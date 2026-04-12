@@ -71,6 +71,7 @@ class TransactionCreate(BaseModel):
     category_id: Optional[int] = None
     description: Optional[str] = None
     transfer_to_account_id: Optional[int] = None
+    delete_attachment: bool = False
 
 class TransactionResponse(BaseModel):
     id: int

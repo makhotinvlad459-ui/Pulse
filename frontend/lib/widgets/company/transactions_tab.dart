@@ -1,6 +1,10 @@
+import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:html' as html;
 import '../../services/api_client.dart';
 import 'edit_transaction_dialog.dart';
 
@@ -176,6 +180,34 @@ class _TransactionsTabState extends State<TransactionsTab> {
     );
   }
 
+  Future<void> _downloadFile(String url, String filename) async {
+    final api = ApiClient();
+    try {
+      final response = await api
+          .getFile(url, queryParameters: {'company_id': widget.companyId});
+      final bytes = response.data as List<int>;
+      if (kIsWeb) {
+        final blob = html.Blob([bytes]);
+        final objectUrl = html.Url.createObjectUrlFromBlob(blob);
+        final downloadLink = html.AnchorElement(href: objectUrl)
+          ..setAttribute('download', filename)
+          ..click();
+        if (objectUrl != null) {
+          html.Url.revokeObjectUrl(objectUrl);
+        }
+      } else {
+        final directory = await getApplicationDocumentsDirectory();
+        final file = File('${directory.path}/$filename');
+        await file.writeAsBytes(bytes);
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Сохранено: ${file.path}')));
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Ошибка скачивания: $e')));
+    }
+  }
+
   Future<void> _showAttachment(String? url, int transactionId) async {
     if (url == null) return;
     final api = ApiClient();
@@ -206,27 +238,25 @@ class _TransactionsTabState extends State<TransactionsTab> {
           ),
         );
       } else if (ext == 'pdf') {
-        showDialog(
+        final confirm = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
             title: const Text('PDF файл'),
             content: const Text('Файл в формате PDF. Скачать?'),
             actions: [
               TextButton(
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: () => Navigator.pop(context, false),
                   child: const Text('Отмена')),
               TextButton(
-                onPressed: () async {
-                  // Здесь можно добавить сохранение файла
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                      content: Text('Скачивание PDF пока не реализовано')));
-                },
-                child: const Text('Скачать'),
-              ),
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Скачать')),
             ],
           ),
         );
+        if (confirm == true) {
+          final filename = url.split('/').last;
+          await _downloadFile('/transactions/$transactionId/photo', filename);
+        }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Невозможно отобразить файл')));
@@ -239,14 +269,6 @@ class _TransactionsTabState extends State<TransactionsTab> {
 
   @override
   Widget build(BuildContext context) {
-    Map<DateTime, List<dynamic>> grouped = {};
-    for (var t in _transactions) {
-      DateTime date = DateTime.parse(t['date']).toLocal();
-      DateTime key = DateTime(date.year, date.month, date.day);
-      grouped.putIfAbsent(key, () => []).add(t);
-    }
-    var sortedDates = grouped.keys.toList()..sort((a, b) => b.compareTo(a));
-
     return Column(
       children: [
         Padding(
@@ -276,102 +298,74 @@ class _TransactionsTabState extends State<TransactionsTab> {
                   : RefreshIndicator(
                       onRefresh: _loadTransactions,
                       child: ListView.builder(
-                        itemCount: sortedDates.length,
+                        itemCount: _transactions.length,
                         itemBuilder: (context, index) {
-                          final date = sortedDates[index];
-                          final dayTransactions = grouped[date]!;
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                    vertical: 8, horizontal: 16),
-                                child: Text(
-                                  DateFormat('EEEE, d MMMM yyyy', 'ru')
-                                      .format(date),
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16),
+                          final t = _transactions[index];
+                          final isDeleted = t['is_deleted'] == true;
+                          return Card(
+                            margin: const EdgeInsets.symmetric(vertical: 4),
+                            color:
+                                isDeleted ? Colors.grey.shade200 : Colors.white,
+                            child: ListTile(
+                              title: Text(
+                                '${t['amount']} ₽',
+                                style: TextStyle(
+                                  color: t['type'] == 'income'
+                                      ? (isDeleted ? Colors.grey : Colors.green)
+                                      : (isDeleted ? Colors.grey : Colors.red),
+                                  decoration: isDeleted
+                                      ? TextDecoration.lineThrough
+                                      : null,
                                 ),
                               ),
-                              ...dayTransactions.map((t) {
-                                final isDeleted = t['is_deleted'] == true;
-                                return Card(
-                                  margin: const EdgeInsets.symmetric(
-                                      vertical: 4, horizontal: 8),
-                                  color: isDeleted
-                                      ? Colors.grey.shade200
-                                      : Colors.white,
-                                  child: ListTile(
-                                    title: Text(
-                                      '${t['amount']} ₽',
-                                      style: TextStyle(
-                                        color: t['type'] == 'income'
-                                            ? (isDeleted
-                                                ? Colors.grey
-                                                : Colors.green)
-                                            : (isDeleted
-                                                ? Colors.grey
-                                                : Colors.red),
-                                        decoration: isDeleted
-                                            ? TextDecoration.lineThrough
-                                            : null,
-                                      ),
+                              subtitle: Text(
+                                '${_typeName(t['type'])} • ${getCategoryName(t['category_id'])} • ${getAccountName(t['account_id'])} • ${t['description'] ?? ''}',
+                                style: TextStyle(
+                                    color: isDeleted
+                                        ? Colors.grey
+                                        : Colors.black87,
+                                    fontSize: 12),
+                              ),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (t['attachment_url'] != null)
+                                    IconButton(
+                                      icon: const Icon(Icons.attach_file,
+                                          size: 18, color: Colors.blue),
+                                      onPressed: () => _showAttachment(
+                                          t['attachment_url'], t['id']),
+                                      tooltip: 'Просмотреть вложение',
                                     ),
-                                    subtitle: Text(
-                                      '${_typeName(t['type'])} • ${getCategoryName(t['category_id'])} • ${getAccountName(t['account_id'])} • ${t['description'] ?? ''}',
-                                      style: TextStyle(
-                                          color: isDeleted
-                                              ? Colors.grey
-                                              : Colors.black87,
-                                          fontSize: 12),
+                                  if (isDeleted)
+                                    IconButton(
+                                      icon: const Icon(Icons.restore,
+                                          color: Colors.orange),
+                                      onPressed: () =>
+                                          _restoreTransaction(t['id']),
+                                      tooltip: 'Восстановить',
                                     ),
-                                    trailing: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        if (t['attachment_url'] != null)
-                                          IconButton(
-                                            icon: const Icon(Icons.attach_file,
-                                                size: 18, color: Colors.blue),
-                                            onPressed: () => _showAttachment(
-                                                t['attachment_url'], t['id']),
-                                            tooltip: 'Просмотреть вложение',
-                                          ),
-                                        if (isDeleted)
-                                          IconButton(
-                                            icon: const Icon(Icons.restore,
-                                                color: Colors.orange),
-                                            onPressed: () =>
-                                                _restoreTransaction(t['id']),
-                                            tooltip: 'Восстановить',
-                                          ),
-                                        if (widget.isFounder && isDeleted)
-                                          IconButton(
-                                            icon: const Icon(
-                                                Icons.delete_forever,
-                                                color: Colors.red),
-                                            onPressed: () =>
-                                                _permanentDeleteTransaction(
-                                                    t['id']),
-                                            tooltip: 'Удалить навсегда',
-                                          ),
-                                        Text(
-                                          DateFormat('HH:mm', 'ru').format(
-                                              DateTime.parse(t['date'])),
-                                          style: TextStyle(
-                                              color: isDeleted
-                                                  ? Colors.grey
-                                                  : Colors.black54),
-                                        ),
-                                      ],
+                                  if (widget.isFounder && isDeleted)
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_forever,
+                                          color: Colors.red),
+                                      onPressed: () =>
+                                          _permanentDeleteTransaction(t['id']),
+                                      tooltip: 'Удалить навсегда',
                                     ),
-                                    onTap: isDeleted
-                                        ? null
-                                        : () => _editTransaction(t),
+                                  Text(
+                                    DateFormat('HH:mm', 'ru')
+                                        .format(DateTime.parse(t['date'])),
+                                    style: TextStyle(
+                                        color: isDeleted
+                                            ? Colors.grey
+                                            : Colors.black54),
                                   ),
-                                );
-                              }).toList(),
-                            ],
+                                ],
+                              ),
+                              onTap:
+                                  isDeleted ? null : () => _editTransaction(t),
+                            ),
                           );
                         },
                       ),

@@ -230,6 +230,16 @@ async def update_transaction(
         transaction.transfer_to_account_id = trans_data.transfer_to_account_id
     else:
         transaction.transfer_to_account_id = None
+
+    # Обработка удаления вложения
+    if trans_data.delete_attachment:
+        if transaction.attachment_url and os.path.exists(transaction.attachment_url):
+            try:
+                os.remove(transaction.attachment_url)
+            except Exception as e:
+                print(f"Error deleting file: {e}")
+        transaction.attachment_url = None
+        transaction.attachment_uploaded_at = None
     
     await db.flush()
     
@@ -245,14 +255,14 @@ async def update_transaction(
     return transaction
 
 
-@router.delete("/{transaction_id}")
-async def delete_transaction(
+@router.patch("/{transaction_id}", response_model=TransactionResponse)
+async def update_transaction(
     transaction_id: int,
     company_id: int,
+    trans_data: TransactionCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # Проверка доступа к компании
     if current_user.role == UserRole.FOUNDER:
         result = await db.execute(select(Company).where(Company.id == company_id, Company.founder_id == current_user.id))
     else:
@@ -266,35 +276,47 @@ async def delete_transaction(
     if not transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
     
-    # Учредитель - жёсткое удаление, сотрудник - мягкое
-    if current_user.role == UserRole.FOUNDER:
-        # Жёсткое удаление: удаляем файл, если он есть
+    old_account_id = transaction.account_id
+    old_transfer_to = transaction.transfer_to_account_id
+    
+    # Приводим дату к naive
+    if trans_data.date.tzinfo is not None:
+        trans_data.date = trans_data.date.replace(tzinfo=None)
+    
+    transaction.account_id = trans_data.account_id
+    transaction.type = trans_data.type
+    transaction.amount = trans_data.amount
+    transaction.date = trans_data.date
+    transaction.category_id = trans_data.category_id
+    transaction.description = trans_data.description
+    transaction.updated_by = current_user.id
+    if trans_data.type == TransactionType.TRANSFER:
+        transaction.transfer_to_account_id = trans_data.transfer_to_account_id
+    else:
+        transaction.transfer_to_account_id = None
+
+    # Обработка удаления вложения
+    if trans_data.delete_attachment:
         if transaction.attachment_url and os.path.exists(transaction.attachment_url):
             try:
                 os.remove(transaction.attachment_url)
             except Exception as e:
                 print(f"Error deleting file: {e}")
-        await db.delete(transaction)
-        await db.commit()
-        # Пересчёт балансов
-        await recalc_account_balance(transaction.account_id, db)
-        if transaction.transfer_to_account_id:
-            await recalc_account_balance(transaction.transfer_to_account_id, db)
-        await db.commit()
-        return {"detail": "Transaction permanently deleted"}
-    else:
-        # Мягкое удаление: файл не трогаем
-        if transaction.is_deleted:
-            raise HTTPException(status_code=400, detail="Transaction already deleted")
-        transaction.is_deleted = True
-        transaction.deleted_by = current_user.id
-        transaction.deleted_at = datetime.utcnow()
-        await db.flush()
-        await recalc_account_balance(transaction.account_id, db)
-        if transaction.transfer_to_account_id:
-            await recalc_account_balance(transaction.transfer_to_account_id, db)
-        await db.commit()
-        return {"detail": "Transaction soft-deleted"}
+        transaction.attachment_url = None
+        transaction.attachment_uploaded_at = None
+    
+    await db.flush()
+    
+    await recalc_account_balance(old_account_id, db)
+    if old_transfer_to:
+        await recalc_account_balance(old_transfer_to, db)
+    await recalc_account_balance(transaction.account_id, db)
+    if transaction.transfer_to_account_id:
+        await recalc_account_balance(transaction.transfer_to_account_id, db)
+    
+    await db.commit()
+    await db.refresh(transaction)
+    return transaction
 
 @router.post("/{transaction_id}/restore")
 async def restore_transaction(
@@ -339,7 +361,7 @@ async def upload_transaction_photo(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # 1. Проверка доступа к компании
+    # Проверка доступа к компании
     if current_user.role == UserRole.FOUNDER:
         result = await db.execute(select(Company).where(Company.id == company_id, Company.founder_id == current_user.id))
     else:
@@ -348,38 +370,45 @@ async def upload_transaction_photo(
     if not company:
         raise HTTPException(status_code=404, detail="Company not found or access denied")
 
-    # 2. Находим транзакцию
+    # Находим транзакцию
     result = await db.execute(select(Transaction).where(Transaction.id == transaction_id, Transaction.company_id == company_id))
     transaction = result.scalar_one_or_none()
     if not transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
 
-    # 3. Проверка размера файла
-    file.file.seek(0, 2)  # перейти в конец
+    # Если уже есть файл, удаляем его
+    if transaction.attachment_url and os.path.exists(transaction.attachment_url):
+        try:
+            os.remove(transaction.attachment_url)
+        except Exception as e:
+            print(f"Error deleting old file: {e}")
+
+    # Проверка размера
+    file.file.seek(0, 2)
     size = file.file.tell()
     if size > MAX_FILE_SIZE:
         raise HTTPException(status_code=400, detail=f"File too large (max {MAX_FILE_SIZE // (1024*1024)} MB)")
-    await file.seek(0)  # вернуться в начало
+    await file.seek(0)
 
-    # 4. Проверка расширения файла
+    # Проверка расширения
     ext = os.path.splitext(file.filename)[1].lower()
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=400, detail="Only JPG, PNG, PDF files are allowed")
 
-    # 5. Создаём папку для компании (если её нет)
+    # Создаём папку для компании
     upload_dir = f"uploads/company_{company_id}"
     os.makedirs(upload_dir, exist_ok=True)
 
-    # 6. Генерируем уникальное имя файла (время + оригинальное имя)
+    # Уникальное имя файла
     timestamp = int(datetime.utcnow().timestamp())
     safe_filename = f"{transaction_id}_{timestamp}{ext}"
     file_path = os.path.join(upload_dir, safe_filename)
 
-    # 7. Сохраняем файл
+    # Сохраняем файл
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # 8. Обновляем запись транзакции
+    # Обновляем транзакцию
     transaction.attachment_url = file_path
     transaction.attachment_uploaded_at = datetime.utcnow()
     await db.commit()

@@ -105,6 +105,8 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
       'date': _date.toIso8601String(),
       'account_id': _accountId,
       'description': _description,
+      'delete_attachment':
+          !_hasExistingAttachment && _photo == null && _webFile == null,
     };
     if (_type == 'income' || _type == 'expense') {
       if (_categoryId != null) data['category_id'] = _categoryId;
