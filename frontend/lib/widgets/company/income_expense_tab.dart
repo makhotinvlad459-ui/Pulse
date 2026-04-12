@@ -91,6 +91,12 @@ class _IncomeExpenseTabState extends State<IncomeExpenseTab> {
     return cat != null ? (cat['icon'] ?? '📁') : '📁';
   }
 
+  int? _getCategoryId(String categoryName) {
+    final cat = widget.categories
+        .firstWhere((c) => c['name'] == categoryName, orElse: () => null);
+    return cat?['id'];
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) return const Center(child: CircularProgressIndicator());
@@ -131,18 +137,22 @@ class _IncomeExpenseTabState extends State<IncomeExpenseTab> {
                   color: Colors.green,
                   getIcon: _getIconForCategory,
                   onTapCategory: (categoryName) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => TransactionsByCategoryScreen(
-                          companyId: widget.companyId,
-                          categoryName: categoryName,
-                          type: 'income',
-                          startDate: _startDate,
-                          endDate: _endDate,
+                    final categoryId = _getCategoryId(categoryName);
+                    if (categoryId != null) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => TransactionsByCategoryScreen(
+                            companyId: widget.companyId,
+                            categoryId: categoryId,
+                            categoryName: categoryName,
+                            type: 'income',
+                            startDate: _startDate,
+                            endDate: _endDate,
+                          ),
                         ),
-                      ),
-                    );
+                      );
+                    }
                   },
                 ),
               ),
@@ -153,18 +163,22 @@ class _IncomeExpenseTabState extends State<IncomeExpenseTab> {
                   color: Colors.red,
                   getIcon: _getIconForCategory,
                   onTapCategory: (categoryName) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => TransactionsByCategoryScreen(
-                          companyId: widget.companyId,
-                          categoryName: categoryName,
-                          type: 'expense',
-                          startDate: _startDate,
-                          endDate: _endDate,
+                    final categoryId = _getCategoryId(categoryName);
+                    if (categoryId != null) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => TransactionsByCategoryScreen(
+                            companyId: widget.companyId,
+                            categoryId: categoryId,
+                            categoryName: categoryName,
+                            type: 'expense',
+                            startDate: _startDate,
+                            endDate: _endDate,
+                          ),
                         ),
-                      ),
-                    );
+                      );
+                    }
                   },
                 ),
               ),
@@ -235,12 +249,14 @@ class _CategoryColumn extends StatelessWidget {
 
 class TransactionsByCategoryScreen extends StatelessWidget {
   final int companyId;
+  final int categoryId;
   final String categoryName;
   final String type;
   final DateTime startDate;
   final DateTime endDate;
   const TransactionsByCategoryScreen({
     required this.companyId,
+    required this.categoryId,
     required this.categoryName,
     required this.type,
     required this.startDate,
@@ -257,6 +273,7 @@ class TransactionsByCategoryScreen extends StatelessWidget {
         future: ApiClient().get('/transactions', queryParameters: {
           'company_id': companyId,
           'type': type,
+          'category_id': categoryId,
           'start_date': startDate.toIso8601String(),
           'end_date': endDate.toIso8601String(),
         }),
