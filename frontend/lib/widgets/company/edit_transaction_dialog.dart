@@ -148,16 +148,16 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       title: Text(_type == 'income'
           ? 'Редактировать доход'
           : (_type == 'expense'
               ? 'Редактировать расход'
               : 'Редактировать перевод')),
-      content: Form(
+      content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Первая строка: счёт и тип
             Row(
               children: [
                 Expanded(
@@ -193,42 +193,29 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
               ],
             ),
             const SizedBox(height: 12),
-            // Сумма и дата в одной строке
-            Row(
-              children: [
-                Expanded(
-                  child: TextFormField(
-                    initialValue: _amount.toString(),
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                        labelText: 'Сумма', border: OutlineInputBorder()),
-                    onChanged: (v) => _amount = double.tryParse(v) ?? 0,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: InkWell(
-                    onTap: () async {
-                      final picked = await showDatePicker(
-                        context: context,
-                        initialDate: _date,
-                        firstDate: DateTime(2000),
-                        lastDate: DateTime.now(),
-                        locale: const Locale('ru', 'RU'),
-                      );
-                      if (picked != null) setState(() => _date = picked);
-                    },
-                    child: InputDecorator(
-                      decoration: const InputDecoration(
-                          labelText: 'Дата', border: OutlineInputBorder()),
-                      child: Text(DateFormat('dd.MM.yyyy', 'ru').format(_date)),
-                    ),
-                  ),
-                ),
-              ],
+            TextFormField(
+              initialValue: _amount.toString(),
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                  labelText: 'Сумма', border: OutlineInputBorder()),
+              onChanged: (v) => _amount = double.tryParse(v) ?? 0,
             ),
             const SizedBox(height: 12),
-            // Категория (только для дохода/расхода)
+            ListTile(
+              title: const Text('Дата'),
+              trailing: Text(DateFormat('dd.MM.yyyy', 'ru').format(_date)),
+              onTap: () async {
+                final picked = await showDatePicker(
+                  context: context,
+                  initialDate: _date,
+                  firstDate: DateTime(2000),
+                  lastDate: DateTime.now(),
+                  locale: const Locale('ru', 'RU'),
+                );
+                if (picked != null) setState(() => _date = picked);
+              },
+            ),
+            const SizedBox(height: 12),
             if (_type == 'income' || _type == 'expense')
               DropdownButtonFormField<int>(
                 value: _categoryId,

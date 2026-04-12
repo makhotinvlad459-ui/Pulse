@@ -39,10 +39,13 @@ class _TransactionsTabState extends State<TransactionsTab> {
     setState(() => _loading = true);
     final api = ApiClient();
     try {
+      final endDateTime = _endDate
+          .add(const Duration(days: 1))
+          .subtract(const Duration(seconds: 1));
       final res = await api.get('/transactions', queryParameters: {
         'company_id': widget.companyId,
         'start_date': _startDate.toIso8601String(),
-        'end_date': _endDate.toIso8601String(),
+        'end_date': endDateTime.toIso8601String(),
         'include_deleted': 'true',
       });
       setState(() {
