@@ -1,10 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
+from sqlalchemy import select, update, func
 from typing import List, Optional
 from datetime import datetime, timedelta
+from sqlalchemy.orm import selectinload
 import os
 import shutil
+from datetime import datetime
+from fastapi.responses import FileResponse
 
 from app.database import get_db
 from app.models import User, Company, Account, Category, Transaction, TransactionType, CompanyMember, UserRole
@@ -13,22 +16,37 @@ from app.deps import get_current_user
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
 
-async def recalc_account_balance(account_id: int, db: AsyncSession):
-    result = await db.execute(
-        select(Transaction)
-        .where(Transaction.account_id == account_id, Transaction.is_deleted == False)
-    )
-    transactions = result.scalars().all()
-    balance = 0.0
-    for t in transactions:
-        if t.type == TransactionType.INCOME:
-            balance += t.amount
-        elif t.type == TransactionType.EXPENSE:
-            balance -= t.amount
-        elif t.type == TransactionType.TRANSFER:
-            balance -= t.amount
-    await db.execute(update(Account).where(Account.id == account_id).values(balance=balance))
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+ALLOWED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.pdf'}
 
+async def recalc_account_balance(account_id: int, db: AsyncSession):
+    # Сумма доходов
+    income = await db.execute(
+        select(func.coalesce(func.sum(Transaction.amount), 0))
+        .where(Transaction.account_id == account_id, Transaction.type == 'income', Transaction.is_deleted == False)
+    )
+    total_income = float(income.scalar())
+    # Сумма расходов
+    expense = await db.execute(
+        select(func.coalesce(func.sum(Transaction.amount), 0))
+        .where(Transaction.account_id == account_id, Transaction.type == 'expense', Transaction.is_deleted == False)
+    )
+    total_expense = float(expense.scalar())
+    # Исходящие переводы
+    transfer_out = await db.execute(
+        select(func.coalesce(func.sum(Transaction.amount), 0))
+        .where(Transaction.account_id == account_id, Transaction.type == 'transfer', Transaction.is_deleted == False)
+    )
+    total_transfer_out = float(transfer_out.scalar())
+    # Входящие переводы
+    transfer_in = await db.execute(
+        select(func.coalesce(func.sum(Transaction.amount), 0))
+        .where(Transaction.transfer_to_account_id == account_id, Transaction.type == 'transfer', Transaction.is_deleted == False)
+    )
+    total_transfer_in = float(transfer_in.scalar())
+    balance = total_income - total_expense - total_transfer_out + total_transfer_in
+    await db.execute(update(Account).where(Account.id == account_id).values(balance=balance))
+    
 @router.post("/", response_model=TransactionResponse)
 async def create_transaction(
     trans_data: TransactionCreate,
@@ -226,6 +244,7 @@ async def update_transaction(
     await db.refresh(transaction)
     return transaction
 
+
 @router.delete("/{transaction_id}")
 async def delete_transaction(
     transaction_id: int,
@@ -233,6 +252,7 @@ async def delete_transaction(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    # Проверка доступа к компании
     if current_user.role == UserRole.FOUNDER:
         result = await db.execute(select(Company).where(Company.id == company_id, Company.founder_id == current_user.id))
     else:
@@ -246,20 +266,35 @@ async def delete_transaction(
     if not transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
     
-    if transaction.is_deleted:
-        raise HTTPException(status_code=400, detail="Transaction already deleted")
-    
-    transaction.is_deleted = True
-    transaction.deleted_by = current_user.id
-    transaction.deleted_at = datetime.utcnow()
-    
-    await db.flush()
-    await recalc_account_balance(transaction.account_id, db)
-    if transaction.transfer_to_account_id:
-        await recalc_account_balance(transaction.transfer_to_account_id, db)
-    
-    await db.commit()
-    return {"detail": "Transaction soft-deleted"}
+    # Учредитель - жёсткое удаление, сотрудник - мягкое
+    if current_user.role == UserRole.FOUNDER:
+        # Жёсткое удаление: удаляем файл, если он есть
+        if transaction.attachment_url and os.path.exists(transaction.attachment_url):
+            try:
+                os.remove(transaction.attachment_url)
+            except Exception as e:
+                print(f"Error deleting file: {e}")
+        await db.delete(transaction)
+        await db.commit()
+        # Пересчёт балансов
+        await recalc_account_balance(transaction.account_id, db)
+        if transaction.transfer_to_account_id:
+            await recalc_account_balance(transaction.transfer_to_account_id, db)
+        await db.commit()
+        return {"detail": "Transaction permanently deleted"}
+    else:
+        # Мягкое удаление: файл не трогаем
+        if transaction.is_deleted:
+            raise HTTPException(status_code=400, detail="Transaction already deleted")
+        transaction.is_deleted = True
+        transaction.deleted_by = current_user.id
+        transaction.deleted_at = datetime.utcnow()
+        await db.flush()
+        await recalc_account_balance(transaction.account_id, db)
+        if transaction.transfer_to_account_id:
+            await recalc_account_balance(transaction.transfer_to_account_id, db)
+        await db.commit()
+        return {"detail": "Transaction soft-deleted"}
 
 @router.post("/{transaction_id}/restore")
 async def restore_transaction(
@@ -304,6 +339,62 @@ async def upload_transaction_photo(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    # 1. Проверка доступа к компании
+    if current_user.role == UserRole.FOUNDER:
+        result = await db.execute(select(Company).where(Company.id == company_id, Company.founder_id == current_user.id))
+    else:
+        result = await db.execute(select(Company).join(CompanyMember).where(Company.id == company_id, CompanyMember.user_id == current_user.id))
+    company = result.scalar_one_or_none()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found or access denied")
+
+    # 2. Находим транзакцию
+    result = await db.execute(select(Transaction).where(Transaction.id == transaction_id, Transaction.company_id == company_id))
+    transaction = result.scalar_one_or_none()
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+
+    # 3. Проверка размера файла
+    file.file.seek(0, 2)  # перейти в конец
+    size = file.file.tell()
+    if size > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail=f"File too large (max {MAX_FILE_SIZE // (1024*1024)} MB)")
+    await file.seek(0)  # вернуться в начало
+
+    # 4. Проверка расширения файла
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="Only JPG, PNG, PDF files are allowed")
+
+    # 5. Создаём папку для компании (если её нет)
+    upload_dir = f"uploads/company_{company_id}"
+    os.makedirs(upload_dir, exist_ok=True)
+
+    # 6. Генерируем уникальное имя файла (время + оригинальное имя)
+    timestamp = int(datetime.utcnow().timestamp())
+    safe_filename = f"{transaction_id}_{timestamp}{ext}"
+    file_path = os.path.join(upload_dir, safe_filename)
+
+    # 7. Сохраняем файл
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    # 8. Обновляем запись транзакции
+    transaction.attachment_url = file_path
+    transaction.attachment_uploaded_at = datetime.utcnow()
+    await db.commit()
+
+    return {"detail": "File uploaded", "url": file_path}
+
+
+@router.get("/{transaction_id}/photo")
+async def get_transaction_photo(
+    transaction_id: int,
+    company_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Проверка доступа к компании
     if current_user.role == UserRole.FOUNDER:
         result = await db.execute(select(Company).where(Company.id == company_id, Company.founder_id == current_user.id))
     else:
@@ -314,17 +405,11 @@ async def upload_transaction_photo(
     
     result = await db.execute(select(Transaction).where(Transaction.id == transaction_id, Transaction.company_id == company_id))
     transaction = result.scalar_one_or_none()
-    if not transaction:
-        raise HTTPException(status_code=404, detail="Transaction not found")
+    if not transaction or not transaction.attachment_url:
+        raise HTTPException(status_code=404, detail="File not found")
     
-    upload_dir = f"uploads/company_{company_id}"
-    os.makedirs(upload_dir, exist_ok=True)
-    file_extension = file.filename.split(".")[-1]
-    file_path = f"{upload_dir}/{transaction_id}_{datetime.utcnow().timestamp()}.{file_extension}"
+    file_path = transaction.attachment_url
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
     
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-    
-    transaction.attachment_url = file_path
-    await db.commit()
-    return {"detail": "Photo uploaded", "url": file_path}
+    return FileResponse(file_path)

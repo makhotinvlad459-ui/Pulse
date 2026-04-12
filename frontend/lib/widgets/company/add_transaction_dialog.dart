@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../../../services/api_client.dart';
 
@@ -33,6 +34,7 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
   String _description = '';
   bool _loading = false;
   XFile? _photo;
+  PlatformFile? _webFile;
 
   @override
   void initState() {
@@ -40,16 +42,27 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
     if (widget.accounts.isNotEmpty) _accountId = widget.accounts[0]['id'];
   }
 
-  Future<void> _pickPhoto() async {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery);
-    if (picked != null) setState(() => _photo = picked);
+  Future<void> _pickFile() async {
+    if (kIsWeb) {
+      final result = await FilePicker.platform.pickFiles();
+      if (result != null) {
+        setState(() => _webFile = result.files.first);
+      }
+    } else {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(source: ImageSource.gallery);
+      if (picked != null) setState(() => _photo = picked);
+    }
   }
 
   Future<void> _takePhoto() async {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.camera);
-    if (picked != null) setState(() => _photo = picked);
+    if (kIsWeb) {
+      await _pickFile();
+    } else {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(source: ImageSource.camera);
+      if (picked != null) setState(() => _photo = picked);
+    }
   }
 
   Future<void> _submit() async {
@@ -78,11 +91,12 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
           queryParameters: {'company_id': widget.companyId}, data: data);
       final transactionId = response.data['id'];
       if (_photo != null) {
-        final file = File(_photo!.path);
-        if (await file.exists()) {
-          await api.uploadPhoto('/transactions/$transactionId/upload', _photo!,
-              queryParameters: {'company_id': widget.companyId});
-        }
+        await api.uploadPhoto('/transactions/$transactionId/upload', _photo!,
+            queryParameters: {'company_id': widget.companyId});
+      } else if (_webFile != null && _webFile!.bytes != null) {
+        await api.uploadPhotoBytes('/transactions/$transactionId/upload',
+            _webFile!.bytes!, _webFile!.name,
+            queryParameters: {'company_id': widget.companyId});
       }
       widget.onSuccess();
       if (mounted) Navigator.pop(context);
@@ -201,33 +215,35 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
               onChanged: (v) => _description = v,
             ),
             const SizedBox(height: 12),
-            if (!kIsWeb)
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  ElevatedButton.icon(
-                    onPressed: _pickPhoto,
-                    icon: const Icon(Icons.photo_library),
-                    label: const Text('Галерея'),
-                  ),
-                  ElevatedButton.icon(
-                    onPressed: _takePhoto,
-                    icon: const Icon(Icons.camera_alt),
-                    label: const Text('Камера'),
-                  ),
-                ],
-              ),
-            if (_photo != null)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: _pickFile,
+                  icon: const Icon(Icons.attach_file),
+                  label: const Text('Файл'),
+                ),
+                ElevatedButton.icon(
+                  onPressed: _takePhoto,
+                  icon: const Icon(Icons.camera_alt),
+                  label: const Text('Камера'),
+                ),
+              ],
+            ),
+            if (_photo != null || _webFile != null)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Row(
                   children: [
                     const Icon(Icons.check_circle, color: Colors.green),
                     const SizedBox(width: 8),
-                    Text(_photo!.name),
+                    Text(_photo != null ? _photo!.name : _webFile!.name),
                     IconButton(
                       icon: const Icon(Icons.clear, size: 16),
-                      onPressed: () => setState(() => _photo = null),
+                      onPressed: () => setState(() {
+                        _photo = null;
+                        _webFile = null;
+                      }),
                     ),
                   ],
                 ),

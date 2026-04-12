@@ -2,7 +2,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:dio/dio.dart'; // добавлен импорт
 import '../../../services/api_client.dart';
 
 class EditTransactionDialog extends StatefulWidget {
@@ -36,6 +38,8 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
   late String _description;
   bool _loading = false;
   XFile? _photo;
+  PlatformFile? _webFile;
+  bool _hasExistingAttachment = false;
 
   @override
   void initState() {
@@ -47,18 +51,92 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
     _categoryId = widget.transaction['category_id'];
     _transferToAccountId = widget.transaction['transfer_to_account_id'];
     _description = widget.transaction['description'] ?? '';
+    _hasExistingAttachment = widget.transaction['attachment_url'] != null;
   }
 
-  Future<void> _pickPhoto() async {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery);
-    if (picked != null) setState(() => _photo = picked);
+  Future<void> _pickFile() async {
+    if (kIsWeb) {
+      final result = await FilePicker.platform.pickFiles();
+      if (result != null) {
+        setState(() {
+          _webFile = result.files.first;
+          _hasExistingAttachment = false;
+        });
+      }
+    } else {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(source: ImageSource.gallery);
+      if (picked != null)
+        setState(() {
+          _photo = picked;
+          _hasExistingAttachment = false;
+        });
+    }
   }
 
   Future<void> _takePhoto() async {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.camera);
-    if (picked != null) setState(() => _photo = picked);
+    if (kIsWeb) {
+      await _pickFile();
+    } else {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(source: ImageSource.camera);
+      if (picked != null)
+        setState(() {
+          _photo = picked;
+          _hasExistingAttachment = false;
+        });
+    }
+  }
+
+  Future<void> _deleteAttachment() async {
+    setState(() {
+      _hasExistingAttachment = false;
+      _photo = null;
+      _webFile = null;
+    });
+  }
+
+  Future<void> _save() async {
+    setState(() => _loading = true);
+    final api = ApiClient();
+    Map<String, dynamic> data = {
+      'type': _type,
+      'amount': _amount,
+      'date': _date.toIso8601String(),
+      'account_id': _accountId,
+      'description': _description,
+    };
+    if (_type == 'income' || _type == 'expense') {
+      if (_categoryId != null) data['category_id'] = _categoryId;
+    } else if (_type == 'transfer') {
+      data['transfer_to_account_id'] = _transferToAccountId;
+    }
+    try {
+      await api.patch('/transactions/${widget.transaction['id']}',
+          queryParameters: {'company_id': widget.companyId}, data: data);
+      // Если нужно заменить вложение
+      if ((_photo != null || _webFile != null) && !_hasExistingAttachment) {
+        if (_photo != null) {
+          await api.uploadPhoto(
+              '/transactions/${widget.transaction['id']}/upload', _photo!,
+              queryParameters: {'company_id': widget.companyId});
+        } else if (_webFile != null && _webFile!.bytes != null) {
+          await api.uploadPhotoBytes(
+              '/transactions/${widget.transaction['id']}/upload',
+              _webFile!.bytes!,
+              _webFile!.name,
+              queryParameters: {'company_id': widget.companyId});
+        }
+      }
+      await widget.onSuccess();
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   Future<void> _deleteTransaction() async {
@@ -102,40 +180,6 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
             content: Text(
                 widget.isFounder ? 'Операция удалена' : 'Операция скрыта')),
       );
-    } catch (e) {
-      if (mounted)
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Ошибка: $e')));
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  Future<void> _save() async {
-    setState(() => _loading = true);
-    final api = ApiClient();
-    Map<String, dynamic> data = {
-      'type': _type,
-      'amount': _amount,
-      'date': _date.toIso8601String(),
-      'account_id': _accountId,
-      'description': _description,
-    };
-    if (_type == 'income' || _type == 'expense') {
-      if (_categoryId != null) data['category_id'] = _categoryId;
-    } else if (_type == 'transfer') {
-      data['transfer_to_account_id'] = _transferToAccountId;
-    }
-    try {
-      await api.patch('/transactions/${widget.transaction['id']}',
-          queryParameters: {'company_id': widget.companyId}, data: data);
-      if (_photo != null) {
-        await api.uploadPhoto(
-            '/transactions/${widget.transaction['id']}/upload', _photo!,
-            queryParameters: {'company_id': widget.companyId});
-      }
-      await widget.onSuccess();
-      if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted)
         ScaffoldMessenger.of(context)
@@ -251,33 +295,51 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
               onChanged: (v) => _description = v,
             ),
             const SizedBox(height: 12),
-            if (!kIsWeb)
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  ElevatedButton.icon(
-                    onPressed: _pickPhoto,
-                    icon: const Icon(Icons.photo_library),
-                    label: const Text('Галерея'),
-                  ),
-                  ElevatedButton.icon(
-                    onPressed: _takePhoto,
-                    icon: const Icon(Icons.camera_alt),
-                    label: const Text('Камера'),
-                  ),
-                ],
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: _pickFile,
+                  icon: const Icon(Icons.attach_file),
+                  label: const Text('Файл'),
+                ),
+                ElevatedButton.icon(
+                  onPressed: _takePhoto,
+                  icon: const Icon(Icons.camera_alt),
+                  label: const Text('Камера'),
+                ),
+              ],
+            ),
+            if (_hasExistingAttachment && _photo == null && _webFile == null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Row(
+                  children: [
+                    const Icon(Icons.attachment, color: Colors.blue),
+                    const SizedBox(width: 8),
+                    const Text('Есть вложение'),
+                    TextButton(
+                      onPressed: _deleteAttachment,
+                      child: const Text('Удалить',
+                          style: TextStyle(color: Colors.red)),
+                    ),
+                  ],
+                ),
               ),
-            if (_photo != null)
+            if (_photo != null || _webFile != null)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Row(
                   children: [
                     const Icon(Icons.check_circle, color: Colors.green),
                     const SizedBox(width: 8),
-                    Text(_photo!.name),
+                    Text(_photo != null ? _photo!.name : _webFile!.name),
                     IconButton(
                       icon: const Icon(Icons.clear, size: 16),
-                      onPressed: () => setState(() => _photo = null),
+                      onPressed: () => setState(() {
+                        _photo = null;
+                        _webFile = null;
+                      }),
                     ),
                   ],
                 ),

@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../services/api_client.dart';
@@ -39,13 +40,10 @@ class _TransactionsTabState extends State<TransactionsTab> {
     setState(() => _loading = true);
     final api = ApiClient();
     try {
-      final endDateTime = _endDate
-          .add(const Duration(days: 1))
-          .subtract(const Duration(seconds: 1));
       final res = await api.get('/transactions', queryParameters: {
         'company_id': widget.companyId,
         'start_date': _startDate.toIso8601String(),
-        'end_date': endDateTime.toIso8601String(),
+        'end_date': _endDate.toIso8601String(),
         'include_deleted': 'true',
       });
       setState(() {
@@ -76,6 +74,7 @@ class _TransactionsTabState extends State<TransactionsTab> {
         _endDate = picked.end;
       });
       await _loadTransactions();
+      setState(() {});
     }
   }
 
@@ -177,9 +176,69 @@ class _TransactionsTabState extends State<TransactionsTab> {
     );
   }
 
+  Future<void> _showAttachment(String? url, int transactionId) async {
+    if (url == null) return;
+    final api = ApiClient();
+    try {
+      final response = await api.getFile('/transactions/$transactionId/photo',
+          queryParameters: {'company_id': widget.companyId});
+      final bytes = response.data as List<int>;
+      final uint8list = Uint8List.fromList(bytes);
+      final ext = url.split('.').last.toLowerCase();
+      if (ext == 'jpg' || ext == 'jpeg' || ext == 'png') {
+        showDialog(
+          context: context,
+          builder: (context) => Dialog(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.all(8.0),
+                  child: Text('Фото',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+                Image.memory(uint8list),
+                TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Закрыть')),
+              ],
+            ),
+          ),
+        );
+      } else if (ext == 'pdf') {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('PDF файл'),
+            content: const Text('Файл в формате PDF. Скачать?'),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Отмена')),
+              TextButton(
+                onPressed: () async {
+                  // Здесь можно добавить сохранение файла
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                      content: Text('Скачивание PDF пока не реализовано')));
+                },
+                child: const Text('Скачать'),
+              ),
+            ],
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Невозможно отобразить файл')));
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Ошибка загрузки файла: $e')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Группировка по дням
     Map<DateTime, List<dynamic>> grouped = {};
     for (var t in _transactions) {
       DateTime date = DateTime.parse(t['date']).toLocal();
@@ -270,6 +329,14 @@ class _TransactionsTabState extends State<TransactionsTab> {
                                     trailing: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
+                                        if (t['attachment_url'] != null)
+                                          IconButton(
+                                            icon: const Icon(Icons.attach_file,
+                                                size: 18, color: Colors.blue),
+                                            onPressed: () => _showAttachment(
+                                                t['attachment_url'], t['id']),
+                                            tooltip: 'Просмотреть вложение',
+                                          ),
                                         if (isDeleted)
                                           IconButton(
                                             icon: const Icon(Icons.restore,

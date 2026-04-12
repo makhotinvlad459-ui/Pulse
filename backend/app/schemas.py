@@ -28,7 +28,7 @@ class CompanyResponse(BaseModel):
     bank_account: str
     manager_full_name: str
     manager_phone: str
-    total_balance: float  # сумма наличные + банк по этой компании
+    total_balance: float
     class Config:
         from_attributes = True
 
@@ -51,12 +51,14 @@ class AccountResponse(BaseModel):
 class CategoryCreate(BaseModel):
     name: str
     type: TransactionType
+    icon: str = "📁"
 
 class CategoryResponse(BaseModel):
     id: int
     name: str
     type: TransactionType
     is_system: bool
+    icon: str = "📁"          # <--- добавлено поле icon
     class Config:
         from_attributes = True
 
@@ -68,7 +70,7 @@ class TransactionCreate(BaseModel):
     account_id: int
     category_id: Optional[int] = None
     description: Optional[str] = None
-    transfer_to_account_id: Optional[int] = None  # только для перевода
+    transfer_to_account_id: Optional[int] = None
 
 class TransactionResponse(BaseModel):
     id: int

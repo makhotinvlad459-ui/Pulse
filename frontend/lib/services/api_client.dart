@@ -16,6 +16,9 @@ class ApiClient {
   final Dio _dio = Dio(BaseOptions(baseUrl: baseUrl));
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
+  // Публичный геттер для доступа к Dio
+  Dio get dio => _dio;
+
   ApiClient() {
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
@@ -55,13 +58,29 @@ class ApiClient {
           data: data,
           options: Options(contentType: Headers.formUrlEncodedContentType));
 
-  // Универсальный метод загрузки фото (работает и на вебе, и на мобильных)
+  // Загрузка фото (для XFile)
   Future<void> uploadPhoto(String path, XFile photo,
       {Map<String, dynamic>? queryParameters}) async {
     final bytes = await photo.readAsBytes();
     final multipartFile = MultipartFile.fromBytes(bytes, filename: photo.name);
     final formData = FormData.fromMap({'file': multipartFile});
     await _dio.post(path, data: formData, queryParameters: queryParameters);
+  }
+
+  // Загрузка байтов (для веб-файлов)
+  Future<void> uploadPhotoBytes(String path, List<int> bytes, String filename,
+      {Map<String, dynamic>? queryParameters}) async {
+    final multipartFile = MultipartFile.fromBytes(bytes, filename: filename);
+    final formData = FormData.fromMap({'file': multipartFile});
+    await _dio.post(path, data: formData, queryParameters: queryParameters);
+  }
+
+  // Получение файла (для просмотра)
+  Future<Response> getFile(String path,
+      {Map<String, dynamic>? queryParameters}) async {
+    return await _dio.get(path,
+        queryParameters: queryParameters,
+        options: Options(responseType: ResponseType.bytes));
   }
 
   // Управление токеном

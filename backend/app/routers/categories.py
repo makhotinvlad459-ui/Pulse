@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
+from fastapi import Query
 from typing import List
 
 from app.database import get_db
@@ -28,13 +29,17 @@ async def create_category(
     if not company:
         raise HTTPException(status_code=404, detail="Company not found or access denied")
     
+    # Преобразуем тип в строку, если это enum
+    type_str = category_data.type.value if hasattr(category_data.type, 'value') else category_data.type
+    
     new_category = Category(
-        company_id=company_id,
-        name=category_data.name,
-        type=category_data.type,
-        is_system=False,
-        created_by=current_user.id
-    )
+    company_id=company_id,
+    name=category_data.name,
+    type=category_data.type.value,  
+    is_system=False,
+    created_by=current_user.id,
+    icon=category_data.icon
+)
     db.add(new_category)
     await db.commit()
     await db.refresh(new_category)
@@ -43,7 +48,7 @@ async def create_category(
 @router.delete("/{category_id}")
 async def delete_category(
     category_id: int,
-    company_id: int,
+    company_id: int = Query(...),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -73,9 +78,10 @@ async def delete_category(
         default_category = Category(
             company_id=company_id,
             name="Без категории",
-            type=TransactionType.INCOME,  # значение не важно для системной
+            type='income',  # строка, а не enum
             is_system=True,
-            created_by=current_user.id
+            created_by=current_user.id,
+            icon='📁'
         )
         db.add(default_category)
         await db.flush()

@@ -262,3 +262,58 @@ async def add_member(
     db.add(member)
     await db.commit()
     return {"detail": "Member added", "user_id": user.id, "full_name": user.full_name, "phone": user.phone}
+
+@router.put("/{company_id}", response_model=CompanyResponse)
+async def update_company(
+    company_id: int,
+    company_data: CompanyCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role != UserRole.FOUNDER:
+        raise HTTPException(status_code=403, detail="Only founder can update companies")
+    
+    result = await db.execute(select(Company).where(Company.id == company_id, Company.founder_id == current_user.id))
+    company = result.scalar_one_or_none()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    
+    company.inn = company_data.inn
+    company.name = company_data.name
+    company.bank_account = company_data.bank_account
+    company.manager_full_name = company_data.manager_full_name
+    company.manager_phone = company_data.manager_phone
+    
+    await db.commit()
+    await db.refresh(company)
+    
+    # пересчитываем total_balance для ответа
+    acc_result = await db.execute(select(Account).where(Account.company_id == company.id))
+    accounts = acc_result.scalars().all()
+    total_balance = sum(float(acc.balance) for acc in accounts)
+    
+    return CompanyResponse(
+        id=company.id,
+        inn=company.inn,
+        name=company.name,
+        bank_account=company.bank_account,
+        manager_full_name=company.manager_full_name,
+        manager_phone=company.manager_phone,
+        total_balance=total_balance
+    )
+
+@router.delete("/{company_id}")
+async def delete_company(
+    company_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role != UserRole.FOUNDER:
+        raise HTTPException(status_code=403, detail="Only founder can delete companies")
+    result = await db.execute(select(Company).where(Company.id == company_id, Company.founder_id == current_user.id))
+    company = result.scalar_one_or_none()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    await db.delete(company)
+    await db.commit()
+    return {"detail": "Company deleted"}

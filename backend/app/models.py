@@ -103,6 +103,8 @@ class Category(Base):
     is_system: Mapped[bool] = mapped_column(Boolean, default=False)
     created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    icon: Mapped[str] = mapped_column(String(10), default="📁")
+
 
     # relationships
     company: Mapped["Company"] = relationship("Company", back_populates="categories")
@@ -129,7 +131,8 @@ class Transaction(Base):
     transfer_to_account_id: Mapped[int | None] = mapped_column(ForeignKey("accounts.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
+    attachment_uploaded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    
     # relationships
     company: Mapped["Company"] = relationship(back_populates="transactions")
     account: Mapped["Account"] = relationship(foreign_keys=[account_id], back_populates="transactions_from")
