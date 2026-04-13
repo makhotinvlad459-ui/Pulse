@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import '../services/api_client.dart';
 
 class CreateCompanyScreen extends ConsumerStatefulWidget {
@@ -29,7 +30,7 @@ class _CreateCompanyScreenState extends ConsumerState<CreateCompanyScreen> {
     setState(() => _isLoading = true);
     try {
       final api = ApiClient();
-      await api.post('/companies', data: {
+      final response = await api.post('/companies', data: {
         'inn': _innController.text,
         'name': _nameController.text,
         'bank_account': _bankAccountController.text,
@@ -39,7 +40,14 @@ class _CreateCompanyScreenState extends ConsumerState<CreateCompanyScreen> {
             .where((e) => e['full_name']!.isNotEmpty && e['phone']!.isNotEmpty)
             .toList(),
       });
-      if (mounted) Navigator.pop(context, true);
+      final credentials = response.data['employees_credentials'] as List? ?? [];
+      if (mounted) {
+        if (credentials.isNotEmpty) {
+          _showCredentialsDialog(credentials);
+        } else {
+          Navigator.pop(context, true);
+        }
+      }
     } catch (e) {
       if (mounted)
         ScaffoldMessenger.of(context)
@@ -47,6 +55,51 @@ class _CreateCompanyScreenState extends ConsumerState<CreateCompanyScreen> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _showCredentialsDialog(List<dynamic> credentials) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Пароли сотрудников'),
+        content: SizedBox(
+          width: 300,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: credentials.length,
+            itemBuilder: (context, index) {
+              final emp = credentials[index];
+              final role = emp['role'] ?? 'employee';
+              final roleText = role == 'manager' ? 'Управляющий' : 'Сотрудник';
+              return ListTile(
+                title: Text('${emp['full_name']} ($roleText)'),
+                subtitle: Text(
+                    'Телефон: ${emp['phone']}\nПароль: ${emp['password']}'),
+                trailing: IconButton(
+                  icon: const Icon(Icons.copy),
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: emp['password']));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Пароль скопирован')),
+                    );
+                  },
+                ),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.pop(context, true);
+            },
+            child: const Text('Закрыть'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override

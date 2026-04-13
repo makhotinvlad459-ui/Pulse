@@ -31,7 +31,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       });
       final token = response.data['access_token'];
       await _api.setToken(token);
-      state = AuthState();
+      // После регистрации тоже получаем профиль
+      await _loadUserProfile();
     } catch (e) {
       state = AuthState(error: e.toString());
     }
@@ -46,16 +47,42 @@ class AuthNotifier extends StateNotifier<AuthState> {
       });
       final token = response.data['access_token'];
       await _api.setToken(token);
-      // Здесь можно добавить запрос на получение данных пользователя (эндпоинт /auth/me)
-      state = AuthState(
-          user: User(
-              id: 0,
-              email: username,
-              phone: '',
-              fullName: '',
-              role: UserRole.founder));
+      await _loadUserProfile();
     } catch (e) {
       state = AuthState(error: e.toString());
+    }
+  }
+
+  Future<void> _loadUserProfile() async {
+    try {
+      final response = await _api.get('/auth/me');
+      final data = response.data;
+      final user = User(
+        id: data['id'],
+        email: data['email'],
+        phone: data['phone'],
+        fullName: data['full_name'],
+        role: _stringToRole(data['role']),
+        subscriptionUntil: data['subscription_until'] != null
+            ? DateTime.parse(data['subscription_until'])
+            : null,
+      );
+      state = AuthState(user: user);
+    } catch (e) {
+      state = AuthState(error: 'Failed to load user profile: $e');
+    }
+  }
+
+  UserRole _stringToRole(String role) {
+    switch (role) {
+      case 'founder':
+        return UserRole.founder;
+      case 'employee':
+        return UserRole.employee;
+      case 'superadmin':
+        return UserRole.superadmin;
+      default:
+        return UserRole.employee;
     }
   }
 

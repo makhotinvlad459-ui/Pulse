@@ -6,6 +6,6 @@ import '../models/statistics.dart';
 final homeProvider = FutureProvider((ref) async {
   final api = ApiClient();
   final companies = await api.getCompanies();
-  final overview = await api.getFounderOverview();
+  final overview = await api.getUserOverview();
   return (companies: companies, overview: overview);
 });

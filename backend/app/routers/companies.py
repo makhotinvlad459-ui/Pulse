@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import selectinload
 from app.models import CompanyMember
 from typing import List
@@ -9,8 +9,8 @@ import random
 import string
 
 from app.database import get_db
-from app.models import User, Company, Account, CompanyMember, UserRole
-from app.schemas import CompanyCreate, CompanyResponse
+from app.models import User, Company, Account, CompanyMember, UserRole, Category
+from app.schemas import CompanyCreate, CompanyResponse,  UpdateMemberRole, SetManagerRequest
 from app.deps import get_current_user
 from app.auth import get_password_hash
 
@@ -19,6 +19,27 @@ router = APIRouter(prefix="/companies", tags=["companies"])
 def generate_random_password(length=8):
     return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
 
+# --- Вспомогательная функция проверки прав на управление сотрудниками ---
+async def _can_manage_employees(company_id: int, current_user: User, db: AsyncSession) -> bool:
+    """Возвращает True, если текущий пользователь может управлять сотрудниками компании."""
+    if current_user.role == UserRole.FOUNDER:
+        # Проверяем, что это его компания
+        result = await db.execute(select(Company).where(Company.id == company_id, Company.founder_id == current_user.id))
+        if result.scalar_one_or_none():
+            return True
+    # Проверяем, является ли пользователь менеджером в этой компании
+    result = await db.execute(
+        select(CompanyMember).where(
+            CompanyMember.company_id == company_id,
+            CompanyMember.user_id == current_user.id,
+            CompanyMember.role_in_company == 'manager'
+        )
+    )
+    if result.scalar_one_or_none():
+        return True
+    return False
+
+# --- Создание компании (без изменений) ---
 @router.post("/", response_model=CompanyResponse)
 async def create_company(
     company_data: CompanyCreate,
@@ -61,45 +82,123 @@ async def create_company(
     db.add(cash_account)
     db.add(bank_account)
     
-    # Добавляем сотрудников
+    # Предустановленные категории
+    preset_categories = [
+        {"name": "Реализация", "type": "income", "icon": "💰"},
+        {"name": "Продажи", "type": "income", "icon": "📈"},
+        {"name": "Транспортные", "type": "expense", "icon": "🚗"},
+        {"name": "Касса", "type": "expense", "icon": "💵"},
+        {"name": "Офис", "type": "expense", "icon": "🏢"},
+    ]
+    for cat in preset_categories:
+        category = Category(
+            company_id=new_company.id,
+            name=cat["name"],
+            type=cat["type"],
+            is_system=False,
+            created_by=current_user.id,
+            icon=cat["icon"]
+        )
+        db.add(category)
+    
+    employees_credentials = []
+    
+    # --- Создаём пользователя для управляющего ---
+    if company_data.manager_phone and company_data.manager_full_name:
+        result = await db.execute(select(User).where(User.phone == company_data.manager_phone))
+        existing_manager = result.scalar_one_or_none()
+        if existing_manager:
+            # Если пользователь уже существует, просто добавляем как менеджера в компанию
+            member = CompanyMember(
+                company_id=new_company.id,
+                user_id=existing_manager.id,
+                role_in_company="manager",
+                invited_by=current_user.id
+            )
+            db.add(member)
+        else:
+            manager_password = generate_random_password()
+            manager_password_hash = get_password_hash(manager_password)
+            manager_user = User(
+                email=f"{company_data.manager_phone}@pulse.local",
+                phone=company_data.manager_phone,
+                full_name=company_data.manager_full_name,
+                password_hash=manager_password_hash,
+                role=UserRole.EMPLOYEE,
+                subscription_until=None,
+                soft_delete_retention_days=15
+            )
+            db.add(manager_user)
+            await db.flush()
+            member = CompanyMember(
+                company_id=new_company.id,
+                user_id=manager_user.id,
+                role_in_company="manager",
+                invited_by=current_user.id
+            )
+            db.add(member)
+            employees_credentials.append({
+                "full_name": company_data.manager_full_name,
+                "phone": company_data.manager_phone,
+                "password": manager_password,
+                "role": "manager"
+            })
+    
+    # --- Добавляем сотрудников ---
     for emp in company_data.employees:
         phone = emp.get("phone")
         full_name = emp.get("full_name")
-        # Проверяем, существует ли пользователь с таким телефоном
+        if not phone or not full_name:
+            continue
+        # Проверяем, существует ли пользователь
         result = await db.execute(select(User).where(User.phone == phone))
-        existing = result.scalar_one_or_none()
-        if existing:
-            raise HTTPException(status_code=400, detail=f"User with phone {phone} already exists")
-        
-        password = generate_random_password()
-        password_hash = get_password_hash(password)
-        new_user = User(
-            email=f"{phone}@pulse.local",
-            phone=phone,
-            full_name=full_name,
-            password_hash=password_hash,
-            role=UserRole.EMPLOYEE,
-            subscription_until=None,
-            soft_delete_retention_days=15
-        )
-        db.add(new_user)
-        await db.flush()
-        
-        member = CompanyMember(
-            company_id=new_company.id,
-            user_id=new_user.id,
-            role_in_company="employee",
-            invited_by=current_user.id
-        )
-        db.add(member)
-        # Здесь вы можете сохранить пароль в переменную, чтобы потом вернуть учредителю
-        # Пока просто печатаем в консоль (в реальности нужно отправить учредителю)
-        print(f"Создан сотрудник: {full_name}, телефон: {phone}, пароль: {password}")
+        existing_user = result.scalar_one_or_none()
+        if existing_user:
+            # Проверяем, не состоит ли уже в компании
+            existing_member = await db.execute(select(CompanyMember).where(
+                CompanyMember.company_id == new_company.id,
+                CompanyMember.user_id == existing_user.id
+            ))
+            if not existing_member.scalar_one_or_none():
+                member = CompanyMember(
+                    company_id=new_company.id,
+                    user_id=existing_user.id,
+                    role_in_company="employee",
+                    invited_by=current_user.id
+                )
+                db.add(member)
+        else:
+            password = generate_random_password()
+            password_hash = get_password_hash(password)
+            new_user = User(
+                email=f"{phone}@pulse.local",
+                phone=phone,
+                full_name=full_name,
+                password_hash=password_hash,
+                role=UserRole.EMPLOYEE,
+                subscription_until=None,
+                soft_delete_retention_days=15
+            )
+            db.add(new_user)
+            await db.flush()
+            member = CompanyMember(
+                company_id=new_company.id,
+                user_id=new_user.id,
+                role_in_company="employee",
+                invited_by=current_user.id
+            )
+            db.add(member)
+            employees_credentials.append({
+                "full_name": full_name,
+                "phone": phone,
+                "password": password,
+                "role": "employee"
+            })
     
     await db.commit()
     await db.refresh(new_company)
     
-    total = (cash_account.balance or 0) + (bank_account.balance or 0)
+    total_balance = (cash_account.balance or 0) + (bank_account.balance or 0)
     return CompanyResponse(
         id=new_company.id,
         inn=new_company.inn,
@@ -107,9 +206,10 @@ async def create_company(
         bank_account=new_company.bank_account,
         manager_full_name=new_company.manager_full_name,
         manager_phone=new_company.manager_phone,
-        total_balance=total
+        total_balance=total_balance,
+        employees_credentials=employees_credentials
     )
-
+# --- Получение списка компаний (без изменений) ---
 @router.get("/", response_model=List[CompanyResponse])
 async def get_companies(
     db: AsyncSession = Depends(get_db),
@@ -130,6 +230,23 @@ async def get_companies(
     response = []
     for comp in companies:
         total = sum(acc.balance for acc in comp.accounts)
+        
+        # Определяем роль текущего пользователя в этой компании
+        current_user_role = None
+        if current_user.role == UserRole.FOUNDER and comp.founder_id == current_user.id:
+            current_user_role = 'founder'
+        else:
+            # Ищем членство
+            result = await db.execute(
+                select(CompanyMember).where(
+                    CompanyMember.company_id == comp.id,
+                    CompanyMember.user_id == current_user.id
+                )
+            )
+            member = result.scalar_one_or_none()
+            if member:
+                current_user_role = member.role_in_company  # 'manager', 'employee'
+        
         response.append(CompanyResponse(
             id=comp.id,
             inn=comp.inn,
@@ -137,17 +254,20 @@ async def get_companies(
             bank_account=comp.bank_account,
             manager_full_name=comp.manager_full_name,
             manager_phone=comp.manager_phone,
-            total_balance=total
+            total_balance=total,
+            employees_credentials=[],
+            current_user_role=current_user_role
         ))
     return response
 
+# --- Получение членов компании (без изменений) ---
 @router.get("/{company_id}/members")
 async def get_company_members(
     company_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # Проверяем, что пользователь имеет доступ к компании (учредитель или сотрудник)
+    # Проверка доступа к компании (учредитель или член компании)
     if current_user.role == UserRole.FOUNDER:
         result = await db.execute(select(Company).where(Company.id == company_id, Company.founder_id == current_user.id))
     else:
@@ -156,7 +276,6 @@ async def get_company_members(
     if not company:
         raise HTTPException(status_code=404, detail="Company not found or access denied")
     
-    # Получаем список участников с информацией о пользователях
     result = await db.execute(
         select(CompanyMember)
         .where(CompanyMember.company_id == company_id)
@@ -176,6 +295,7 @@ async def get_company_members(
         for m in members
     ]
 
+# --- Удаление члена компании (теперь доступно учредителю и менеджеру) ---
 @router.delete("/{company_id}/members/{user_id}")
 async def remove_member(
     company_id: int,
@@ -183,27 +303,19 @@ async def remove_member(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # Только учредитель может удалять сотрудников
-    if current_user.role != UserRole.FOUNDER:
-        raise HTTPException(status_code=403, detail="Only founder can remove members")
+    if not await _can_manage_employees(company_id, current_user, db):
+        raise HTTPException(status_code=403, detail="Only founder or manager can remove members")
     
-    # Проверяем, что компания принадлежит учредителю
-    result = await db.execute(select(Company).where(Company.id == company_id, Company.founder_id == current_user.id))
-    company = result.scalar_one_or_none()
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
-    
-    # Находим связь
     result = await db.execute(select(CompanyMember).where(CompanyMember.company_id == company_id, CompanyMember.user_id == user_id))
     member = result.scalar_one_or_none()
     if not member:
         raise HTTPException(status_code=404, detail="Member not found in this company")
     
-    # Нельзя удалить самого учредителя (учредитель не состоит в company_members)
     await db.delete(member)
     await db.commit()
     return {"detail": "Member removed from company"}
 
+# --- Добавление члена компании (доступно учредителю и менеджеру, возвращает пароль) ---
 @router.post("/{company_id}/members")
 async def add_member(
     company_id: int,
@@ -212,47 +324,41 @@ async def add_member(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # Только учредитель может добавлять сотрудников
-    if current_user.role != UserRole.FOUNDER:
-        raise HTTPException(status_code=403, detail="Only founder can add members")
+    if not await _can_manage_employees(company_id, current_user, db):
+        raise HTTPException(status_code=403, detail="Only founder or manager can add members")
     
-    # Проверяем компанию
-    result = await db.execute(select(Company).where(Company.id == company_id, Company.founder_id == current_user.id))
+    # Проверка существования компании
+    result = await db.execute(select(Company).where(Company.id == company_id))
     company = result.scalar_one_or_none()
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
     
-    # Проверяем, существует ли пользователь с таким телефоном
+    # Поиск пользователя по телефону
     result = await db.execute(select(User).where(User.phone == phone))
     user = result.scalar_one_or_none()
+    created = False
+    password = None
     if not user:
-        # Создаём нового сотрудника
-        from app.auth import get_password_hash
-        import random, string
-        def generate_random_password(length=8):
-            return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
         password = generate_random_password()
-        new_user = User(
+        password_hash = get_password_hash(password)
+        user = User(
             email=f"{phone}@pulse.local",
             phone=phone,
             full_name=full_name,
-            password_hash=get_password_hash(password),
+            password_hash=password_hash,
             role=UserRole.EMPLOYEE,
             subscription_until=None,
             soft_delete_retention_days=15
         )
-        db.add(new_user)
+        db.add(user)
         await db.flush()
-        user = new_user
-        # Здесь нужно вернуть пароль учредителю (через print или в ответе)
-        print(f"Created new user: {full_name}, phone: {phone}, password: {password}")
+        created = True
     else:
-        # Проверяем, не состоит ли уже в этой компании
-        result = await db.execute(select(CompanyMember).where(CompanyMember.company_id == company_id, CompanyMember.user_id == user.id))
-        if result.scalar_one_or_none():
+        # Проверяем, не является ли уже членом этой компании
+        existing = await db.execute(select(CompanyMember).where(CompanyMember.company_id == company_id, CompanyMember.user_id == user.id))
+        if existing.scalar_one_or_none():
             raise HTTPException(status_code=400, detail="User already a member of this company")
     
-    # Добавляем связь
     member = CompanyMember(
         company_id=company_id,
         user_id=user.id,
@@ -261,8 +367,42 @@ async def add_member(
     )
     db.add(member)
     await db.commit()
-    return {"detail": "Member added", "user_id": user.id, "full_name": user.full_name, "phone": user.phone}
+    
+    response_data = {
+        "detail": "Member added",
+        "user_id": user.id,
+        "full_name": user.full_name,
+        "phone": user.phone
+    }
+    if created:
+        response_data["password"] = password
+    return response_data
 
+# --- Сброс пароля члена компании (доступно учредителю и менеджеру, возвращает новый пароль) ---
+@router.post("/{company_id}/members/{user_id}/reset-password")
+async def reset_member_password(
+    company_id: int,
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if not await _can_manage_employees(company_id, current_user, db):
+        raise HTTPException(status_code=403, detail="Only founder or manager can reset passwords")
+    
+    # Проверяем, что пользователь является членом компании
+    result = await db.execute(select(CompanyMember).where(CompanyMember.company_id == company_id, CompanyMember.user_id == user_id))
+    member = result.scalar_one_or_none()
+    if not member:
+        raise HTTPException(status_code=404, detail="User is not a member of this company")
+    
+    new_password = generate_random_password()
+    new_password_hash = get_password_hash(new_password)
+    await db.execute(update(User).where(User.id == user_id).values(password_hash=new_password_hash))
+    await db.commit()
+    
+    return {"detail": "Password reset", "new_password": new_password}
+
+# --- Редактирование компании (без изменений) ---
 @router.put("/{company_id}", response_model=CompanyResponse)
 async def update_company(
     company_id: int,
@@ -287,7 +427,6 @@ async def update_company(
     await db.commit()
     await db.refresh(company)
     
-    # пересчитываем total_balance для ответа
     acc_result = await db.execute(select(Account).where(Account.company_id == company.id))
     accounts = acc_result.scalars().all()
     total_balance = sum(float(acc.balance) for acc in accounts)
@@ -299,9 +438,102 @@ async def update_company(
         bank_account=company.bank_account,
         manager_full_name=company.manager_full_name,
         manager_phone=company.manager_phone,
-        total_balance=total_balance
+        total_balance=total_balance,
+        employees_credentials=[]
     )
 
+# --- Назначить управляющего компании (из числа членов) ---
+@router.put("/{company_id}/manager")
+async def set_company_manager(
+    company_id: int,
+    req: SetManagerRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Проверяем права: только учредитель или текущий менеджер?
+    # Для безопасности оставим только учредителя
+    if current_user.role != UserRole.FOUNDER:
+        raise HTTPException(status_code=403, detail="Only founder can change company manager")
+    
+    # Проверяем существование компании и права учредителя
+    result = await db.execute(select(Company).where(Company.id == company_id, Company.founder_id == current_user.id))
+    company = result.scalar_one_or_none()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    
+    # Проверяем, что пользователь с таким user_id является членом компании
+    result = await db.execute(select(CompanyMember).where(CompanyMember.company_id == company_id, CompanyMember.user_id == req.user_id))
+    member = result.scalar_one_or_none()
+    if not member:
+        raise HTTPException(status_code=404, detail="User is not a member of this company")
+    
+    # Получаем данные пользователя
+    result = await db.execute(select(User).where(User.id == req.user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Обновляем поля компании
+    company.manager_full_name = user.full_name
+    company.manager_phone = user.phone
+    await db.flush()
+    
+    # Если у текущего управляющего (кто был раньше) роль была manager, понижаем до employee
+    # Находим старого управляющего (члена с ролью manager)
+    result = await db.execute(select(CompanyMember).where(CompanyMember.company_id == company_id, CompanyMember.role_in_company == 'manager'))
+    old_manager = result.scalar_one_or_none()
+    if old_manager and old_manager.user_id != req.user_id:
+        old_manager.role_in_company = 'employee'
+    
+    # Назначаем новому пользователю роль manager
+    member.role_in_company = 'manager'
+    
+    await db.commit()
+    return {"detail": "Manager updated", "manager_full_name": user.full_name, "manager_phone": user.phone}
+
+# --- Обновление роли участника (повышение/понижение) ---
+@router.patch("/{company_id}/members/{user_id}/role")
+async def update_member_role(
+    company_id: int,
+    user_id: int,
+    req: UpdateMemberRole,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Доступно учредителю или текущему менеджеру? Пусть учредителю
+    if current_user.role != UserRole.FOUNDER:
+        raise HTTPException(status_code=403, detail="Only founder can change member roles")
+    
+    result = await db.execute(select(Company).where(Company.id == company_id, Company.founder_id == current_user.id))
+    if not result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Company not found")
+    
+    result = await db.execute(select(CompanyMember).where(CompanyMember.company_id == company_id, CompanyMember.user_id == user_id))
+    member = result.scalar_one_or_none()
+    if not member:
+        raise HTTPException(status_code=404, detail="Member not found")
+    
+    if req.role_in_company not in ('manager', 'employee'):
+        raise HTTPException(status_code=400, detail="Invalid role")
+    
+    member.role_in_company = req.role_in_company
+    await db.commit()
+    
+    # Если роль стала manager, также обновляем поля компании (опционально)
+    if req.role_in_company == 'manager':
+        result = await db.execute(select(User).where(User.id == user_id))
+        user = result.scalar_one_or_none()
+        if user:
+            company_result = await db.execute(select(Company).where(Company.id == company_id))
+            company = company_result.scalar_one_or_none()
+            if company:
+                company.manager_full_name = user.full_name
+                company.manager_phone = user.phone
+                await db.commit()
+    
+    return {"detail": "Role updated", "new_role": req.role_in_company}
+
+# --- Удаление компании (без изменений) ---
 @router.delete("/{company_id}")
 async def delete_company(
     company_id: int,

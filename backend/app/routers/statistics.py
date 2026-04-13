@@ -305,3 +305,38 @@ async def get_transaction_photo(
         raise HTTPException(status_code=404, detail="File not found")
     
     return FileResponse(file_path)
+
+@router.get("/user-overview")
+async def get_user_overview(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Получаем все компании, доступные пользователю
+    if current_user.role == UserRole.FOUNDER:
+        result = await db.execute(select(Company).where(Company.founder_id == current_user.id))
+    else:
+        # Сотрудник: компании через CompanyMember
+        result = await db.execute(
+            select(Company).join(CompanyMember).where(CompanyMember.user_id == current_user.id)
+        )
+    companies = result.scalars().all()
+    
+    total_cash = 0.0
+    total_bank = 0.0
+    
+    for company in companies:
+        # Суммируем балансы счетов компании
+        acc_result = await db.execute(select(Account).where(Account.company_id == company.id))
+        accounts = acc_result.scalars().all()
+        for acc in accounts:
+            if acc.type == 'cash':
+                total_cash += float(acc.balance)
+            elif acc.type == 'bank':
+                total_bank += float(acc.balance)
+    
+    total_all = total_cash + total_bank
+    return {
+        "total_cash": total_cash,
+        "total_bank": total_bank,
+        "total_all": total_all
+    }

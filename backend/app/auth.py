@@ -10,13 +10,13 @@ from pydantic import BaseModel
 from app.database import get_db
 from app.models import User, UserRole
 from app.config import settings
+from app.deps import get_current_user  # добавлен импорт
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
-# Pydantic-модель для регистрации
 class RegisterRequest(BaseModel):
     email: str
     phone: str
@@ -40,7 +40,6 @@ async def register(
     register_data: RegisterRequest,
     db: AsyncSession = Depends(get_db)
 ):
-    # Проверяем, не существует ли пользователь
     result = await db.execute(
         select(User).where((User.email == register_data.email) | (User.phone == register_data.phone))
     )
@@ -48,9 +47,7 @@ async def register(
     if existing_user:
         raise HTTPException(status_code=400, detail="User with this email or phone already exists")
 
-    # Эмуляция покупки подписки – устанавливаем subscription_until на 30 дней вперёд
     subscription_until = datetime.utcnow() + timedelta(days=30)
-
     new_user = User(
         email=register_data.email,
         phone=register_data.phone,
@@ -82,9 +79,67 @@ async def login(
     if user.role == UserRole.FOUNDER and user.subscription_until and user.subscription_until < datetime.utcnow():
         raise HTTPException(status_code=403, detail="Subscription expired")
 
-    # Обновляем время последнего входа
     user.last_login = datetime.utcnow()
     await db.commit()
 
     access_token = create_access_token(data={"sub": str(user.id), "role": user.role.value})
     return {"access_token": access_token, "token_type": "bearer"}
+
+@router.get("/me")
+async def get_current_user_info(
+    current_user: User = Depends(get_current_user),
+):
+    return {
+        "id": current_user.id,
+        "email": current_user.email,
+        "phone": current_user.phone,
+        "full_name": current_user.full_name,
+        "role": current_user.role.value,
+        "subscription_until": current_user.subscription_until.isoformat() if current_user.subscription_until else None,
+    }
+
+@router.post("/admin/register-founder")
+async def admin_register_founder(
+    email: str,
+    phone: str,
+    full_name: str,
+    password: str,
+    subscription_days: int = 30,
+    permanent: bool = False,
+    db: AsyncSession = Depends(get_db),
+    current_admin: User = Depends(get_current_user)
+):
+    if current_admin.role != UserRole.SUPERADMIN:
+        raise HTTPException(status_code=403, detail="Only superadmin can register founders")
+    
+    result = await db.execute(
+        select(User).where((User.email == email) | (User.phone == phone))
+    )
+    if result.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="User already exists")
+    
+    if permanent:
+        subscription_until = None
+    else:
+        subscription_until = datetime.utcnow() + timedelta(days=subscription_days)
+    
+    new_user = User(
+        email=email,
+        phone=phone,
+        full_name=full_name,
+        password_hash=get_password_hash(password),
+        role=UserRole.FOUNDER,
+        subscription_until=subscription_until,
+        soft_delete_retention_days=15,
+    )
+    db.add(new_user)
+    await db.commit()
+    await db.refresh(new_user)
+    
+    return {
+        "id": new_user.id,
+        "email": new_user.email,
+        "phone": new_user.phone,
+        "full_name": new_user.full_name,
+        "subscription_until": subscription_until.isoformat() if subscription_until else None
+    }

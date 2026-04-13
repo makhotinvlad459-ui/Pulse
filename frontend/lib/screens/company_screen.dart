@@ -15,6 +15,7 @@ import '../widgets/company/edit_company_dialog.dart';
 import '../widgets/company/edit_transaction_dialog.dart';
 import '../widgets/company/add_account_dialog.dart';
 import '../widgets/company/manage_categories_dialog.dart';
+import '../widgets/company/manage_employees_dialog.dart'; // новый импорт
 
 class CompanyScreen extends ConsumerStatefulWidget {
   final Company company;
@@ -89,7 +90,9 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
     final isFounder = authState.user?.role == UserRole.founder;
-    print('CompanyScreen: isFounder = $isFounder');
+    // Определяем, может ли пользователь управлять сотрудниками
+    final canManageEmployees =
+        isFounder || widget.company.currentUserRole == 'manager';
 
     return Scaffold(
       appBar: AppBar(
@@ -117,21 +120,34 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                         companyId: widget.company.id,
                         onSuccess: _refresh,
                         categories: _categories));
+              if (value == 'manage_employees')
+                await showDialog(
+                    context: context,
+                    builder: (_) => ManageEmployeesDialog(
+                        companyId: widget.company.id, onSuccess: _refresh));
               if (value == 'delete') await _confirmDeleteCompany();
             },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                  value: 'edit', child: Text('Редактировать компанию')),
-              const PopupMenuItem(
-                  value: 'add_account', child: Text('Добавить счёт')),
-              const PopupMenuItem(
-                  value: 'manage_categories',
-                  child: Text('Управление категориями')),
-              const PopupMenuItem(
+            itemBuilder: (context) {
+              final items = [
+                const PopupMenuItem(
+                    value: 'edit', child: Text('Редактировать компанию')),
+                const PopupMenuItem(
+                    value: 'add_account', child: Text('Добавить счёт')),
+                const PopupMenuItem(
+                    value: 'manage_categories',
+                    child: Text('Управление категориями')),
+              ];
+              if (canManageEmployees) {
+                items.add(const PopupMenuItem(
+                    value: 'manage_employees',
+                    child: Text('Управление сотрудниками')));
+              }
+              items.add(const PopupMenuItem(
                   value: 'delete',
                   child: Text('Удалить компанию',
-                      style: TextStyle(color: Colors.red))),
-            ],
+                      style: TextStyle(color: Colors.red))));
+              return items;
+            },
           ),
         ],
       ),

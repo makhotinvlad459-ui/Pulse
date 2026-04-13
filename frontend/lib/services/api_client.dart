@@ -99,4 +99,9 @@ class ApiClient {
     final response = await get('/statistics/founder-overview');
     return FounderOverview.fromJson(response.data);
   }
+
+  Future<FounderOverview> getUserOverview() async {
+    final response = await get('/statistics/user-overview');
+    return FounderOverview.fromJson(response.data);
+  }
 }

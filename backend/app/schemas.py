@@ -19,7 +19,8 @@ class CompanyCreate(BaseModel):
     bank_account: str
     manager_full_name: str
     manager_phone: str
-    employees: List[dict] = []  # каждый: {"full_name": str, "phone": str}
+    employees: List[dict] = []
+    
 
 class CompanyResponse(BaseModel):
     id: int
@@ -29,6 +30,8 @@ class CompanyResponse(BaseModel):
     manager_full_name: str
     manager_phone: str
     total_balance: float
+    employees_credentials: List[dict] = []
+    current_user_role: Optional[str] = None  
     class Config:
         from_attributes = True
 
@@ -88,5 +91,13 @@ class TransactionResponse(BaseModel):
     deleted_by: Optional[int]
     deleted_at: Optional[datetime]
     transfer_to_account_id: Optional[int]
+    creator_name: Optional[str] = None
+    updater_name: Optional[str] = None
     class Config:
         from_attributes = True
+
+class UpdateMemberRole(BaseModel):
+    role_in_company: str        
+
+class SetManagerRequest(BaseModel):
+    user_id: int

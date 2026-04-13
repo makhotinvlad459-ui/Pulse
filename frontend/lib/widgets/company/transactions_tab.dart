@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:html' as html;
 import '../../services/api_client.dart';
+import '../../models/transaction.dart';
 import 'edit_transaction_dialog.dart';
 
 class TransactionsTab extends StatefulWidget {
@@ -28,7 +29,7 @@ class TransactionsTab extends StatefulWidget {
 }
 
 class _TransactionsTabState extends State<TransactionsTab> {
-  List<dynamic> _transactions = [];
+  List<Transaction> _transactions = [];
   bool _loading = true;
   DateTime _startDate = DateTime(DateTime.now().year, DateTime.now().month, 1);
   DateTime _endDate = DateTime(DateTime.now().year, DateTime.now().month + 1, 0)
@@ -51,8 +52,9 @@ class _TransactionsTabState extends State<TransactionsTab> {
         'end_date': _endDate.toIso8601String(),
         'include_deleted': 'true',
       });
+      final List<dynamic> data = res.data;
       setState(() {
-        _transactions = res.data;
+        _transactions = data.map((json) => Transaction.fromJson(json)).toList();
         _loading = false;
       });
     } catch (e) {
@@ -166,11 +168,23 @@ class _TransactionsTabState extends State<TransactionsTab> {
     }
   }
 
-  Future<void> _editTransaction(Map<String, dynamic> transaction) async {
+  Future<void> _editTransaction(Transaction transaction) async {
+    // Преобразуем Transaction в Map для совместимости с EditTransactionDialog
+    final Map<String, dynamic> map = {
+      'id': transaction.id,
+      'type': transaction.type,
+      'amount': transaction.amount,
+      'date': transaction.date.toIso8601String(),
+      'account_id': transaction.accountId,
+      'category_id': transaction.categoryId,
+      'description': transaction.description,
+      'attachment_url': transaction.attachmentUrl,
+      'transfer_to_account_id': transaction.transferToAccountId,
+    };
     await showDialog(
       context: context,
       builder: (context) => EditTransactionDialog(
-        transaction: transaction,
+        transaction: map,
         companyId: widget.companyId,
         accounts: widget.accounts,
         categories: widget.categories,
@@ -273,9 +287,9 @@ class _TransactionsTabState extends State<TransactionsTab> {
   @override
   Widget build(BuildContext context) {
     // Группировка по дням
-    Map<DateTime, List<dynamic>> grouped = {};
+    Map<DateTime, List<Transaction>> grouped = {};
     for (var t in _transactions) {
-      DateTime date = DateTime.parse(t['date']).toLocal();
+      DateTime date = t.date.toLocal();
       DateTime key = DateTime(date.year, date.month, date.day);
       grouped.putIfAbsent(key, () => []).add(t);
     }
@@ -329,7 +343,7 @@ class _TransactionsTabState extends State<TransactionsTab> {
                                 ),
                               ),
                               ...dayTransactions.map((t) {
-                                final isDeleted = t['is_deleted'] == true;
+                                final isDeleted = t.isDeleted;
                                 return Card(
                                   margin: const EdgeInsets.symmetric(
                                       vertical: 4, horizontal: 8),
@@ -338,9 +352,9 @@ class _TransactionsTabState extends State<TransactionsTab> {
                                       : Colors.white,
                                   child: ListTile(
                                     title: Text(
-                                      '${t['amount']} ₽',
+                                      '${t.amount} ₽',
                                       style: TextStyle(
-                                        color: t['type'] == 'income'
+                                        color: t.type == 'income'
                                             ? (isDeleted
                                                 ? Colors.grey
                                                 : Colors.green)
@@ -352,23 +366,48 @@ class _TransactionsTabState extends State<TransactionsTab> {
                                             : null,
                                       ),
                                     ),
-                                    subtitle: Text(
-                                      '${_typeName(t['type'])} • ${getCategoryName(t['category_id'])} • ${getAccountName(t['account_id'])} • ${t['description'] ?? ''}',
-                                      style: TextStyle(
-                                          color: isDeleted
-                                              ? Colors.grey
-                                              : Colors.black87,
-                                          fontSize: 12),
+                                    subtitle: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          '${_typeName(t.type)} • ${getCategoryName(t.categoryId)} • ${getAccountName(t.accountId)} • ${t.description ?? ''}',
+                                          style: TextStyle(
+                                              color: isDeleted
+                                                  ? Colors.grey
+                                                  : Colors.black87,
+                                              fontSize: 12),
+                                        ),
+                                        if (t.creatorName != null)
+                                          Text(
+                                            'Создал: ${t.creatorName}',
+                                            style: TextStyle(
+                                                fontSize: 10,
+                                                color: isDeleted
+                                                    ? Colors.grey
+                                                    : Colors.grey.shade600),
+                                          ),
+                                        if (t.updaterName != null &&
+                                            t.updaterName != t.creatorName)
+                                          Text(
+                                            'Изменил: ${t.updaterName}',
+                                            style: TextStyle(
+                                                fontSize: 10,
+                                                color: isDeleted
+                                                    ? Colors.grey
+                                                    : Colors.grey.shade600),
+                                          ),
+                                      ],
                                     ),
                                     trailing: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        if (t['attachment_url'] != null)
+                                        if (t.attachmentUrl != null)
                                           IconButton(
                                             icon: const Icon(Icons.attach_file,
                                                 size: 18, color: Colors.blue),
                                             onPressed: () => _showAttachment(
-                                                t['attachment_url'], t['id']),
+                                                t.attachmentUrl, t.id),
                                             tooltip: 'Просмотреть вложение',
                                           ),
                                         if (isDeleted)
@@ -376,7 +415,7 @@ class _TransactionsTabState extends State<TransactionsTab> {
                                             icon: const Icon(Icons.restore,
                                                 color: Colors.orange),
                                             onPressed: () =>
-                                                _restoreTransaction(t['id']),
+                                                _restoreTransaction(t.id),
                                             tooltip: 'Восстановить',
                                           ),
                                         if (widget.isFounder && isDeleted)
@@ -386,12 +425,12 @@ class _TransactionsTabState extends State<TransactionsTab> {
                                                 color: Colors.red),
                                             onPressed: () =>
                                                 _permanentDeleteTransaction(
-                                                    t['id']),
+                                                    t.id),
                                             tooltip: 'Удалить навсегда',
                                           ),
                                         Text(
-                                          DateFormat('HH:mm', 'ru').format(
-                                              DateTime.parse(t['date'])),
+                                          DateFormat('HH:mm', 'ru')
+                                              .format(t.date.toLocal()),
                                           style: TextStyle(
                                               color: isDeleted
                                                   ? Colors.grey

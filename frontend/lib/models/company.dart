@@ -6,6 +6,7 @@ class Company {
   final String managerFullName;
   final String managerPhone;
   final double totalBalance;
+  final String? currentUserRole;
 
   Company({
     required this.id,
@@ -15,6 +16,7 @@ class Company {
     required this.managerFullName,
     required this.managerPhone,
     required this.totalBalance,
+    this.currentUserRole,
   });
 
   factory Company.fromJson(Map<String, dynamic> json) {
@@ -26,6 +28,7 @@ class Company {
       managerFullName: json['manager_full_name'],
       managerPhone: json['manager_phone'],
       totalBalance: (json['total_balance'] as num).toDouble(),
+      currentUserRole: json['current_user_role'],
     );
   }
 }

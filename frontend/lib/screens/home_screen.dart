@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../providers/home_provider.dart';
+import '../providers/auth_provider.dart';
 import '../widgets/graphite_background.dart';
 import '../models/company.dart';
 import '../screens/create_company_screen.dart';
@@ -170,7 +171,7 @@ class _CompanyCard extends ConsumerWidget {
             context,
             MaterialPageRoute(builder: (_) => CompanyScreen(company: company)),
           );
-          ref.invalidate(homeProvider); // обновляем всегда после возврата
+          ref.invalidate(homeProvider);
         },
       ),
     );
@@ -182,45 +183,40 @@ class SettingsDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ref = ProviderScope.containerOf(context).read(authProvider.notifier);
     return Drawer(
       backgroundColor: Colors.white,
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
-          DrawerHeader(
-            decoration: const BoxDecoration(color: Colors.blueGrey),
+          const DrawerHeader(
+            decoration: BoxDecoration(color: Colors.blueGrey),
             child: Text('Настройки',
-                style: GoogleFonts.caveat(fontSize: 28, color: Colors.white)),
+                style: TextStyle(fontSize: 28, color: Colors.white)),
           ),
           const ExpansionTile(
             title: Text('Сотрудники', style: TextStyle(color: Colors.black87)),
-            children: [
-              ListTile(
-                  title: Text('Список сотрудников будет здесь',
-                      style: TextStyle(color: Colors.black54)))
-            ],
+            children: [ListTile(title: Text('Список сотрудников будет здесь'))],
           ),
           const ExpansionTile(
             title: Text('Подписка', style: TextStyle(color: Colors.black87)),
-            children: [
-              ListTile(
-                  title: Text('Статус: Активна',
-                      style: TextStyle(color: Colors.black54))),
-              ListTile(
-                  title: Text('Действует до: 2026-05-09',
-                      style: TextStyle(color: Colors.black54))),
-            ],
+            children: [ListTile(title: Text('Статус: Активна'))],
           ),
           const ExpansionTile(
             title: Text('Поддержка', style: TextStyle(color: Colors.black87)),
-            children: [
-              ListTile(
-                  title: Text('Email: support@pulse.ru',
-                      style: TextStyle(color: Colors.black54))),
-              ListTile(
-                  title: Text('Телефон: +7 (999) 123-45-67',
-                      style: TextStyle(color: Colors.black54))),
-            ],
+            children: [ListTile(title: Text('Email: support@pulse.ru'))],
+          ),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.logout, color: Colors.red),
+            title: const Text('Выйти', style: TextStyle(color: Colors.red)),
+            onTap: () async {
+              Navigator.pop(context);
+              await ref.logout();
+              if (context.mounted) {
+                Navigator.pushReplacementNamed(context, '/login');
+              }
+            },
           ),
         ],
       ),
