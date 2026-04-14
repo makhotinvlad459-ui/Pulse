@@ -78,7 +78,7 @@ class TransactionCreate(BaseModel):
 
 class TransactionResponse(BaseModel):
     id: int
-    type: TransactionType
+    type: str
     amount: float
     date: datetime
     account_id: int

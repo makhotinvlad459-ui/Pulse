@@ -86,12 +86,14 @@ class _IncomeExpenseTabState extends State<IncomeExpenseTab> {
   }
 
   String _getIconForCategory(String categoryName) {
+    if (categoryName == 'Без категории') return '📁';
     final cat = widget.categories
         .firstWhere((c) => c['name'] == categoryName, orElse: () => null);
     return cat != null ? (cat['icon'] ?? '📁') : '📁';
   }
 
   int? _getCategoryId(String categoryName) {
+    if (categoryName == 'Без категории') return null;
     final cat = widget.categories
         .firstWhere((c) => c['name'] == categoryName, orElse: () => null);
     return cat?['id'];
@@ -138,21 +140,19 @@ class _IncomeExpenseTabState extends State<IncomeExpenseTab> {
                   getIcon: _getIconForCategory,
                   onTapCategory: (categoryName) {
                     final categoryId = _getCategoryId(categoryName);
-                    if (categoryId != null) {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => TransactionsByCategoryScreen(
-                            companyId: widget.companyId,
-                            categoryId: categoryId,
-                            categoryName: categoryName,
-                            type: 'income',
-                            startDate: _startDate,
-                            endDate: _endDate,
-                          ),
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => TransactionsByCategoryScreen(
+                          companyId: widget.companyId,
+                          categoryId: categoryId,
+                          categoryName: categoryName,
+                          type: 'income',
+                          startDate: _startDate,
+                          endDate: _endDate,
                         ),
-                      );
-                    }
+                      ),
+                    );
                   },
                 ),
               ),
@@ -164,21 +164,19 @@ class _IncomeExpenseTabState extends State<IncomeExpenseTab> {
                   getIcon: _getIconForCategory,
                   onTapCategory: (categoryName) {
                     final categoryId = _getCategoryId(categoryName);
-                    if (categoryId != null) {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => TransactionsByCategoryScreen(
-                            companyId: widget.companyId,
-                            categoryId: categoryId,
-                            categoryName: categoryName,
-                            type: 'expense',
-                            startDate: _startDate,
-                            endDate: _endDate,
-                          ),
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => TransactionsByCategoryScreen(
+                          companyId: widget.companyId,
+                          categoryId: categoryId,
+                          categoryName: categoryName,
+                          type: 'expense',
+                          startDate: _startDate,
+                          endDate: _endDate,
                         ),
-                      );
-                    }
+                      ),
+                    );
                   },
                 ),
               ),
@@ -249,14 +247,14 @@ class _CategoryColumn extends StatelessWidget {
 
 class TransactionsByCategoryScreen extends StatelessWidget {
   final int companyId;
-  final int categoryId;
+  final int? categoryId;
   final String categoryName;
   final String type;
   final DateTime startDate;
   final DateTime endDate;
   const TransactionsByCategoryScreen({
     required this.companyId,
-    required this.categoryId,
+    this.categoryId,
     required this.categoryName,
     required this.type,
     required this.startDate,
@@ -265,18 +263,21 @@ class TransactionsByCategoryScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final queryParams = {
+      'company_id': companyId,
+      'type': type,
+      'start_date': startDate.toIso8601String(),
+      'end_date': endDate.toIso8601String(),
+    };
+    if (categoryId != null) {
+      queryParams['category_id'] = categoryId!;
+    }
     return Scaffold(
       appBar: AppBar(
           title: Text(
               '$categoryName (${type == 'income' ? 'Приход' : 'Расход'})')),
       body: FutureBuilder(
-        future: ApiClient().get('/transactions', queryParameters: {
-          'company_id': companyId,
-          'type': type,
-          'category_id': categoryId,
-          'start_date': startDate.toIso8601String(),
-          'end_date': endDate.toIso8601String(),
-        }),
+        future: ApiClient().get('/transactions', queryParameters: queryParams),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());

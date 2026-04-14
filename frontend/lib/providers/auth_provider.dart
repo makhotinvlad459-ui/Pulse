@@ -19,7 +19,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   final ApiClient _api = ApiClient();
 
-  Future<void> register(
+  Future<bool> register(
       String email, String phone, String fullName, String password) async {
     state = AuthState(isLoading: true);
     try {
@@ -31,10 +31,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
       });
       final token = response.data['access_token'];
       await _api.setToken(token);
-      // После регистрации тоже получаем профиль
       await _loadUserProfile();
+      return true;
     } catch (e) {
       state = AuthState(error: e.toString());
+      return false;
     }
   }
 

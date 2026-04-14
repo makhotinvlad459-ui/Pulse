@@ -3,7 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../providers/home_provider.dart';
 import '../providers/auth_provider.dart';
-import '../widgets/graphite_background.dart';
+import '../widgets/matrix_rain.dart';
+import '../widgets/ecg_widget.dart';
 import '../models/company.dart';
 import '../screens/create_company_screen.dart';
 import '../screens/company_screen.dart';
@@ -16,75 +17,108 @@ class HomeScreen extends ConsumerWidget {
     final homeAsync = ref.watch(homeProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Пульс',
-            style: GoogleFonts.caveat(fontSize: 28, color: Colors.black87)),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black87,
-        elevation: 1,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.bar_chart),
-            onPressed: () {
-              // TODO: перейти к отчётам
-            },
+      drawer: const SettingsDrawer(),
+      backgroundColor: Colors.white,
+      body: Stack(
+        children: [
+          Container(
+            color: const Color(0xFFF2F2F2),
+            child: CustomPaint(
+              painter: _LightGridPainter(),
+              size: Size.infinite,
+            ),
           ),
-          Builder(
-            builder: (context) => IconButton(
-              icon: const Icon(Icons.settings),
-              onPressed: () => Scaffold.of(context).openDrawer(),
+          MatrixRain(color: Colors.black, opacity: 0.4),
+          SafeArea(
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 32),
+                  child: ECGWidget(
+                    color: Colors.grey.shade600,
+                    width: 200,
+                    height: 60,
+                  ),
+                ),
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Пульс',
+                        style: GoogleFonts.caveat(
+                          fontSize: 32,
+                          color: Colors.grey.shade800,
+                        ),
+                      ),
+                      Row(
+                        children: [
+                          IconButton(
+                            icon: Icon(Icons.bar_chart,
+                                color: Colors.grey.shade700),
+                            onPressed: () {},
+                          ),
+                          Builder(
+                            builder: (context) => IconButton(
+                              icon: Icon(Icons.settings,
+                                  color: Colors.grey.shade700),
+                              onPressed: () =>
+                                  Scaffold.of(context).openDrawer(),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: RefreshIndicator(
+                    onRefresh: () async {
+                      ref.invalidate(homeProvider);
+                      await Future.delayed(Duration.zero);
+                    },
+                    child: homeAsync.when(
+                      data: (data) {
+                        final companies = data.companies;
+                        final overview = data.overview;
+                        return ListView(
+                          padding: const EdgeInsets.all(16),
+                          children: [
+                            Row(
+                              children: [
+                                _StatCard(
+                                    title: 'Суммарно',
+                                    amount: overview.totalAll),
+                                const SizedBox(width: 8),
+                                _StatCard(
+                                    title: 'Наличные',
+                                    amount: overview.totalCash),
+                                const SizedBox(width: 8),
+                                _StatCard(
+                                    title: 'Банк', amount: overview.totalBank),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            ...companies.map((company) =>
+                                _CompanyCard(company: company, ref: ref)),
+                          ],
+                        );
+                      },
+                      loading: () =>
+                          const Center(child: CircularProgressIndicator()),
+                      error: (error, stack) => Center(
+                        child: Text('Ошибка: $error',
+                            style: const TextStyle(color: Colors.red)),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
-      ),
-      drawer: const SettingsDrawer(),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          ref.invalidate(homeProvider);
-          await Future.delayed(Duration.zero);
-        },
-        child: GraphiteBackground(
-          child: homeAsync.when(
-            data: (data) {
-              final companies = data.companies;
-              final overview = data.overview;
-              return Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Row(
-                      children: [
-                        _StatCard(
-                            title: 'Суммарно на счетах',
-                            amount: overview.totalAll),
-                        const SizedBox(width: 8),
-                        _StatCard(
-                            title: 'Наличные', amount: overview.totalCash),
-                        const SizedBox(width: 8),
-                        _StatCard(title: 'Банк', amount: overview.totalBank),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    child: ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      itemCount: companies.length,
-                      itemBuilder: (context, index) {
-                        final company = companies[index];
-                        return _CompanyCard(company: company);
-                      },
-                    ),
-                  ),
-                ],
-              );
-            },
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (error, stack) => Center(
-              child: Text('Ошибка: $error',
-                  style: const TextStyle(color: Colors.red)),
-            ),
-          ),
-        ),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
@@ -139,12 +173,13 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-class _CompanyCard extends ConsumerWidget {
+class _CompanyCard extends StatelessWidget {
   final Company company;
-  const _CompanyCard({required this.company});
+  final WidgetRef ref;
+  const _CompanyCard({required this.company, required this.ref});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       color: Colors.white,
@@ -190,13 +225,21 @@ class SettingsDrawer extends StatelessWidget {
         padding: EdgeInsets.zero,
         children: [
           const DrawerHeader(
-            decoration: BoxDecoration(color: Colors.blueGrey),
+            decoration:
+                BoxDecoration(color: Color.fromARGB(255, 191, 193, 194)),
             child: Text('Настройки',
                 style: TextStyle(fontSize: 28, color: Colors.white)),
           ),
-          const ExpansionTile(
-            title: Text('Сотрудники', style: TextStyle(color: Colors.black87)),
-            children: [ListTile(title: Text('Список сотрудников будет здесь'))],
+          ListTile(
+            leading: const Icon(Icons.people, color: Colors.black87),
+            title: const Text('Сотрудники'),
+            onTap: () {
+              // TODO: открыть экран со списком сотрудников
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                    content: Text('Список сотрудников в разработке')),
+              );
+            },
           ),
           const ExpansionTile(
             title: Text('Подписка', style: TextStyle(color: Colors.black87)),
@@ -222,4 +265,23 @@ class SettingsDrawer extends StatelessWidget {
       ),
     );
   }
+}
+
+class _LightGridPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.grey.shade300.withOpacity(0.5)
+      ..strokeWidth = 0.5;
+    const double spacing = 30.0;
+    for (double x = 0; x < size.width; x += spacing) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+    }
+    for (double y = 0; y < size.height; y += spacing) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

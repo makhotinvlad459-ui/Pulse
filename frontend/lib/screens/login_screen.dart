@@ -16,7 +16,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _glowController;
   late final Animation<double> _glowAnimation;
-  final TextEditingController _usernameController = TextEditingController();
+  final TextEditingController _loginController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
   @override
@@ -35,7 +35,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   @override
   void dispose() {
     _glowController.dispose();
-    _usernameController.dispose();
+    _loginController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
@@ -48,7 +48,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         children: [
           // Светлый серый фон с клеткой
           Container(
-            color: const Color(0xFFF2F2F2), // светло-серый
+            color: const Color(0xFFF2F2F2),
             child: CustomPaint(
               painter: _LightGridPainter(),
               size: Size.infinite,
@@ -78,7 +78,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                     },
                   ),
                   const SizedBox(height: 20),
-                  // Заголовок "Пульс" (тёмно-серый)
+                  // Заголовок "Пульс"
                   TweenAnimationBuilder(
                     tween: Tween<double>(begin: 0.9, end: 1.0),
                     duration: const Duration(milliseconds: 800),
@@ -118,7 +118,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                     },
                   ),
                   const SizedBox(height: 40),
-                  // Карточка входа (белая, с серой тенью)
+                  // Карточка входа
                   Card(
                     elevation: 6,
                     color: Colors.white,
@@ -131,10 +131,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                       child: Column(
                         children: [
                           TextField(
-                            controller: _usernameController,
+                            controller: _loginController,
                             style: const TextStyle(color: Colors.black87),
                             decoration: InputDecoration(
-                              labelText: 'Email или телефон',
+                              labelText: 'Логин', // изменено
                               labelStyle:
                                   TextStyle(color: Colors.grey.shade600),
                               prefixIcon: Icon(Icons.person,
@@ -185,7 +185,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                             ElevatedButton(
                               onPressed: () async {
                                 await ref.read(authProvider.notifier).login(
-                                      _usernameController.text.trim(),
+                                      _loginController.text.trim(),
                                       _passwordController.text.trim(),
                                     );
                                 if (ref.read(authProvider).user != null &&
@@ -216,8 +216,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                               Navigator.pushNamed(context, '/register');
                             },
                             child: Text(
-                              'Нет аккаунта? Зарегистрироваться',
+                              'Нет аккаунта? Создать аккаунт',
                               style: TextStyle(color: Colors.grey.shade700),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Приложение не собирает персональные данные пользователей и не обрабатывает их.\n',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Colors.grey.shade500,
+                              fontSize: 12,
+                              height: 1.4,
                             ),
                           ),
                         ],

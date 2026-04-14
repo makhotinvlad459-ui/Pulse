@@ -8,6 +8,7 @@ import 'dart:html' as html;
 import '../../services/api_client.dart';
 import '../../models/transaction.dart';
 import 'edit_transaction_dialog.dart';
+import 'add_transaction_dialog.dart'; // добавлен импорт
 
 class TransactionsTab extends StatefulWidget {
   final int companyId;
@@ -169,7 +170,6 @@ class _TransactionsTabState extends State<TransactionsTab> {
   }
 
   Future<void> _editTransaction(Transaction transaction) async {
-    // Преобразуем Transaction в Map для совместимости с EditTransactionDialog
     final Map<String, dynamic> map = {
       'id': transaction.id,
       'type': transaction.type,
@@ -286,7 +286,6 @@ class _TransactionsTabState extends State<TransactionsTab> {
 
   @override
   Widget build(BuildContext context) {
-    // Группировка по дням
     Map<DateTime, List<Transaction>> grouped = {};
     for (var t in _transactions) {
       DateTime date = t.date.toLocal();
@@ -295,160 +294,190 @@ class _TransactionsTabState extends State<TransactionsTab> {
     }
     var sortedDates = grouped.keys.toList()..sort((a, b) => b.compareTo(a));
 
-    return Column(
+    return Stack(
       children: [
-        Padding(
-          padding: const EdgeInsets.all(8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              TextButton.icon(
-                onPressed: _selectPeriod,
-                icon: const Icon(Icons.calendar_today),
-                label: Text(
-                    '${DateFormat('dd.MM.yyyy', 'ru').format(_startDate)} - ${DateFormat('dd.MM.yyyy', 'ru').format(_endDate)}'),
+        Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  TextButton.icon(
+                    onPressed: _selectPeriod,
+                    icon: const Icon(Icons.calendar_today),
+                    label: Text(
+                        '${DateFormat('dd.MM.yyyy', 'ru').format(_startDate)} - ${DateFormat('dd.MM.yyyy', 'ru').format(_endDate)}'),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.refresh),
+                    onPressed: _loadTransactions,
+                  ),
+                ],
               ),
-              IconButton(
-                icon: const Icon(Icons.refresh),
-                onPressed: _loadTransactions,
-              ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: _loading
-              ? const Center(child: CircularProgressIndicator())
-              : _transactions.isEmpty
-                  ? const Center(
-                      child: Text('Нет операций за выбранный период'))
-                  : RefreshIndicator(
-                      onRefresh: _loadTransactions,
-                      child: ListView.builder(
-                        itemCount: sortedDates.length,
-                        itemBuilder: (context, index) {
-                          final date = sortedDates[index];
-                          final dayTransactions = grouped[date]!;
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                    vertical: 8, horizontal: 16),
-                                child: Text(
-                                  DateFormat('EEEE, d MMMM yyyy', 'ru')
-                                      .format(date),
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16),
-                                ),
-                              ),
-                              ...dayTransactions.map((t) {
-                                final isDeleted = t.isDeleted;
-                                return Card(
-                                  margin: const EdgeInsets.symmetric(
-                                      vertical: 4, horizontal: 8),
-                                  color: isDeleted
-                                      ? Colors.grey.shade200
-                                      : Colors.white,
-                                  child: ListTile(
-                                    title: Text(
-                                      '${t.amount} ₽',
-                                      style: TextStyle(
-                                        color: t.type == 'income'
-                                            ? (isDeleted
-                                                ? Colors.grey
-                                                : Colors.green)
-                                            : (isDeleted
-                                                ? Colors.grey
-                                                : Colors.red),
-                                        decoration: isDeleted
-                                            ? TextDecoration.lineThrough
-                                            : null,
-                                      ),
+            ),
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _transactions.isEmpty
+                      ? const Center(
+                          child: Text('Нет операций за выбранный период'))
+                      : RefreshIndicator(
+                          onRefresh: _loadTransactions,
+                          child: ListView.builder(
+                            itemCount: sortedDates.length,
+                            itemBuilder: (context, index) {
+                              final date = sortedDates[index];
+                              final dayTransactions = grouped[date]!;
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 8, horizontal: 16),
+                                    child: Text(
+                                      DateFormat('EEEE, d MMMM yyyy', 'ru')
+                                          .format(date),
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16),
                                     ),
-                                    subtitle: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          '${_typeName(t.type)} • ${getCategoryName(t.categoryId)} • ${getAccountName(t.accountId)} • ${t.description ?? ''}',
-                                          style: TextStyle(
-                                              color: isDeleted
-                                                  ? Colors.grey
-                                                  : Colors.black87,
-                                              fontSize: 12),
-                                        ),
-                                        if (t.creatorName != null)
-                                          Text(
-                                            'Создал: ${t.creatorName}',
-                                            style: TextStyle(
-                                                fontSize: 10,
-                                                color: isDeleted
-                                                    ? Colors.grey
-                                                    : Colors.grey.shade600),
-                                          ),
-                                        if (t.updaterName != null &&
-                                            t.updaterName != t.creatorName)
-                                          Text(
-                                            'Изменил: ${t.updaterName}',
-                                            style: TextStyle(
-                                                fontSize: 10,
-                                                color: isDeleted
-                                                    ? Colors.grey
-                                                    : Colors.grey.shade600),
-                                          ),
-                                      ],
-                                    ),
-                                    trailing: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        if (t.attachmentUrl != null)
-                                          IconButton(
-                                            icon: const Icon(Icons.attach_file,
-                                                size: 18, color: Colors.blue),
-                                            onPressed: () => _showAttachment(
-                                                t.attachmentUrl, t.id),
-                                            tooltip: 'Просмотреть вложение',
-                                          ),
-                                        if (isDeleted)
-                                          IconButton(
-                                            icon: const Icon(Icons.restore,
-                                                color: Colors.orange),
-                                            onPressed: () =>
-                                                _restoreTransaction(t.id),
-                                            tooltip: 'Восстановить',
-                                          ),
-                                        if (widget.isFounder && isDeleted)
-                                          IconButton(
-                                            icon: const Icon(
-                                                Icons.delete_forever,
-                                                color: Colors.red),
-                                            onPressed: () =>
-                                                _permanentDeleteTransaction(
-                                                    t.id),
-                                            tooltip: 'Удалить навсегда',
-                                          ),
-                                        Text(
-                                          DateFormat('HH:mm', 'ru')
-                                              .format(t.date.toLocal()),
-                                          style: TextStyle(
-                                              color: isDeleted
-                                                  ? Colors.grey
-                                                  : Colors.black54),
-                                        ),
-                                      ],
-                                    ),
-                                    onTap: isDeleted
-                                        ? null
-                                        : () => _editTransaction(t),
                                   ),
-                                );
-                              }).toList(),
-                            ],
-                          );
-                        },
-                      ),
-                    ),
+                                  ...dayTransactions.map((t) {
+                                    final isDeleted = t.isDeleted;
+                                    return Card(
+                                      margin: const EdgeInsets.symmetric(
+                                          vertical: 4, horizontal: 8),
+                                      color: isDeleted
+                                          ? Colors.grey.shade200
+                                          : Colors.white,
+                                      child: ListTile(
+                                        title: Text(
+                                          '${t.amount} ₽',
+                                          style: TextStyle(
+                                            color: t.type == 'income'
+                                                ? (isDeleted
+                                                    ? Colors.grey
+                                                    : Colors.green)
+                                                : (isDeleted
+                                                    ? Colors.grey
+                                                    : Colors.red),
+                                            decoration: isDeleted
+                                                ? TextDecoration.lineThrough
+                                                : null,
+                                          ),
+                                        ),
+                                        subtitle: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              '${_typeName(t.type)} • ${getCategoryName(t.categoryId)} • ${getAccountName(t.accountId)} • ${t.description ?? ''}',
+                                              style: TextStyle(
+                                                  color: isDeleted
+                                                      ? Colors.grey
+                                                      : Colors.black87,
+                                                  fontSize: 12),
+                                            ),
+                                            if (t.creatorName != null)
+                                              Text(
+                                                'Создал: ${t.creatorName}',
+                                                style: TextStyle(
+                                                    fontSize: 10,
+                                                    color: isDeleted
+                                                        ? Colors.grey
+                                                        : Colors.grey.shade600),
+                                              ),
+                                            if (t.updaterName != null &&
+                                                t.updaterName != t.creatorName)
+                                              Text(
+                                                'Изменил: ${t.updaterName}',
+                                                style: TextStyle(
+                                                    fontSize: 10,
+                                                    color: isDeleted
+                                                        ? Colors.grey
+                                                        : Colors.grey.shade600),
+                                              ),
+                                          ],
+                                        ),
+                                        trailing: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            if (t.attachmentUrl != null)
+                                              IconButton(
+                                                icon: const Icon(
+                                                    Icons.attach_file,
+                                                    size: 18,
+                                                    color: Colors.blue),
+                                                onPressed: () =>
+                                                    _showAttachment(
+                                                        t.attachmentUrl, t.id),
+                                                tooltip: 'Просмотреть вложение',
+                                              ),
+                                            if (isDeleted)
+                                              IconButton(
+                                                icon: const Icon(Icons.restore,
+                                                    color: Colors.orange),
+                                                onPressed: () =>
+                                                    _restoreTransaction(t.id),
+                                                tooltip: 'Восстановить',
+                                              ),
+                                            if (widget.isFounder && isDeleted)
+                                              IconButton(
+                                                icon: const Icon(
+                                                    Icons.delete_forever,
+                                                    color: Colors.red),
+                                                onPressed: () =>
+                                                    _permanentDeleteTransaction(
+                                                        t.id),
+                                                tooltip: 'Удалить навсегда',
+                                              ),
+                                            Text(
+                                              DateFormat('HH:mm', 'ru')
+                                                  .format(t.date.toLocal()),
+                                              style: TextStyle(
+                                                  color: isDeleted
+                                                      ? Colors.grey
+                                                      : Colors.black54),
+                                            ),
+                                          ],
+                                        ),
+                                        onTap: isDeleted
+                                            ? null
+                                            : () => _editTransaction(t),
+                                      ),
+                                    );
+                                  }).toList(),
+                                ],
+                              );
+                            },
+                          ),
+                        ),
+            ),
+          ],
+        ),
+        // FAB для добавления операции
+        Positioned(
+          bottom: 16,
+          right: 16,
+          child: FloatingActionButton(
+            onPressed: () async {
+              await showDialog(
+                context: context,
+                builder: (_) => AddTransactionDialog(
+                  companyId: widget.companyId,
+                  onSuccess: () async {
+                    await _loadTransactions(); // обновляем список
+                    await widget.onRefresh(); // обновляем счета/категории
+                  },
+                  accounts: widget.accounts,
+                  categories: widget.categories,
+                ),
+              );
+            },
+            backgroundColor: Colors.blueGrey.shade300,
+            child: const Icon(Icons.add),
+          ),
         ),
       ],
     );

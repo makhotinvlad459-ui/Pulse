@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../services/api_client.dart';
 import '../providers/auth_provider.dart';
 import '../models/user.dart';
-import '../widgets/graphite_background.dart';
+import '../widgets/matrix_rain.dart';
 import '../models/company.dart';
 import '../widgets/company/account_card.dart';
 import '../widgets/company/transactions_tab.dart';
@@ -12,10 +13,9 @@ import '../widgets/company/income_expense_tab.dart';
 import '../widgets/company/reports_tab.dart';
 import '../widgets/company/add_transaction_dialog.dart';
 import '../widgets/company/edit_company_dialog.dart';
-import '../widgets/company/edit_transaction_dialog.dart';
 import '../widgets/company/add_account_dialog.dart';
 import '../widgets/company/manage_categories_dialog.dart';
-import '../widgets/company/manage_employees_dialog.dart'; // новый импорт
+import '../widgets/company/manage_employees_dialog.dart';
 
 class CompanyScreen extends ConsumerStatefulWidget {
   final Company company;
@@ -90,156 +90,183 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
     final isFounder = authState.user?.role == UserRole.founder;
-    // Определяем, может ли пользователь управлять сотрудниками
     final canManageEmployees =
         isFounder || widget.company.currentUserRole == 'manager';
 
+    final double rainHeight = 200; // подберите под свою шапку
+
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.company.name),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black87,
-        elevation: 1,
-        actions: [
-          PopupMenuButton<String>(
-            onSelected: (value) async {
-              if (value == 'edit')
-                await showDialog(
-                    context: context,
-                    builder: (_) => EditCompanyDialog(
-                        company: widget.company, onSuccess: _refresh));
-              if (value == 'add_account')
-                await showDialog(
-                    context: context,
-                    builder: (_) => AddAccountDialog(
-                        companyId: widget.company.id, onSuccess: _refresh));
-              if (value == 'manage_categories')
-                await showDialog(
-                    context: context,
-                    builder: (_) => ManageCategoriesDialog(
-                        companyId: widget.company.id,
-                        onSuccess: _refresh,
-                        categories: _categories));
-              if (value == 'manage_employees')
-                await showDialog(
-                    context: context,
-                    builder: (_) => ManageEmployeesDialog(
-                        companyId: widget.company.id, onSuccess: _refresh));
-              if (value == 'delete') await _confirmDeleteCompany();
-            },
-            itemBuilder: (context) {
-              final items = [
-                const PopupMenuItem(
-                    value: 'edit', child: Text('Редактировать компанию')),
-                const PopupMenuItem(
-                    value: 'add_account', child: Text('Добавить счёт')),
-                const PopupMenuItem(
-                    value: 'manage_categories',
-                    child: Text('Управление категориями')),
-              ];
-              if (canManageEmployees) {
-                items.add(const PopupMenuItem(
-                    value: 'manage_employees',
-                    child: Text('Управление сотрудниками')));
-              }
-              items.add(const PopupMenuItem(
-                  value: 'delete',
-                  child: Text('Удалить компанию',
-                      style: TextStyle(color: Colors.red))));
-              return items;
-            },
+      backgroundColor: Colors.white,
+      body: Stack(
+        children: [
+          Container(
+            color: const Color(0xFFF2F2F2),
+            child: CustomPaint(
+              painter: _LightGridPainter(),
+              size: Size.infinite,
+            ),
+          ),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: rainHeight,
+            child: MatrixRain(color: Colors.black, opacity: 0.3),
+          ),
+          SafeArea(
+            child: Column(
+              children: [
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon:
+                            Icon(Icons.arrow_back, color: Colors.grey.shade800),
+                        onPressed: () => Navigator.pop(context, _hasChanges),
+                      ),
+                      const Spacer(),
+                      PopupMenuButton<String>(
+                        onSelected: (value) async {
+                          if (value == 'edit')
+                            await showDialog(
+                                context: context,
+                                builder: (_) => EditCompanyDialog(
+                                    company: widget.company,
+                                    onSuccess: _refresh));
+                          if (value == 'add_account')
+                            await showDialog(
+                                context: context,
+                                builder: (_) => AddAccountDialog(
+                                    companyId: widget.company.id,
+                                    onSuccess: _refresh));
+                          if (value == 'manage_categories')
+                            await showDialog(
+                                context: context,
+                                builder: (_) => ManageCategoriesDialog(
+                                    companyId: widget.company.id,
+                                    onSuccess: _refresh,
+                                    categories: _categories));
+                          if (value == 'manage_employees')
+                            await showDialog(
+                                context: context,
+                                builder: (_) => ManageEmployeesDialog(
+                                    companyId: widget.company.id,
+                                    onSuccess: _refresh));
+                          if (value == 'delete') await _confirmDeleteCompany();
+                        },
+                        itemBuilder: (context) {
+                          final items = [
+                            const PopupMenuItem(
+                                value: 'edit',
+                                child: Text('Редактировать компанию')),
+                            const PopupMenuItem(
+                                value: 'add_account',
+                                child: Text('Добавить счёт')),
+                            const PopupMenuItem(
+                                value: 'manage_categories',
+                                child: Text('Управление категориями')),
+                          ];
+                          if (canManageEmployees) {
+                            items.add(const PopupMenuItem(
+                                value: 'manage_employees',
+                                child: Text('Управление сотрудниками')));
+                          }
+                          items.add(const PopupMenuItem(
+                              value: 'delete',
+                              child: Text('Удалить компанию',
+                                  style: TextStyle(color: Colors.red))));
+                          return items;
+                        },
+                        icon:
+                            Icon(Icons.more_vert, color: Colors.grey.shade800),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Text(
+                    widget.company.name,
+                    style: GoogleFonts.orbitron(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey.shade800,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                SizedBox(
+                  height: 100,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      children: _accounts
+                          .map((acc) => AccountCard(
+                                account: acc,
+                                onDelete: () async {
+                                  final api = ApiClient();
+                                  try {
+                                    await api.delete('/accounts/${acc['id']}',
+                                        queryParameters: {
+                                          'company_id': widget.company.id
+                                        });
+                                    await _refresh();
+                                  } catch (e) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('Ошибка: $e')));
+                                  }
+                                },
+                              ))
+                          .toList(),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Column(
+                    children: [
+                      TabBar(
+                        controller: _tabController,
+                        tabs: const [
+                          Tab(text: 'Операции'),
+                          Tab(text: 'Приход/Расход'),
+                          Tab(text: 'График'),
+                        ],
+                        labelColor: Colors.grey.shade800,
+                        unselectedLabelColor: Colors.grey.shade500,
+                        indicatorColor: Colors.grey.shade800,
+                      ),
+                      Expanded(
+                        child: TabBarView(
+                          controller: _tabController,
+                          children: [
+                            TransactionsTab(
+                              companyId: widget.company.id,
+                              onRefresh: _refresh,
+                              accounts: _accounts,
+                              categories: _categories,
+                              isFounder: isFounder,
+                            ),
+                            IncomeExpenseTab(
+                                companyId: widget.company.id,
+                                categories: _categories),
+                            ReportsTab(companyId: widget.company.id),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
-      body: GraphiteBackground(
-        child: _loading
-            ? const Center(child: CircularProgressIndicator())
-            : Column(
-                children: [
-                  SizedBox(
-                    height: 120,
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
-                        children: _accounts
-                            .map((acc) => AccountCard(
-                                  account: acc,
-                                  onDelete: () async {
-                                    final api = ApiClient();
-                                    try {
-                                      await api.delete('/accounts/${acc['id']}',
-                                          queryParameters: {
-                                            'company_id': widget.company.id
-                                          });
-                                      await _refresh();
-                                    } catch (e) {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(SnackBar(
-                                              content: Text('Ошибка: $e')));
-                                    }
-                                  },
-                                ))
-                            .toList(),
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: Column(
-                      children: [
-                        TabBar(
-                          controller: _tabController,
-                          tabs: const [
-                            Tab(text: 'Операции'),
-                            Tab(text: 'Приход/Расход'),
-                            Tab(text: 'График'),
-                          ],
-                        ),
-                        Expanded(
-                          child: TabBarView(
-                            controller: _tabController,
-                            children: [
-                              TransactionsTab(
-                                companyId: widget.company.id,
-                                onRefresh: _refresh,
-                                accounts: _accounts,
-                                categories: _categories,
-                                isFounder: isFounder,
-                              ),
-                              IncomeExpenseTab(
-                                  companyId: widget.company.id,
-                                  categories: _categories),
-                              ReportsTab(companyId: widget.company.id),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-      ),
-      floatingActionButton: _buildFAB(),
+      // FAB удалён – теперь кнопка добавления находится внутри TransactionsTab
     );
-  }
-
-  Widget _buildFAB() {
-    if (_tabController.index == 0) {
-      return FloatingActionButton(
-        onPressed: () => showDialog(
-          context: context,
-          builder: (_) => AddTransactionDialog(
-            companyId: widget.company.id,
-            onSuccess: _refresh,
-            accounts: _accounts,
-            categories: _categories,
-          ),
-        ),
-        backgroundColor: Colors.blueGrey.shade300,
-        child: const Icon(Icons.add),
-      );
-    }
-    return const SizedBox.shrink();
   }
 
   Future<void> _confirmDeleteCompany() async {
@@ -275,4 +302,23 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
       }
     }
   }
+}
+
+class _LightGridPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.grey.shade300.withOpacity(0.5)
+      ..strokeWidth = 0.5;
+    const double spacing = 30.0;
+    for (double x = 0; x < size.width; x += spacing) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+    }
+    for (double y = 0; y < size.height; y += spacing) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

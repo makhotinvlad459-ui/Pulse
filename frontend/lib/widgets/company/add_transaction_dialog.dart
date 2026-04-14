@@ -8,7 +8,8 @@ import '../../../services/api_client.dart';
 
 class AddTransactionDialog extends StatefulWidget {
   final int companyId;
-  final VoidCallback onSuccess;
+  final Future<void> Function()
+      onSuccess; // изменено на Future<void> Function()
   final List<dynamic> accounts;
   final List<dynamic> categories;
   const AddTransactionDialog({
@@ -98,7 +99,8 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
             _webFile!.bytes!, _webFile!.name,
             queryParameters: {'company_id': widget.companyId});
       }
-      widget.onSuccess();
+      // Дожидаемся завершения обновления
+      await widget.onSuccess();
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted)
