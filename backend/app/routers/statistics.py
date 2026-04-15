@@ -4,6 +4,7 @@ from sqlalchemy import select, func
 from datetime import datetime, timedelta
 from typing import Optional
 from fastapi.responses import FileResponse
+import os
 
 from app.database import get_db
 from app.models import User, Company, Transaction, Category, CompanyMember, UserRole, Account
@@ -35,15 +36,17 @@ async def get_income_statistics(
         end_date = next_month - timedelta(days=next_month.day)
         end_date = end_date.replace(hour=23, minute=59, second=59)
     
-    # Общая сумма
+    # Общая сумма (только по счетам с include_in_profit_loss = True)
     total_result = await db.execute(
         select(func.sum(Transaction.amount))
+        .join(Account, Transaction.account_id == Account.id)
         .where(
             Transaction.company_id == company_id,
             Transaction.type == 'income',
             Transaction.is_deleted == False,
             Transaction.date >= start_date,
-            Transaction.date <= end_date
+            Transaction.date <= end_date,
+            Account.include_in_profit_loss == True
         )
     )
     total_income = total_result.scalar() or 0.0
@@ -55,12 +58,14 @@ async def get_income_statistics(
             month_expr.label('month'),
             func.sum(Transaction.amount).label('total')
         )
+        .join(Account, Transaction.account_id == Account.id)
         .where(
             Transaction.company_id == company_id,
             Transaction.type == 'income',
             Transaction.is_deleted == False,
             Transaction.date >= start_date,
-            Transaction.date <= end_date
+            Transaction.date <= end_date,
+            Account.include_in_profit_loss == True
         )
         .group_by(month_expr)
         .order_by('month')
@@ -74,12 +79,14 @@ async def get_income_statistics(
             func.sum(Transaction.amount).label('total')
         )
         .outerjoin(Category, Transaction.category_id == Category.id)
+        .join(Account, Transaction.account_id == Account.id)
         .where(
             Transaction.company_id == company_id,
             Transaction.type == 'income',
             Transaction.is_deleted == False,
             Transaction.date >= start_date,
-            Transaction.date <= end_date
+            Transaction.date <= end_date,
+            Account.include_in_profit_loss == True
         )
         .group_by('category')
     )
@@ -117,15 +124,17 @@ async def get_expense_statistics(
         end_date = next_month - timedelta(days=next_month.day)
         end_date = end_date.replace(hour=23, minute=59, second=59)
     
-    # Общая сумма
+    # Общая сумма (только по счетам с include_in_profit_loss = True)
     total_result = await db.execute(
         select(func.sum(Transaction.amount))
+        .join(Account, Transaction.account_id == Account.id)
         .where(
             Transaction.company_id == company_id,
             Transaction.type == 'expense',
             Transaction.is_deleted == False,
             Transaction.date >= start_date,
-            Transaction.date <= end_date
+            Transaction.date <= end_date,
+            Account.include_in_profit_loss == True
         )
     )
     total_expense = total_result.scalar() or 0.0
@@ -137,31 +146,35 @@ async def get_expense_statistics(
             month_expr.label('month'),
             func.sum(Transaction.amount).label('total')
         )
+        .join(Account, Transaction.account_id == Account.id)
         .where(
             Transaction.company_id == company_id,
             Transaction.type == 'expense',
             Transaction.is_deleted == False,
             Transaction.date >= start_date,
-            Transaction.date <= end_date
+            Transaction.date <= end_date,
+            Account.include_in_profit_loss == True
         )
         .group_by(month_expr)
         .order_by('month')
     )
     monthly = [{"month": row.month.isoformat(), "total": float(row.total)} for row in monthly_result]
     
-    # По категориям (включая операции без категории)
+    # По категориям
     category_result = await db.execute(
         select(
             func.coalesce(Category.name, 'Без категории').label('category'),
             func.sum(Transaction.amount).label('total')
         )
         .outerjoin(Category, Transaction.category_id == Category.id)
+        .join(Account, Transaction.account_id == Account.id)
         .where(
             Transaction.company_id == company_id,
             Transaction.type == 'expense',
             Transaction.is_deleted == False,
             Transaction.date >= start_date,
-            Transaction.date <= end_date
+            Transaction.date <= end_date,
+            Account.include_in_profit_loss == True
         )
         .group_by('category')
     )
@@ -205,12 +218,14 @@ async def get_profit_loss(
             month_expr.label('month'),
             func.sum(Transaction.amount).label('income')
         )
+        .join(Account, Transaction.account_id == Account.id)
         .where(
             Transaction.company_id == company_id,
             Transaction.type == 'income',
             Transaction.is_deleted == False,
             Transaction.date >= start_date,
-            Transaction.date <= end_date
+            Transaction.date <= end_date,
+            Account.include_in_profit_loss == True
         )
         .group_by(month_expr)
     )
@@ -219,12 +234,14 @@ async def get_profit_loss(
             month_expr.label('month'),
             func.sum(Transaction.amount).label('expense')
         )
+        .join(Account, Transaction.account_id == Account.id)
         .where(
             Transaction.company_id == company_id,
             Transaction.type == 'expense',
             Transaction.is_deleted == False,
             Transaction.date >= start_date,
-            Transaction.date <= end_date
+            Transaction.date <= end_date,
+            Account.include_in_profit_loss == True
         )
         .group_by(month_expr)
     )
@@ -278,34 +295,6 @@ async def get_founder_overview(
         "total_all": total_all
     }
 
-@router.get("/{transaction_id}/photo")
-async def get_transaction_photo(
-    transaction_id: int,
-    company_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    # Проверка доступа к компании (как в других эндпоинтах)
-    if current_user.role == UserRole.FOUNDER:
-        result = await db.execute(select(Company).where(Company.id == company_id, Company.founder_id == current_user.id))
-    else:
-        result = await db.execute(select(Company).join(CompanyMember).where(Company.id == company_id, CompanyMember.user_id == current_user.id))
-    company = result.scalar_one_or_none()
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found or access denied")
-    
-    # Находим транзакцию
-    result = await db.execute(select(Transaction).where(Transaction.id == transaction_id, Transaction.company_id == company_id))
-    transaction = result.scalar_one_or_none()
-    if not transaction or not transaction.attachment_url:
-        raise HTTPException(status_code=404, detail="File not found")
-    
-    file_path = transaction.attachment_url
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="File not found")
-    
-    return FileResponse(file_path)
-
 @router.get("/user-overview")
 async def get_user_overview(
     db: AsyncSession = Depends(get_db),
@@ -340,3 +329,31 @@ async def get_user_overview(
         "total_bank": total_bank,
         "total_all": total_all
     }
+
+@router.get("/{transaction_id}/photo")
+async def get_transaction_photo(
+    transaction_id: int,
+    company_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Проверка доступа к компании (как в других эндпоинтах)
+    if current_user.role == UserRole.FOUNDER:
+        result = await db.execute(select(Company).where(Company.id == company_id, Company.founder_id == current_user.id))
+    else:
+        result = await db.execute(select(Company).join(CompanyMember).where(Company.id == company_id, CompanyMember.user_id == current_user.id))
+    company = result.scalar_one_or_none()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found or access denied")
+    
+    # Находим транзакцию
+    result = await db.execute(select(Transaction).where(Transaction.id == transaction_id, Transaction.company_id == company_id))
+    transaction = result.scalar_one_or_none()
+    if not transaction or not transaction.attachment_url:
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    file_path = transaction.attachment_url
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    return FileResponse(file_path)

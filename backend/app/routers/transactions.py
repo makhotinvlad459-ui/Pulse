@@ -49,6 +49,7 @@ async def create_transaction(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    # Проверка доступа к компании
     if current_user.role == UserRole.FOUNDER:
         result = await db.execute(select(Company).where(Company.id == company_id, Company.founder_id == current_user.id))
     else:
@@ -57,13 +58,18 @@ async def create_transaction(
     if not company:
         raise HTTPException(status_code=404, detail="Company not found or access denied")
     
+    # Проверка счёта
     result = await db.execute(select(Account).where(Account.id == trans_data.account_id, Account.company_id == company_id))
     account = result.scalar_one_or_none()
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
     
-    if trans_data.type == TransactionType.TRANSFER:
-        if not trans_data.transfer_to_account_id:
+    # Определяем, является ли операция переводом (используем строку, а не enum)
+    is_transfer = (trans_data.type.value == 'transfer')
+    
+    # Валидация перевода
+    if is_transfer:
+        if trans_data.transfer_to_account_id is None:
             raise HTTPException(status_code=400, detail="Transfer requires transfer_to_account_id")
         result = await db.execute(select(Account).where(Account.id == trans_data.transfer_to_account_id, Account.company_id == company_id))
         target_account = result.scalar_one_or_none()
@@ -72,7 +78,8 @@ async def create_transaction(
         if trans_data.account_id == trans_data.transfer_to_account_id:
             raise HTTPException(status_code=400, detail="Cannot transfer to the same account")
     
-    if trans_data.type in (TransactionType.INCOME, TransactionType.EXPENSE):
+    # Категории для дохода/расхода
+    if not is_transfer:  # доход или расход
         if not trans_data.category_id:
             result = await db.execute(select(Category).where(Category.company_id == company_id, Category.is_system == True))
             default_cat = result.scalar_one_or_none()
@@ -92,31 +99,34 @@ async def create_transaction(
             if not result.scalar_one_or_none():
                 raise HTTPException(status_code=404, detail="Category not found")
     
+    # Приводим дату
     if trans_data.date.tzinfo is not None:
         trans_data.date = trans_data.date.replace(tzinfo=None)
     
+    # Создаём транзакцию
     new_trans = Transaction(
         company_id=company_id,
         account_id=trans_data.account_id,
-        type=trans_data.type.value,
+        type=trans_data.type.value,  # строка
         amount=trans_data.amount,
         date=trans_data.date,
         category_id=trans_data.category_id,
         description=trans_data.description,
         created_by=current_user.id,
-        transfer_to_account_id=trans_data.transfer_to_account_id if trans_data.type == TransactionType.TRANSFER else None
+        transfer_to_account_id=trans_data.transfer_to_account_id if is_transfer else None
     )
     db.add(new_trans)
-    await db.flush()
+    await db.flush()  # отправляем в БД
     
-    await recalc_account_balance(trans_data.account_id, db)
-    if trans_data.type == TransactionType.TRANSFER:
-        await recalc_account_balance(trans_data.transfer_to_account_id, db)
+    # Пересчёт балансов
+    await recalc_account_balance(new_trans.account_id, db)
+    if is_transfer and new_trans.transfer_to_account_id is not None:
+        await recalc_account_balance(new_trans.transfer_to_account_id, db)
     
     await db.commit()
     await db.refresh(new_trans)
-    # Подгружаем связанные объекты для получения имён
     await db.refresh(new_trans, attribute_names=['creator', 'updater'])
+    
     return TransactionResponse(
         id=new_trans.id,
         type=new_trans.type,
@@ -281,7 +291,10 @@ async def update_transaction(
     transaction.category_id = trans_data.category_id
     transaction.description = trans_data.description
     transaction.updated_by = current_user.id
-    if trans_data.type == TransactionType.TRANSFER:
+    
+    # Определяем, является ли операция переводом (используем строку)
+    is_transfer = (trans_data.type.value == 'transfer')
+    if is_transfer:
         transaction.transfer_to_account_id = trans_data.transfer_to_account_id
     else:
         transaction.transfer_to_account_id = None
@@ -333,7 +346,6 @@ async def delete_transaction(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # ... (без изменений, оставляем как было) ...
     if current_user.role == UserRole.FOUNDER:
         result = await db.execute(select(Company).where(Company.id == company_id, Company.founder_id == current_user.id))
     else:
@@ -380,7 +392,6 @@ async def restore_transaction(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # ... (без изменений) ...
     if current_user.role == UserRole.FOUNDER:
         result = await db.execute(select(Company).where(Company.id == company_id, Company.founder_id == current_user.id))
     else:
@@ -417,7 +428,6 @@ async def upload_transaction_photo(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # ... (без изменений) ...
     if current_user.role == UserRole.FOUNDER:
         result = await db.execute(select(Company).where(Company.id == company_id, Company.founder_id == current_user.id))
     else:
@@ -470,7 +480,6 @@ async def get_transaction_photo(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # ... (без изменений) ...
     if current_user.role == UserRole.FOUNDER:
         result = await db.execute(select(Company).where(Company.id == company_id, Company.founder_id == current_user.id))
     else:

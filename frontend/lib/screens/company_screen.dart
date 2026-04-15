@@ -11,7 +11,6 @@ import '../widgets/company/account_card.dart';
 import '../widgets/company/transactions_tab.dart';
 import '../widgets/company/income_expense_tab.dart';
 import '../widgets/company/reports_tab.dart';
-import '../widgets/company/add_transaction_dialog.dart';
 import '../widgets/company/edit_company_dialog.dart';
 import '../widgets/company/add_account_dialog.dart';
 import '../widgets/company/manage_categories_dialog.dart';

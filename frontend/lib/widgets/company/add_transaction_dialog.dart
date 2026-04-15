@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
@@ -8,8 +7,7 @@ import '../../../services/api_client.dart';
 
 class AddTransactionDialog extends StatefulWidget {
   final int companyId;
-  final Future<void> Function()
-      onSuccess; // изменено на Future<void> Function()
+  final Future<void> Function() onSuccess;
   final List<dynamic> accounts;
   final List<dynamic> categories;
   const AddTransactionDialog({
@@ -40,15 +38,21 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
   @override
   void initState() {
     super.initState();
-    if (widget.accounts.isNotEmpty) _accountId = widget.accounts[0]['id'];
+    if (widget.accounts.isNotEmpty) {
+      _accountId = widget.accounts[0]['id'];
+      // Если изначально тип transfer, выбираем получателя
+      if (_type == 'transfer') {
+        final available =
+            widget.accounts.where((a) => a['id'] != _accountId).toList();
+        if (available.isNotEmpty) _transferToAccountId = available[0]['id'];
+      }
+    }
   }
 
   Future<void> _pickFile() async {
     if (kIsWeb) {
       final result = await FilePicker.platform.pickFiles();
-      if (result != null) {
-        setState(() => _webFile = result.files.first);
-      }
+      if (result != null) setState(() => _webFile = result.files.first);
     } else {
       final picker = ImagePicker();
       final picked = await picker.pickImage(source: ImageSource.gallery);
@@ -85,8 +89,24 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
     if (_type == 'income' || _type == 'expense') {
       if (_categoryId != null) data['category_id'] = _categoryId;
     } else if (_type == 'transfer') {
+      if (_transferToAccountId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Выберите счёт получатель')),
+        );
+        setState(() => _loading = false);
+        return;
+      }
+      if (_transferToAccountId == _accountId) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Нельзя переводить на тот же счёт')),
+        );
+        setState(() => _loading = false);
+        return;
+      }
       data['transfer_to_account_id'] = _transferToAccountId;
     }
+    // ОТЛАДКА
+    print('=== Sending data: $data');
     try {
       final response = await api.post('/transactions',
           queryParameters: {'company_id': widget.companyId}, data: data);
@@ -99,7 +119,6 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
             _webFile!.bytes!, _webFile!.name,
             queryParameters: {'company_id': widget.companyId});
       }
-      // Дожидаемся завершения обновления
       await widget.onSuccess();
       if (mounted) Navigator.pop(context);
     } catch (e) {
@@ -135,7 +154,21 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
                                   child: Text(a['name']),
                                 ))
                         .toList(),
-                    onChanged: (v) => setState(() => _accountId = v),
+                    onChanged: (v) {
+                      setState(() {
+                        _accountId = v;
+                        if (_type == 'transfer') {
+                          final available = widget.accounts
+                              .where((a) => a['id'] != _accountId)
+                              .toList();
+                          if (available.isNotEmpty) {
+                            _transferToAccountId = available[0]['id'];
+                          } else {
+                            _transferToAccountId = null;
+                          }
+                        }
+                      });
+                    },
                     decoration: const InputDecoration(
                         labelText: 'Счёт', border: OutlineInputBorder()),
                   ),
@@ -150,7 +183,21 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
                       DropdownMenuItem(
                           value: 'transfer', child: Text('Перевод')),
                     ],
-                    onChanged: (v) => setState(() => _type = v!),
+                    onChanged: (v) {
+                      setState(() {
+                        _type = v!;
+                        if (_type == 'transfer') {
+                          final available = widget.accounts
+                              .where((a) => a['id'] != _accountId)
+                              .toList();
+                          if (available.isNotEmpty) {
+                            _transferToAccountId = available[0]['id'];
+                          }
+                        } else {
+                          _transferToAccountId = null;
+                        }
+                      });
+                    },
                     decoration: const InputDecoration(
                         labelText: 'Тип', border: OutlineInputBorder()),
                   ),

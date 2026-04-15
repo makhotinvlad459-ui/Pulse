@@ -206,12 +206,10 @@ class _TransactionsTabState extends State<TransactionsTab> {
       if (kIsWeb) {
         final blob = html.Blob([bytes]);
         final objectUrl = html.Url.createObjectUrlFromBlob(blob);
-        if (objectUrl != null) {
-          final downloadLink = html.AnchorElement(href: objectUrl)
-            ..setAttribute('download', filename)
-            ..click();
-          html.Url.revokeObjectUrl(objectUrl);
-        }
+        final downloadLink = html.AnchorElement(href: objectUrl)
+          ..setAttribute('download', filename)
+          ..click();
+        html.Url.revokeObjectUrl(objectUrl);
       } else {
         final directory = await getApplicationDocumentsDirectory();
         final file = File('${directory.path}/$filename');
