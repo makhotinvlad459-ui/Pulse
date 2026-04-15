@@ -15,6 +15,7 @@ import '../widgets/company/edit_company_dialog.dart';
 import '../widgets/company/add_account_dialog.dart';
 import '../widgets/company/manage_categories_dialog.dart';
 import '../widgets/company/manage_employees_dialog.dart';
+import '../screens/archive_screen.dart'; // импорт экрана архива
 
 class CompanyScreen extends ConsumerStatefulWidget {
   final Company company;
@@ -32,6 +33,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
   List<dynamic> _categories = [];
   bool _loading = true;
   bool _hasChanges = false;
+  int? _archiveAccountId; // ID архивного счёта
 
   @override
   void initState() {
@@ -60,7 +62,17 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
           if (orderA != orderB) return orderA.compareTo(orderB);
           return a['id'].compareTo(b['id']);
         });
-        _accounts = accountsList;
+        // Находим архивный счёт через цикл
+        Map<String, dynamic>? archive;
+        for (var acc in accountsList) {
+          if (acc['name'] == 'Архив') {
+            archive = acc;
+            break;
+          }
+        }
+        _archiveAccountId = archive?['id'];
+        // Исключаем архив из списка для отображения
+        _accounts = accountsList.where((a) => a['name'] != 'Архив').toList();
         _transactions = transactionsRes.data;
         _categories = categoriesRes.data;
         _loading = false;
@@ -78,6 +90,24 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
     setState(() => _hasChanges = true);
   }
 
+  void _openArchive() {
+    if (_archiveAccountId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Архивный счёт не найден.')),
+      );
+      return;
+    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ArchiveScreen(
+          companyId: widget.company.id,
+          archiveAccountId: _archiveAccountId!,
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _tabController.dispose();
@@ -92,7 +122,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
     final canManageEmployees =
         isFounder || widget.company.currentUserRole == 'manager';
 
-    final double rainHeight = 200; // подберите под свою шапку
+    final double rainHeight = 200;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -153,6 +183,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                                 builder: (_) => ManageEmployeesDialog(
                                     companyId: widget.company.id,
                                     onSuccess: _refresh));
+                          if (value == 'archive') _openArchive();
                           if (value == 'delete') await _confirmDeleteCompany();
                         },
                         itemBuilder: (context) {
@@ -171,6 +202,10 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                             items.add(const PopupMenuItem(
                                 value: 'manage_employees',
                                 child: Text('Управление сотрудниками')));
+                          }
+                          if (_archiveAccountId != null) {
+                            items.add(const PopupMenuItem(
+                                value: 'archive', child: Text('Архив')));
                           }
                           items.add(const PopupMenuItem(
                               value: 'delete',
@@ -264,7 +299,6 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
           ),
         ],
       ),
-      // FAB удалён – теперь кнопка добавления находится внутри TransactionsTab
     );
   }
 

@@ -14,6 +14,11 @@ class AccountCard extends StatelessWidget {
       icon = '🏦';
     else
       icon = '📁';
+
+    final isArchive = account['name'] == 'Архив';
+    final balance = (account['balance'] as num).toDouble();
+    final canDelete = account['type'] == 'other' && !isArchive;
+
     return Card(
       margin: const EdgeInsets.only(right: 12),
       color: Colors.white,
@@ -38,7 +43,7 @@ class AccountCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  if (account['type'] != 'cash' && account['type'] != 'bank')
+                  if (canDelete)
                     IconButton(
                       icon:
                           const Icon(Icons.delete, size: 14, color: Colors.red),
@@ -48,15 +53,24 @@ class AccountCard extends StatelessWidget {
                     ),
                 ],
               ),
-              Text(
-                '${account['balance']} ₽',
-                style:
-                    const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-              ),
+              if (!isArchive || balance != 0)
+                Text(
+                  '${balance.toStringAsFixed(2)} ₽',
+                  style: const TextStyle(
+                      fontSize: 14, fontWeight: FontWeight.bold),
+                )
+              else
+                const Text(
+                  'Архив',
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontStyle: FontStyle.italic,
+                      color: Colors.grey),
+                ),
               Text(
                 account['type'] == 'cash'
                     ? 'Наличные'
-                    : (account['type'] == 'bank' ? 'Банк' : 'Другой'),
+                    : (account['type'] == 'bank' ? 'Банк' : 'Пользовательский'),
                 style: const TextStyle(fontSize: 10),
               ),
             ],

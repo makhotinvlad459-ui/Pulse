@@ -13,7 +13,6 @@ class AddAccountDialog extends StatefulWidget {
 
 class _AddAccountDialogState extends State<AddAccountDialog> {
   final _nameController = TextEditingController();
-  String _type = 'other';
   bool _includeInProfitLoss = true;
   bool _loading = false;
 
@@ -26,7 +25,7 @@ class _AddAccountDialogState extends State<AddAccountDialog> {
         'company_id': widget.companyId
       }, data: {
         'name': _nameController.text,
-        'type': _type,
+        'type': 'other',
         'include_in_profit_loss': _includeInProfitLoss,
       });
       widget.onSuccess();
@@ -43,27 +42,21 @@ class _AddAccountDialogState extends State<AddAccountDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Новый счёт'),
+      title: const Text('Новый пользовательский счёт'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           TextField(
               controller: _nameController,
               decoration: const InputDecoration(labelText: 'Название счёта')),
-          DropdownButtonFormField<String>(
-            value: _type,
-            items: const [
-              DropdownMenuItem(value: 'cash', child: Text('Наличные')),
-              DropdownMenuItem(value: 'bank', child: Text('Банк')),
-              DropdownMenuItem(value: 'other', child: Text('Другой')),
-            ],
-            onChanged: (v) => setState(() => _type = v!),
-            decoration: const InputDecoration(labelText: 'Тип'),
-          ),
           SwitchListTile(
             title: const Text('Учитывать в прибыли/убытке'),
             value: _includeInProfitLoss,
             onChanged: (v) => setState(() => _includeInProfitLoss = v),
+          ),
+          const Text(
+            'Вы можете выбрать, влияет ли этот счёт на финансовый результат.',
+            style: TextStyle(fontSize: 12, color: Colors.grey),
           ),
         ],
       ),

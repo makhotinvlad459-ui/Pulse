@@ -3,7 +3,6 @@ import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-// добавлен импорт
 import '../../../services/api_client.dart';
 
 class EditTransactionDialog extends StatefulWidget {
@@ -51,6 +50,18 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
     _transferToAccountId = widget.transaction['transfer_to_account_id'];
     _description = widget.transaction['description'] ?? '';
     _hasExistingAttachment = widget.transaction['attachment_url'] != null;
+
+    // Проверяем, существует ли выбранный счёт в списке accounts
+    final accountIds = widget.accounts.map((a) => a['id'] as int).toList();
+    if (!accountIds.contains(_accountId) && widget.accounts.isNotEmpty) {
+      // Если счёт удалён, выбираем первый доступный счёт
+      _accountId = widget.accounts[0]['id'];
+    }
+    // Для перевода проверяем счёт-получатель
+    if (_transferToAccountId != null &&
+        !accountIds.contains(_transferToAccountId)) {
+      _transferToAccountId = null;
+    }
   }
 
   Future<void> _pickFile() async {
@@ -115,7 +126,6 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
     try {
       await api.patch('/transactions/${widget.transaction['id']}',
           queryParameters: {'company_id': widget.companyId}, data: data);
-      // Если нужно заменить вложение
       if ((_photo != null || _webFile != null) && !_hasExistingAttachment) {
         if (_photo != null) {
           await api.uploadPhoto(
@@ -192,6 +202,19 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
 
   @override
   Widget build(BuildContext context) {
+    // Если список счетов пуст, показываем сообщение
+    if (widget.accounts.isEmpty) {
+      return AlertDialog(
+        title: const Text('Ошибка'),
+        content: const Text('Нет доступных счетов для редактирования.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Закрыть'),
+          ),
+        ],
+      );
+    }
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       title: Text(_type == 'income'

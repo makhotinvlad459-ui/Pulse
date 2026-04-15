@@ -8,7 +8,7 @@ import 'dart:html' as html;
 import '../../services/api_client.dart';
 import '../../models/transaction.dart';
 import 'edit_transaction_dialog.dart';
-import 'add_transaction_dialog.dart'; // добавлен импорт
+import 'add_transaction_dialog.dart';
 
 class TransactionsTab extends StatefulWidget {
   final int companyId;
@@ -84,7 +84,6 @@ class _TransactionsTabState extends State<TransactionsTab> {
             .subtract(const Duration(seconds: 1));
       });
       await _loadTransactions();
-      setState(() {});
     }
   }
 
@@ -170,6 +169,17 @@ class _TransactionsTabState extends State<TransactionsTab> {
   }
 
   Future<void> _editTransaction(Transaction transaction) async {
+    // Проверяем, существует ли счёт в списке accounts
+    final accountExists =
+        widget.accounts.any((a) => a['id'] == transaction.accountId);
+    if (!accountExists) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text(
+                'Эта операция относится к удалённому счёту и перенесена в архив. Редактирование невозможно.')),
+      );
+      return;
+    }
     final Map<String, dynamic> map = {
       'id': transaction.id,
       'type': transaction.type,
@@ -282,10 +292,25 @@ class _TransactionsTabState extends State<TransactionsTab> {
     }
   }
 
+  // Вспомогательная функция для получения типа счёта по id
+  String _getAccountType(int? accountId) {
+    if (accountId == null) return '';
+    try {
+      final acc = widget.accounts
+          .cast<Map<String, dynamic>>()
+          .firstWhere((a) => a['id'] == accountId);
+      return acc['type'] ?? '';
+    } catch (e) {
+      return '';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Группировка по дням
     Map<DateTime, List<Transaction>> grouped = {};
     for (var t in _transactions) {
+      if (t.isDeleted) continue; // удалённые операции не учитываем в итогах
       DateTime date = t.date.toLocal();
       DateTime key = DateTime(date.year, date.month, date.day);
       grouped.putIfAbsent(key, () => []).add(t);
@@ -327,18 +352,64 @@ class _TransactionsTabState extends State<TransactionsTab> {
                             itemBuilder: (context, index) {
                               final date = sortedDates[index];
                               final dayTransactions = grouped[date]!;
+                              // Подсчёт итогов за день (только доходы)
+                              double turnover =
+                                  0; // Оборот = сумма всех доходов
+                              double cashIncome = 0; // Доходы наличными
+                              double nonCashIncome = 0; // Доходы безналичные
+                              for (var t in dayTransactions) {
+                                if (t.type == 'income') {
+                                  turnover += t.amount;
+                                  String accType = _getAccountType(t.accountId);
+                                  if (accType == 'cash') {
+                                    cashIncome += t.amount;
+                                  } else if (accType == 'bank') {
+                                    nonCashIncome += t.amount;
+                                  }
+                                }
+                              }
                               return Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Padding(
                                     padding: const EdgeInsets.symmetric(
                                         vertical: 8, horizontal: 16),
-                                    child: Text(
-                                      DateFormat('EEEE, d MMMM yyyy', 'ru')
-                                          .format(date),
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 16),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          DateFormat('EEEE, d MMMM yyyy', 'ru')
+                                              .format(date),
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 16),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Wrap(
+                                          spacing: 12,
+                                          children: [
+                                            Text(
+                                                '💹 Оборот: ${turnover.toStringAsFixed(2)} ₽',
+                                                style: TextStyle(
+                                                    fontSize: 12,
+                                                    color:
+                                                        Colors.grey.shade700)),
+                                            Text(
+                                                '💵 Нал: ${cashIncome.toStringAsFixed(2)} ₽',
+                                                style: TextStyle(
+                                                    fontSize: 12,
+                                                    color:
+                                                        Colors.grey.shade700)),
+                                            Text(
+                                                '💳 Безнал: ${nonCashIncome.toStringAsFixed(2)} ₽',
+                                                style: TextStyle(
+                                                    fontSize: 12,
+                                                    color:
+                                                        Colors.grey.shade700)),
+                                          ],
+                                        ),
+                                      ],
                                     ),
                                   ),
                                   ...dayTransactions.map((t) {
@@ -465,8 +536,8 @@ class _TransactionsTabState extends State<TransactionsTab> {
                 builder: (_) => AddTransactionDialog(
                   companyId: widget.companyId,
                   onSuccess: () async {
-                    await _loadTransactions(); // обновляем список
-                    await widget.onRefresh(); // обновляем счета/категории
+                    await _loadTransactions();
+                    await widget.onRefresh();
                   },
                   accounts: widget.accounts,
                   categories: widget.categories,
