@@ -22,10 +22,22 @@ async def create_account(
     company = result.scalar_one_or_none()
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
-    if current_user.role != UserRole.FOUNDER:
-        raise HTTPException(status_code=403, detail="Only founder can create accounts")
-    if company.founder_id != current_user.id:
-        raise HTTPException(status_code=403, detail="You don't have access to this company")
+    
+    # Разрешаем учредителю и управляющему
+    if current_user.role == UserRole.FOUNDER:
+        if company.founder_id != current_user.id:
+            raise HTTPException(status_code=403, detail="You don't have access to this company")
+    else:
+        # Проверяем, является ли пользователь менеджером в этой компании
+        result = await db.execute(
+            select(CompanyMember).where(
+                CompanyMember.company_id == company_id,
+                CompanyMember.user_id == current_user.id,
+                CompanyMember.role_in_company == 'manager'
+            )
+        )
+        if not result.scalar_one_or_none():
+            raise HTTPException(status_code=403, detail="Only founder or manager can create accounts")
     
     new_account = Account(
         company_id=company_id,

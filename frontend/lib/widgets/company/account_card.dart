@@ -3,7 +3,14 @@ import 'package:flutter/material.dart';
 class AccountCard extends StatelessWidget {
   final Map<String, dynamic> account;
   final VoidCallback onDelete;
-  const AccountCard({super.key, required this.account, required this.onDelete});
+  final bool isFounder; // новый параметр
+
+  const AccountCard({
+    super.key,
+    required this.account,
+    required this.onDelete,
+    required this.isFounder,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -17,7 +24,8 @@ class AccountCard extends StatelessWidget {
 
     final isArchive = account['name'] == 'Архив';
     final balance = (account['balance'] as num).toDouble();
-    final canDelete = account['type'] == 'other' && !isArchive;
+    // Удалять могут только учредители, и только не системные счета (не 'cash'/'bank') и не архив
+    final canDelete = isFounder && account['type'] == 'other' && !isArchive;
 
     return Card(
       margin: const EdgeInsets.only(right: 12),

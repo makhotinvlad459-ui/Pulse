@@ -142,8 +142,8 @@ async def create_transaction(
         deleted_by=new_trans.deleted_by,
         deleted_at=new_trans.deleted_at,
         transfer_to_account_id=new_trans.transfer_to_account_id,
-        creator_name=new_trans.creator.full_name if new_trans.creator else None,
-        updater_name=new_trans.updater.full_name if new_trans.updater else None
+        creator_name=new_trans.creator.display_name if new_trans.creator else None,
+        updater_name=new_trans.updater.display_name if new_trans.updater else None
     )
 
 @router.get("/", response_model=List[TransactionResponse])
@@ -209,8 +209,8 @@ async def get_transactions(
             deleted_by=t.deleted_by,
             deleted_at=t.deleted_at,
             transfer_to_account_id=t.transfer_to_account_id,
-            creator_name=t.creator.full_name if t.creator else None,
-            updater_name=t.updater.full_name if t.updater else None
+            creator_name=t.creator.display_name if t.creator else None,
+            updater_name=t.updater.display_name if t.updater else None
         ))
     return response
 
@@ -253,8 +253,8 @@ async def get_transaction(
         deleted_by=t.deleted_by,
         deleted_at=t.deleted_at,
         transfer_to_account_id=t.transfer_to_account_id,
-        creator_name=t.creator.full_name if t.creator else None,
-        updater_name=t.updater.full_name if t.updater else None
+        creator_name=t.creator.display_name if t.creator else None,
+        updater_name=t.updater.display_name if t.updater else None
     )
 
 @router.patch("/{transaction_id}", response_model=TransactionResponse)
@@ -335,8 +335,8 @@ async def update_transaction(
         deleted_by=transaction.deleted_by,
         deleted_at=transaction.deleted_at,
         transfer_to_account_id=transaction.transfer_to_account_id,
-        creator_name=transaction.creator.full_name if transaction.creator else None,
-        updater_name=transaction.updater.full_name if transaction.updater else None
+        creator_name=transaction.creator.display_name if transaction.creator else None,
+        updater_name=transaction.updater.display_name if transaction.updater else None
     )
 
 @router.delete("/{transaction_id}")

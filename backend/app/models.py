@@ -3,6 +3,7 @@ from sqlalchemy import String, Boolean, DateTime, ForeignKey, Numeric, Enum, Int
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from enum import Enum as PyEnum
 from app.database import Base
+from sqlalchemy import UniqueConstraint
 
 class UserRole(PyEnum):
     FOUNDER = "founder"
@@ -40,6 +41,13 @@ class User(Base):
     chat_messages: Mapped[list["ChatMessage"]] = relationship(back_populates="user")
     transaction_comments: Mapped[list["TransactionComment"]] = relationship(back_populates="user")
 
+    @property
+    def display_name(self) -> str:
+        """Возвращает 'Основатель' для учредителя, иначе full_name"""
+        if self.role == UserRole.FOUNDER:
+            return "Основатель"
+        return self.full_name
+    
 class Company(Base):
     __tablename__ = "companies"
 
@@ -59,6 +67,7 @@ class Company(Base):
     categories: Mapped[list["Category"]] = relationship("Category", back_populates="company", cascade="all, delete-orphan")
     transactions: Mapped[list["Transaction"]] = relationship("Transaction", back_populates="company", cascade="all, delete-orphan")
     chat_messages: Mapped[list["ChatMessage"]] = relationship(back_populates="company", cascade="all, delete-orphan")
+    tasks: Mapped[list["Task"]] = relationship("Task", back_populates="company", cascade="all, delete-orphan")
 
 class CompanyMember(Base):
     __tablename__ = "company_members"
@@ -151,10 +160,13 @@ class ChatMessage(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     message: Mapped[str] = mapped_column(String(1000))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    edited: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)  # добавлено
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True) # добавлено
 
     # relationships
     company: Mapped["Company"] = relationship(back_populates="chat_messages")
     user: Mapped["User"] = relationship(back_populates="chat_messages")
+
 
 class TransactionComment(Base):
     __tablename__ = "transaction_comments"
@@ -168,3 +180,38 @@ class TransactionComment(Base):
     # relationships
     transaction: Mapped["Transaction"] = relationship(back_populates="comments")
     user: Mapped["User"] = relationship(back_populates="transaction_comments")
+
+class TaskStatus(PyEnum):
+    PENDING = "pending"      # ожидает принятия
+    ACCEPTED = "accepted"    # принята
+    COMPLETED = "completed"  # исполнена
+    FAILED = "failed"        # провалена
+
+class Task(Base):
+    __tablename__ = "tasks"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    company_id: Mapped[int] = mapped_column(ForeignKey("companies.id", ondelete="CASCADE"))
+    author_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    assignee_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=True)  # кому назначена
+    title: Mapped[str] = mapped_column(String(255))
+    description: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    status: Mapped[TaskStatus] = mapped_column(Enum(TaskStatus), default=TaskStatus.PENDING)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    deadline: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    # relationships
+    company: Mapped["Company"] = relationship(back_populates="tasks")
+    author: Mapped["User"] = relationship(foreign_keys=[author_id])
+    assignee: Mapped["User"] = relationship(foreign_keys=[assignee_id])    
+
+class UserChatVisit(Base):
+    __tablename__ = "user_chat_visits"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    company_id: Mapped[int] = mapped_column(ForeignKey("companies.id", ondelete="CASCADE"))
+    last_visit_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint("user_id", "company_id", name="uq_user_company_visit"),)

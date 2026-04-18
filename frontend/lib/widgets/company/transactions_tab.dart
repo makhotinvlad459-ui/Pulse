@@ -7,7 +7,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:html' as html;
 import '../../services/api_client.dart';
 import '../../models/transaction.dart';
-import 'edit_transaction_dialog.dart';
+import 'edit_transaction_dialog.dart'; // <-- импорт
 import 'add_transaction_dialog.dart';
 
 class TransactionsTab extends StatefulWidget {
@@ -169,17 +169,6 @@ class _TransactionsTabState extends State<TransactionsTab> {
   }
 
   Future<void> _editTransaction(Transaction transaction) async {
-    // Проверяем, существует ли счёт в списке accounts
-    final accountExists =
-        widget.accounts.any((a) => a['id'] == transaction.accountId);
-    if (!accountExists) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text(
-                'Эта операция относится к удалённому счёту и перенесена в архив. Редактирование невозможно.')),
-      );
-      return;
-    }
     final Map<String, dynamic> map = {
       'id': transaction.id,
       'type': transaction.type,
@@ -292,7 +281,6 @@ class _TransactionsTabState extends State<TransactionsTab> {
     }
   }
 
-  // Вспомогательная функция для получения типа счёта по id
   String _getAccountType(int? accountId) {
     if (accountId == null) return '';
     try {
@@ -307,10 +295,8 @@ class _TransactionsTabState extends State<TransactionsTab> {
 
   @override
   Widget build(BuildContext context) {
-    // Группировка по дням
     Map<DateTime, List<Transaction>> grouped = {};
     for (var t in _transactions) {
-      if (t.isDeleted) continue; // удалённые операции не учитываем в итогах
       DateTime date = t.date.toLocal();
       DateTime key = DateTime(date.year, date.month, date.day);
       grouped.putIfAbsent(key, () => []).add(t);
@@ -352,13 +338,11 @@ class _TransactionsTabState extends State<TransactionsTab> {
                             itemBuilder: (context, index) {
                               final date = sortedDates[index];
                               final dayTransactions = grouped[date]!;
-                              // Подсчёт итогов за день (только доходы)
-                              double turnover =
-                                  0; // Оборот = сумма всех доходов
-                              double cashIncome = 0; // Доходы наличными
-                              double nonCashIncome = 0; // Доходы безналичные
+                              double turnover = 0;
+                              double cashIncome = 0;
+                              double nonCashIncome = 0;
                               for (var t in dayTransactions) {
-                                if (t.type == 'income') {
+                                if (t.type == 'income' && !t.isDeleted) {
                                   turnover += t.amount;
                                   String accType = _getAccountType(t.accountId);
                                   if (accType == 'cash') {
@@ -525,7 +509,6 @@ class _TransactionsTabState extends State<TransactionsTab> {
             ),
           ],
         ),
-        // FAB для добавления операции
         Positioned(
           bottom: 16,
           right: 16,

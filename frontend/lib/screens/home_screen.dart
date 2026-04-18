@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 import '../providers/home_provider.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/matrix_rain.dart';
@@ -8,12 +10,57 @@ import '../widgets/ecg_widget.dart';
 import '../models/company.dart';
 import '../screens/create_company_screen.dart';
 import '../screens/company_screen.dart';
+import '../services/api_client.dart';
 
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  WebSocketChannel? _userChannel;
+
+  @override
+  void initState() {
+    super.initState();
+    _connectUserWebSocket();
+  }
+
+  @override
+  void dispose() {
+    _userChannel?.sink.close();
+    super.dispose();
+  }
+
+  Future<void> _connectUserWebSocket() async {
+    final authState = ref.read(authProvider);
+    final user = authState.user;
+    if (user == null) return;
+    final api = ApiClient();
+    final token = await api.getToken();
+    if (token == null) return;
+
+    final baseUrl = ApiClient.baseUrl;
+    final wsBase = baseUrl.replaceFirst('http', 'ws');
+    final wsUrl = '$wsBase/ws/user/${user.id}?token=$token';
+    print('🟢 Connecting to user WS: $wsUrl');
+
+    _userChannel = WebSocketChannel.connect(Uri.parse(wsUrl));
+    _userChannel!.stream.listen((message) {
+      print('🟢 User WS message: $message');
+      final data = jsonDecode(message);
+      if (data['type'] == 'update_counters') {
+        ref.invalidate(homeProvider);
+      }
+    }, onError: (error) {
+      print('🔴 User WS error: $error');
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final homeAsync = ref.watch(homeProvider);
 
     return Scaffold(
@@ -83,6 +130,8 @@ class HomeScreen extends ConsumerWidget {
                       data: (data) {
                         final companies = data.companies;
                         final overview = data.overview;
+                        final counts =
+                            data.counts as Map<String, dynamic>? ?? {};
                         return ListView(
                           padding: const EdgeInsets.all(16),
                           children: [
@@ -101,8 +150,20 @@ class HomeScreen extends ConsumerWidget {
                               ],
                             ),
                             const SizedBox(height: 16),
-                            ...companies.map((company) =>
-                                _CompanyCard(company: company, ref: ref)),
+                            ...companies.map((company) {
+                              final unread = counts[company.id.toString()]
+                                      ?['unread_messages'] ??
+                                  0;
+                              final pending = counts[company.id.toString()]
+                                      ?['pending_tasks'] ??
+                                  0;
+                              return _CompanyCard(
+                                company: company,
+                                ref: ref,
+                                unreadMessages: unread,
+                                pendingTasks: pending,
+                              );
+                            }),
                           ],
                         );
                       },
@@ -176,7 +237,14 @@ class _StatCard extends StatelessWidget {
 class _CompanyCard extends StatelessWidget {
   final Company company;
   final WidgetRef ref;
-  const _CompanyCard({required this.company, required this.ref});
+  final int unreadMessages;
+  final int pendingTasks;
+  const _CompanyCard({
+    required this.company,
+    required this.ref,
+    required this.unreadMessages,
+    required this.pendingTasks,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -186,9 +254,42 @@ class _CompanyCard extends StatelessWidget {
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       child: ListTile(
-        title: Text(company.name,
-            style: const TextStyle(
-                color: Colors.black87, fontWeight: FontWeight.bold)),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(
+                company.name,
+                style: const TextStyle(
+                    color: Colors.black87, fontWeight: FontWeight.bold),
+              ),
+            ),
+            if (unreadMessages > 0)
+              Container(
+                margin: const EdgeInsets.only(right: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.red,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '$unreadMessages',
+                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                ),
+              ),
+            if (pendingTasks > 0)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.orange,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '$pendingTasks',
+                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                ),
+              ),
+          ],
+        ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -234,7 +335,6 @@ class SettingsDrawer extends StatelessWidget {
             leading: const Icon(Icons.people, color: Colors.black87),
             title: const Text('Сотрудники'),
             onTap: () {
-              // TODO: открыть экран со списком сотрудников
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                     content: Text('Список сотрудников в разработке')),

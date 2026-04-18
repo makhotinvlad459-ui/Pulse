@@ -1,7 +1,9 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 import '../services/api_client.dart';
 import '../providers/auth_provider.dart';
 import '../models/user.dart';
@@ -15,7 +17,8 @@ import '../widgets/company/edit_company_dialog.dart';
 import '../widgets/company/add_account_dialog.dart';
 import '../widgets/company/manage_categories_dialog.dart';
 import '../widgets/company/manage_employees_dialog.dart';
-import '../screens/archive_screen.dart'; // импорт экрана архива
+import '../widgets/company/chat_and_tasks_tab.dart';
+import '../screens/archive_screen.dart';
 
 class CompanyScreen extends ConsumerStatefulWidget {
   final Company company;
@@ -33,14 +36,84 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
   List<dynamic> _categories = [];
   bool _loading = true;
   bool _hasChanges = false;
-  int? _archiveAccountId; // ID архивного счёта
+  int? _archiveAccountId;
+  int _pendingTasksCount = 0;
+  int _unreadMessagesCount = 0;
+  WebSocketChannel? _userChannel;
 
   @override
   void initState() {
     super.initState();
     initializeDateFormatting('ru_RU', null);
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     _loadData();
+    _connectUserWebSocket();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    _userChannel?.sink.close();
+    if (_hasChanges) Navigator.pop(context, true);
+    super.dispose();
+  }
+
+  Future<void> _connectUserWebSocket() async {
+    final authState = ref.read(authProvider);
+    final user = authState.user;
+    if (user == null) return;
+    final api = ApiClient();
+    final token = await api.getToken();
+    if (token == null) return;
+
+    final baseUrl = ApiClient.baseUrl;
+    final wsBase = baseUrl.replaceFirst('http', 'ws');
+    final wsUrl = '$wsBase/ws/user/${user.id}?token=$token';
+    print('🟢 CompanyScreen connecting user WS: $wsUrl');
+
+    _userChannel = WebSocketChannel.connect(Uri.parse(wsUrl));
+    _userChannel!.stream.listen((message) {
+      print('🟢 CompanyScreen user WS message: $message');
+      final data = jsonDecode(message);
+      if (data['type'] == 'update_counters') {
+        if (data['company_id'] == widget.company.id) {
+          _refreshCounters();
+        }
+      }
+    }, onError: (error) {
+      print('🔴 CompanyScreen user WS error: $error');
+    });
+  }
+
+  Future<void> _refreshCounters() async {
+    final api = ApiClient();
+    try {
+      final countsRes = await api.get('/notifications/unread-counts');
+      final counts = countsRes.data as Map<String, dynamic>;
+      final companyIdStr = widget.company.id.toString();
+      if (counts.containsKey(companyIdStr)) {
+        final companyCounts = counts[companyIdStr] as Map<String, dynamic>;
+        setState(() {
+          _unreadMessagesCount = companyCounts['unread_messages'] ?? 0;
+          _pendingTasksCount = companyCounts['pending_tasks'] ?? 0;
+        });
+      } else {
+        setState(() {
+          _unreadMessagesCount = 0;
+          _pendingTasksCount = 0;
+        });
+      }
+    } catch (e) {
+      print('Error refreshing counters: $e');
+    }
+  }
+
+  void _onPendingTasksChanged(int pending) {
+    if (mounted) setState(() => _pendingTasksCount = pending);
+  }
+
+  void _onUnreadMessagesChanged(int unread) {
+    if (mounted) setState(() => _unreadMessagesCount = unread);
   }
 
   Future<void> _loadData() async {
@@ -62,7 +135,6 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
           if (orderA != orderB) return orderA.compareTo(orderB);
           return a['id'].compareTo(b['id']);
         });
-        // Находим архивный счёт через цикл
         Map<String, dynamic>? archive;
         for (var acc in accountsList) {
           if (acc['name'] == 'Архив') {
@@ -71,12 +143,12 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
           }
         }
         _archiveAccountId = archive?['id'];
-        // Исключаем архив из списка для отображения
         _accounts = accountsList.where((a) => a['name'] != 'Архив').toList();
         _transactions = transactionsRes.data;
         _categories = categoriesRes.data;
         _loading = false;
       });
+      await _refreshCounters();
     } catch (e) {
       setState(() => _loading = false);
       if (mounted)
@@ -109,18 +181,20 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
   }
 
   @override
-  void dispose() {
-    _tabController.dispose();
-    if (_hasChanges) Navigator.pop(context, true);
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
     final isFounder = authState.user?.role == UserRole.founder;
-    final canManageEmployees =
-        isFounder || widget.company.currentUserRole == 'manager';
+    final currentUserRole = widget.company.currentUserRole;
+    final isManager = currentUserRole == 'manager';
+
+    final bool showEditCompany = isFounder;
+    final bool showAddAccount = isFounder || isManager;
+    final bool showManageCategories = isFounder || isManager;
+    final bool showManageEmployees = isFounder || isManager;
+    final bool showArchive =
+        (isFounder || isManager) && _archiveAccountId != null;
+    final bool showDeleteCompany = isFounder;
+    final bool showMenu = isFounder || isManager;
 
     final double rainHeight = 200;
 
@@ -156,66 +230,78 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                         onPressed: () => Navigator.pop(context, _hasChanges),
                       ),
                       const Spacer(),
-                      PopupMenuButton<String>(
-                        onSelected: (value) async {
-                          if (value == 'edit')
-                            await showDialog(
-                                context: context,
-                                builder: (_) => EditCompanyDialog(
-                                    company: widget.company,
-                                    onSuccess: _refresh));
-                          if (value == 'add_account')
-                            await showDialog(
-                                context: context,
-                                builder: (_) => AddAccountDialog(
-                                    companyId: widget.company.id,
-                                    onSuccess: _refresh));
-                          if (value == 'manage_categories')
-                            await showDialog(
-                                context: context,
-                                builder: (_) => ManageCategoriesDialog(
-                                    companyId: widget.company.id,
-                                    onSuccess: _refresh,
-                                    categories: _categories));
-                          if (value == 'manage_employees')
-                            await showDialog(
-                                context: context,
-                                builder: (_) => ManageEmployeesDialog(
-                                    companyId: widget.company.id,
-                                    onSuccess: _refresh));
-                          if (value == 'archive') _openArchive();
-                          if (value == 'delete') await _confirmDeleteCompany();
-                        },
-                        itemBuilder: (context) {
-                          final items = [
-                            const PopupMenuItem(
-                                value: 'edit',
-                                child: Text('Редактировать компанию')),
-                            const PopupMenuItem(
-                                value: 'add_account',
-                                child: Text('Добавить счёт')),
-                            const PopupMenuItem(
-                                value: 'manage_categories',
-                                child: Text('Управление категориями')),
-                          ];
-                          if (canManageEmployees) {
-                            items.add(const PopupMenuItem(
-                                value: 'manage_employees',
-                                child: Text('Управление сотрудниками')));
-                          }
-                          if (_archiveAccountId != null) {
-                            items.add(const PopupMenuItem(
-                                value: 'archive', child: Text('Архив')));
-                          }
-                          items.add(const PopupMenuItem(
-                              value: 'delete',
-                              child: Text('Удалить компанию',
-                                  style: TextStyle(color: Colors.red))));
-                          return items;
-                        },
-                        icon:
-                            Icon(Icons.more_vert, color: Colors.grey.shade800),
-                      ),
+                      if (showMenu)
+                        PopupMenuButton<String>(
+                          onSelected: (value) async {
+                            if (value == 'edit' && showEditCompany)
+                              await showDialog(
+                                  context: context,
+                                  builder: (_) => EditCompanyDialog(
+                                      company: widget.company,
+                                      onSuccess: _refresh));
+                            if (value == 'add_account' && showAddAccount)
+                              await showDialog(
+                                  context: context,
+                                  builder: (_) => AddAccountDialog(
+                                      companyId: widget.company.id,
+                                      onSuccess: _refresh));
+                            if (value == 'manage_categories' &&
+                                showManageCategories)
+                              await showDialog(
+                                  context: context,
+                                  builder: (_) => ManageCategoriesDialog(
+                                      companyId: widget.company.id,
+                                      onSuccess: _refresh,
+                                      categories: _categories));
+                            if (value == 'manage_employees' &&
+                                showManageEmployees)
+                              await showDialog(
+                                  context: context,
+                                  builder: (_) => ManageEmployeesDialog(
+                                      companyId: widget.company.id,
+                                      onSuccess: _refresh));
+                            if (value == 'archive' && showArchive)
+                              _openArchive();
+                            if (value == 'delete' && showDeleteCompany)
+                              await _confirmDeleteCompany();
+                          },
+                          itemBuilder: (context) {
+                            final items = <PopupMenuItem<String>>[];
+                            if (showEditCompany) {
+                              items.add(const PopupMenuItem(
+                                  value: 'edit',
+                                  child: Text('Редактировать компанию')));
+                            }
+                            if (showAddAccount) {
+                              items.add(const PopupMenuItem(
+                                  value: 'add_account',
+                                  child: Text('Добавить счёт')));
+                            }
+                            if (showManageCategories) {
+                              items.add(const PopupMenuItem(
+                                  value: 'manage_categories',
+                                  child: Text('Управление категориями')));
+                            }
+                            if (showManageEmployees) {
+                              items.add(const PopupMenuItem(
+                                  value: 'manage_employees',
+                                  child: Text('Управление сотрудниками')));
+                            }
+                            if (showArchive) {
+                              items.add(const PopupMenuItem(
+                                  value: 'archive', child: Text('Архив')));
+                            }
+                            if (showDeleteCompany) {
+                              items.add(const PopupMenuItem(
+                                  value: 'delete',
+                                  child: Text('Удалить компанию',
+                                      style: TextStyle(color: Colors.red))));
+                            }
+                            return items;
+                          },
+                          icon: Icon(Icons.more_vert,
+                              color: Colors.grey.shade800),
+                        ),
                     ],
                   ),
                 ),
@@ -254,6 +340,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                                         SnackBar(content: Text('Ошибка: $e')));
                                   }
                                 },
+                                isFounder: isFounder,
                               ))
                           .toList(),
                     ),
@@ -264,10 +351,16 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                     children: [
                       TabBar(
                         controller: _tabController,
-                        tabs: const [
-                          Tab(text: 'Операции'),
-                          Tab(text: 'Приход/Расход'),
-                          Tab(text: 'График'),
+                        tabs: [
+                          const Tab(text: 'Операции'),
+                          const Tab(text: 'Приход/Расход'),
+                          const Tab(text: 'График'),
+                          Tab(
+                            text: (_unreadMessagesCount + _pendingTasksCount) >
+                                    0
+                                ? 'Чат/Задачи (${_unreadMessagesCount + _pendingTasksCount})'
+                                : 'Чат/Задачи',
+                          ),
                         ],
                         labelColor: Colors.grey.shade800,
                         unselectedLabelColor: Colors.grey.shade500,
@@ -288,6 +381,12 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                                 companyId: widget.company.id,
                                 categories: _categories),
                             ReportsTab(companyId: widget.company.id),
+                            ChatAndTasksTab(
+                              companyId: widget.company.id,
+                              isManager: isManager,
+                              onPendingTasksChanged: _onPendingTasksChanged,
+                              onUnreadMessagesChanged: _onUnreadMessagesChanged,
+                            ),
                           ],
                         ),
                       ),

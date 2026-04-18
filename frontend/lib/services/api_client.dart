@@ -104,4 +104,8 @@ class ApiClient {
     final response = await get('/statistics/user-overview');
     return FounderOverview.fromJson(response.data);
   }
+
+  Future<String?> getToken() async {
+    return await _storage.read(key: 'access_token');
+  }
 }

@@ -23,7 +23,9 @@ dependencies:
   path_provider: ^2.1.1
   file_picker: ^6.1.1
   google_fonts: ^6.1.0
-  flutter_localizations:  # добавьте эту строку
+  web_socket_channel: ^2.4.0
+  audioplayers: ^6.0.0
+  flutter_localizations:  
     sdk: flutter
 
 dev_dependencies:

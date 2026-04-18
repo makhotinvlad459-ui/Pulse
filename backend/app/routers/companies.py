@@ -209,6 +209,7 @@ async def create_company(
         total_balance=total_balance,
         employees_credentials=employees_credentials
     )
+
 # --- Получение списка компаний (без изменений) ---
 @router.get("/", response_model=List[CompanyResponse])
 async def get_companies(
@@ -260,7 +261,7 @@ async def get_companies(
         ))
     return response
 
-# --- Получение членов компании (без изменений) ---
+# --- Получение членов компании (исправлено: используем display_name) ---
 @router.get("/{company_id}/members")
 async def get_company_members(
     company_id: int,
@@ -286,7 +287,7 @@ async def get_company_members(
         {
             "id": m.id,
             "user_id": m.user_id,
-            "full_name": m.user.full_name,
+            "full_name": m.user.display_name,   # <--- исправлено
             "phone": m.user.phone,
             "email": m.user.email,
             "role_in_company": m.role_in_company,
@@ -295,7 +296,7 @@ async def get_company_members(
         for m in members
     ]
 
-# --- Удаление члена компании (теперь доступно учредителю и менеджеру) ---
+# --- Удаление члена компании ---
 @router.delete("/{company_id}/members/{user_id}")
 async def remove_member(
     company_id: int,
@@ -315,7 +316,7 @@ async def remove_member(
     await db.commit()
     return {"detail": "Member removed from company"}
 
-# --- Добавление члена компании (доступно учредителю и менеджеру, возвращает пароль) ---
+# --- Добавление члена компании ---
 @router.post("/{company_id}/members")
 async def add_member(
     company_id: int,
@@ -378,7 +379,7 @@ async def add_member(
         response_data["password"] = password
     return response_data
 
-# --- Сброс пароля члена компании (доступно учредителю и менеджеру, возвращает новый пароль) ---
+# --- Сброс пароля члена компании ---
 @router.post("/{company_id}/members/{user_id}/reset-password")
 async def reset_member_password(
     company_id: int,
@@ -402,7 +403,7 @@ async def reset_member_password(
     
     return {"detail": "Password reset", "new_password": new_password}
 
-# --- Редактирование компании (без изменений) ---
+# --- Редактирование компании ---
 @router.put("/{company_id}", response_model=CompanyResponse)
 async def update_company(
     company_id: int,
@@ -442,7 +443,7 @@ async def update_company(
         employees_credentials=[]
     )
 
-# --- Назначить управляющего компании (из числа членов) ---
+# --- Назначить управляющего компании ---
 @router.put("/{company_id}/manager")
 async def set_company_manager(
     company_id: int,
@@ -450,48 +451,39 @@ async def set_company_manager(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # Проверяем права: только учредитель или текущий менеджер?
-    # Для безопасности оставим только учредителя
     if current_user.role != UserRole.FOUNDER:
         raise HTTPException(status_code=403, detail="Only founder can change company manager")
     
-    # Проверяем существование компании и права учредителя
     result = await db.execute(select(Company).where(Company.id == company_id, Company.founder_id == current_user.id))
     company = result.scalar_one_or_none()
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
     
-    # Проверяем, что пользователь с таким user_id является членом компании
     result = await db.execute(select(CompanyMember).where(CompanyMember.company_id == company_id, CompanyMember.user_id == req.user_id))
     member = result.scalar_one_or_none()
     if not member:
         raise HTTPException(status_code=404, detail="User is not a member of this company")
     
-    # Получаем данные пользователя
     result = await db.execute(select(User).where(User.id == req.user_id))
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
-    # Обновляем поля компании
     company.manager_full_name = user.full_name
     company.manager_phone = user.phone
     await db.flush()
     
-    # Если у текущего управляющего (кто был раньше) роль была manager, понижаем до employee
-    # Находим старого управляющего (члена с ролью manager)
     result = await db.execute(select(CompanyMember).where(CompanyMember.company_id == company_id, CompanyMember.role_in_company == 'manager'))
     old_manager = result.scalar_one_or_none()
     if old_manager and old_manager.user_id != req.user_id:
         old_manager.role_in_company = 'employee'
     
-    # Назначаем новому пользователю роль manager
     member.role_in_company = 'manager'
     
     await db.commit()
     return {"detail": "Manager updated", "manager_full_name": user.full_name, "manager_phone": user.phone}
 
-# --- Обновление роли участника (повышение/понижение) ---
+# --- Обновление роли участника ---
 @router.patch("/{company_id}/members/{user_id}/role")
 async def update_member_role(
     company_id: int,
@@ -500,7 +492,6 @@ async def update_member_role(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # Доступно учредителю или текущему менеджеру? Пусть учредителю
     if current_user.role != UserRole.FOUNDER:
         raise HTTPException(status_code=403, detail="Only founder can change member roles")
     
@@ -519,7 +510,6 @@ async def update_member_role(
     member.role_in_company = req.role_in_company
     await db.commit()
     
-    # Если роль стала manager, также обновляем поля компании (опционально)
     if req.role_in_company == 'manager':
         result = await db.execute(select(User).where(User.id == user_id))
         user = result.scalar_one_or_none()
@@ -533,7 +523,7 @@ async def update_member_role(
     
     return {"detail": "Role updated", "new_role": req.role_in_company}
 
-# --- Удаление компании (без изменений) ---
+# --- Удаление компании ---
 @router.delete("/{company_id}")
 async def delete_company(
     company_id: int,
