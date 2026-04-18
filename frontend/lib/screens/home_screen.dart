@@ -263,30 +263,39 @@ class _CompanyCard extends StatelessWidget {
                     color: Colors.black87, fontWeight: FontWeight.bold),
               ),
             ),
-            if (unreadMessages > 0)
-              Container(
-                margin: const EdgeInsets.only(right: 4),
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.red,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  '$unreadMessages',
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
-                ),
-              ),
-            if (pendingTasks > 0)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.orange,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  '$pendingTasks',
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
-                ),
+            if (unreadMessages > 0 || pendingTasks > 0)
+              Row(
+                children: [
+                  if (unreadMessages > 0)
+                    Container(
+                      margin: const EdgeInsets.only(right: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        'Сообщения: $unreadMessages',
+                        style:
+                            const TextStyle(color: Colors.white, fontSize: 10),
+                      ),
+                    ),
+                  if (pendingTasks > 0)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.orange,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        'Задачи: $pendingTasks',
+                        style:
+                            const TextStyle(color: Colors.white, fontSize: 10),
+                      ),
+                    ),
+                ],
               ),
           ],
         ),
