@@ -68,6 +68,8 @@ class Company(Base):
     transactions: Mapped[list["Transaction"]] = relationship("Transaction", back_populates="company", cascade="all, delete-orphan")
     chat_messages: Mapped[list["ChatMessage"]] = relationship(back_populates="company", cascade="all, delete-orphan")
     tasks: Mapped[list["Task"]] = relationship("Task", back_populates="company", cascade="all, delete-orphan")
+    products: Mapped[list["Product"]] = relationship(back_populates="company", cascade="all, delete-orphan")
+    dishes: Mapped[list["Dish"]] = relationship(back_populates="company", cascade="all, delete-orphan")
 
 class CompanyMember(Base):
     __tablename__ = "company_members"
@@ -215,3 +217,78 @@ class UserChatVisit(Base):
     last_visit_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     __table_args__ = (UniqueConstraint("user_id", "company_id", name="uq_user_company_visit"),)
+
+class Product(Base):
+    __tablename__ = "products"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    company_id: Mapped[int] = mapped_column(ForeignKey("companies.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(100))
+    unit: Mapped[str] = mapped_column(String(20))  # 'kg', 'liter', 'piece', 'g', 'ml'
+    current_quantity: Mapped[float] = mapped_column(Numeric(15, 3), default=0.0)
+    price_per_unit: Mapped[float] = mapped_column(Numeric(15, 2), nullable=True)  # закупочная цена
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    # relationships
+    company: Mapped["Company"] = relationship(back_populates="products")
+    # recipe_items: Mapped[list["RecipeItem"]] = relationship(back_populates="product", cascade="all, delete-orphan")
+    # stock_entries: Mapped[list["StockEntry"]] = relationship(back_populates="product", cascade="all, delete-orphan")
+
+class Dish(Base):
+    __tablename__ = "dishes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    company_id: Mapped[int] = mapped_column(ForeignKey("companies.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(100))
+    price: Mapped[float] = mapped_column(Numeric(15, 2), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    company: Mapped["Company"] = relationship(back_populates="dishes")
+
+class RecipeItem(Base):
+    __tablename__ = "recipe_items"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    dish_id: Mapped[int] = mapped_column(ForeignKey("dishes.id", ondelete="CASCADE"))
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"))
+    quantity: Mapped[float] = mapped_column(Numeric(15, 3))  # количество товара на одно блюдо
+
+    # relationships
+    dish: Mapped["Dish"] = relationship(back_populates="recipe_items")
+    product: Mapped["Product"] = relationship(back_populates="recipe_items")
+
+class StockEntry(Base):
+    __tablename__ = "stock_entries"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    company_id: Mapped[int] = mapped_column(ForeignKey("companies.id", ondelete="CASCADE"))
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"))
+    quantity: Mapped[float] = mapped_column(Numeric(15, 3))
+    price_per_unit: Mapped[float] = mapped_column(Numeric(15, 2))  # цена за единицу в этом приходе
+    date: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    description: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+
+    # relationships
+    company: Mapped["Company"] = relationship()
+    product: Mapped["Product"] = relationship(back_populates="stock_entries")
+    creator: Mapped["User"] = relationship()  
+
+class StockWriteOff(Base):
+    __tablename__ = "stock_write_offs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    company_id: Mapped[int] = mapped_column(ForeignKey("companies.id", ondelete="CASCADE"))
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"))
+    quantity: Mapped[float] = mapped_column(Numeric(15, 3))
+    reason: Mapped[str] = mapped_column(String(100))  # 'sale', 'spoilage', 'loss'
+    dish_id: Mapped[int | None] = mapped_column(ForeignKey("dishes.id"), nullable=True)  # если списание связано с продажей блюда
+    date: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    description: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+
+    # relationships
+    company: Mapped["Company"] = relationship()
+    product: Mapped["Product"] = relationship(back_populates="write_offs")
+    dish: Mapped["Dish"] = relationship()
+    creator: Mapped["User"] = relationship()

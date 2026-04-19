@@ -61,7 +61,7 @@ class CategoryResponse(BaseModel):
     name: str
     type: TransactionType
     is_system: bool
-    icon: str = "📁"          # <--- добавлено поле icon
+    icon: str = "📁"   
     class Config:
         from_attributes = True
 
