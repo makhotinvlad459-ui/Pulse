@@ -143,7 +143,9 @@ class Transaction(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     attachment_uploaded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    
+    number: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    counterparty: Mapped[str | None] = mapped_column(String(200), nullable=True)   # <-- добавлено
+
     # relationships
     company: Mapped["Company"] = relationship(back_populates="transactions")
     account: Mapped["Account"] = relationship(foreign_keys=[account_id], back_populates="transactions_from")
@@ -153,6 +155,7 @@ class Transaction(Base):
     creator: Mapped["User"] = relationship(foreign_keys=[created_by], back_populates="created_transactions")
     updater: Mapped["User"] = relationship(foreign_keys=[updated_by], back_populates="updated_transactions")
     deleter: Mapped["User"] = relationship(foreign_keys=[deleted_by], back_populates="deleted_transactions")
+    items: Mapped[list["TransactionItem"]] = relationship(back_populates="transaction", cascade="all, delete-orphan")
 
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
@@ -226,15 +229,13 @@ class Product(Base):
     name: Mapped[str] = mapped_column(String(100))
     unit: Mapped[str] = mapped_column(String(20))
     current_quantity: Mapped[float] = mapped_column(Numeric(15, 3), default=0.0)
-    price_per_unit: Mapped[float] = mapped_column(Numeric(15, 2), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    # price_per_unit удалено
 
     # relationships
     company: Mapped["Company"] = relationship(back_populates="products")
-
     stock_entries: Mapped[list["StockEntry"]] = relationship(back_populates="product", cascade="all, delete-orphan")
     write_offs: Mapped[list["StockWriteOff"]] = relationship(back_populates="product", cascade="all, delete-orphan")
-
 
 class StockEntry(Base):
     __tablename__ = "stock_entries"
@@ -269,3 +270,16 @@ class StockWriteOff(Base):
     company: Mapped["Company"] = relationship()
     product: Mapped["Product"] = relationship(back_populates="write_offs")
     creator: Mapped["User"] = relationship()
+
+class TransactionItem(Base):
+    __tablename__ = "transaction_items"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    transaction_id: Mapped[int] = mapped_column(ForeignKey("transactions.id", ondelete="CASCADE"))
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id"))
+    quantity: Mapped[float] = mapped_column(Numeric(15, 3))
+    price_per_unit: Mapped[float] = mapped_column(Numeric(15, 2), nullable=True)
+
+    # relationships
+    transaction: Mapped["Transaction"] = relationship(back_populates="items")
+    product: Mapped["Product"] = relationship() 

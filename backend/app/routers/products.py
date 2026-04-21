@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, func
+from sqlalchemy import select, update
 from typing import List, Optional
 from pydantic import BaseModel
 from datetime import datetime
@@ -11,16 +11,13 @@ from app.deps import get_current_user
 
 router = APIRouter(prefix="/products", tags=["products"])
 
-# ---------- Схемы ----------
 class ProductCreate(BaseModel):
     name: str
     unit: str  # 'kg', 'liter', 'piece', 'g', 'ml'
-    price_per_unit: Optional[float] = None
 
 class ProductUpdate(BaseModel):
     name: Optional[str] = None
     unit: Optional[str] = None
-    price_per_unit: Optional[float] = None
 
 class ProductResponse(BaseModel):
     id: int
@@ -28,15 +25,12 @@ class ProductResponse(BaseModel):
     name: str
     unit: str
     current_quantity: float
-    price_per_unit: Optional[float]
     created_at: datetime
 
     class Config:
         from_attributes = True
 
-# ---------- Вспомогательные функции ----------
 async def _check_company_access(company_id: int, current_user: User, db: AsyncSession) -> bool:
-    """Проверяет, имеет ли пользователь доступ к компании"""
     if current_user.role == UserRole.FOUNDER:
         result = await db.execute(select(Company).where(Company.id == company_id, Company.founder_id == current_user.id))
         if result.scalar_one_or_none():
@@ -44,7 +38,6 @@ async def _check_company_access(company_id: int, current_user: User, db: AsyncSe
     result = await db.execute(select(CompanyMember).where(CompanyMember.company_id == company_id, CompanyMember.user_id == current_user.id))
     return result.scalar_one_or_none() is not None
 
-# ---------- CRUD ----------
 @router.get("/", response_model=List[ProductResponse])
 async def get_products(
     company_id: int,
@@ -70,7 +63,6 @@ async def create_product(
         company_id=company_id,
         name=product_data.name,
         unit=product_data.unit,
-        price_per_unit=product_data.price_per_unit,
         current_quantity=0.0
     )
     db.add(new_product)
@@ -111,8 +103,6 @@ async def update_product(
         product.name = product_data.name
     if product_data.unit is not None:
         product.unit = product_data.unit
-    if product_data.price_per_unit is not None:
-        product.price_per_unit = product_data.price_per_unit
     await db.commit()
     await db.refresh(product)
     return ProductResponse.model_validate(product)

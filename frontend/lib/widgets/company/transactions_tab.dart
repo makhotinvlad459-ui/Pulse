@@ -7,7 +7,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:html' as html;
 import '../../services/api_client.dart';
 import '../../models/transaction.dart';
-import 'edit_transaction_dialog.dart'; // <-- импорт
+import 'edit_transaction_dialog.dart';
 import 'add_transaction_dialog.dart';
 
 class TransactionsTab extends StatefulWidget {
@@ -88,8 +88,8 @@ class _TransactionsTabState extends State<TransactionsTab> {
   }
 
   String _typeName(String type) {
-    if (type == 'income') return 'Доход';
-    if (type == 'expense') return 'Расход';
+    if (type == 'income') return 'Приход (Продажа)';
+    if (type == 'expense') return 'Расход (Покупка)';
     if (type == 'transfer') return 'Перевод';
     return type;
   }
@@ -179,6 +179,13 @@ class _TransactionsTabState extends State<TransactionsTab> {
       'description': transaction.description,
       'attachment_url': transaction.attachmentUrl,
       'transfer_to_account_id': transaction.transferToAccountId,
+      'counterparty': transaction.counterparty,
+      'items': transaction.items.map((i) => {
+        'product_id': i.productId,
+        'product_name': i.productName,
+        'quantity': i.quantity,
+        'price_per_unit': i.pricePerUnit,
+      }).toList(),
     };
     await showDialog(
       context: context,
@@ -405,20 +412,33 @@ class _TransactionsTabState extends State<TransactionsTab> {
                                           ? Colors.grey.shade200
                                           : Colors.white,
                                       child: ListTile(
-                                        title: Text(
-                                          '${t.amount} ₽',
-                                          style: TextStyle(
-                                            color: t.type == 'income'
-                                                ? (isDeleted
-                                                    ? Colors.grey
-                                                    : Colors.green)
-                                                : (isDeleted
-                                                    ? Colors.grey
-                                                    : Colors.red),
-                                            decoration: isDeleted
-                                                ? TextDecoration.lineThrough
-                                                : null,
-                                          ),
+                                        title: Row(
+                                          children: [
+                                            Text(
+                                              '${t.amount.toStringAsFixed(2)} ₽',
+                                              style: TextStyle(
+                                                color: t.type == 'income'
+                                                    ? (isDeleted
+                                                        ? Colors.grey
+                                                        : Colors.green)
+                                                    : (isDeleted
+                                                        ? Colors.grey
+                                                        : Colors.red),
+                                                decoration: isDeleted
+                                                    ? TextDecoration.lineThrough
+                                                    : null,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              'Операция №${t.number}',
+                                              style: TextStyle(
+                                                color: isDeleted ? Colors.grey : Colors.black87,
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                         subtitle: Column(
                                           crossAxisAlignment:
@@ -432,6 +452,36 @@ class _TransactionsTabState extends State<TransactionsTab> {
                                                       : Colors.black87,
                                                   fontSize: 12),
                                             ),
+                                            if (t.counterparty != null && t.counterparty!.isNotEmpty)
+                                              Padding(
+                                                padding: const EdgeInsets.only(top: 2),
+                                                child: Text(
+                                                  'Контрагент: ${t.counterparty}',
+                                                  style: TextStyle(
+                                                    fontSize: 11,
+                                                    color: isDeleted ? Colors.grey : Colors.grey.shade700,
+                                                  ),
+                                                ),
+                                              ),
+                                            if (t.items.isNotEmpty)
+                                              Padding(
+                                                padding: const EdgeInsets.only(top: 4),
+                                                child: Row(
+                                                  children: [
+                                                    const Icon(Icons.shopping_cart, size: 14, color: Colors.blueGrey),
+                                                    const SizedBox(width: 4),
+                                                    Expanded(
+                                                      child: Text(
+                                                        'Товары: ${t.items.map((i) => '${i.productName} (${i.quantity} шт)').join(', ')}',
+                                                        style: TextStyle(
+                                                          fontSize: 11,
+                                                          color: Colors.grey.shade700,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
                                             if (t.creatorName != null)
                                               Text(
                                                 'Создал: ${t.creatorName}',

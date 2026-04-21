@@ -1,21 +1,22 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, func
+from sqlalchemy import select, update, func, delete
 from typing import List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime
 from sqlalchemy.orm import selectinload
 import os
 import shutil
 from fastapi.responses import FileResponse
+from decimal import Decimal
 
 from app.database import get_db
-from app.models import User, Company, Account, Category, Transaction, TransactionType, CompanyMember, UserRole
-from app.schemas import TransactionCreate, TransactionResponse
+from app.models import User, Company, Account, Category, Transaction, TransactionType, CompanyMember, UserRole, Product, TransactionItem
+from app.schemas import TransactionCreate, TransactionResponse, TransactionItemResponse
 from app.deps import get_current_user
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
 
-MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+MAX_FILE_SIZE = 10 * 1024 * 1024
 ALLOWED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.pdf'}
 
 async def recalc_account_balance(account_id: int, db: AsyncSession):
@@ -64,7 +65,6 @@ async def create_transaction(
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
     
-    # Определяем, является ли операция переводом (используем строку, а не enum)
     is_transfer = (trans_data.type.value == 'transfer')
     
     # Валидация перевода
@@ -78,8 +78,8 @@ async def create_transaction(
         if trans_data.account_id == trans_data.transfer_to_account_id:
             raise HTTPException(status_code=400, detail="Cannot transfer to the same account")
     
-    # Категории для дохода/расхода
-    if not is_transfer:  # доход или расход
+    # Категории для дохода/расхода (если нет товаров)
+    if not is_transfer and not trans_data.items:
         if not trans_data.category_id:
             result = await db.execute(select(Category).where(Category.company_id == company_id, Category.is_system == True))
             default_cat = result.scalar_one_or_none()
@@ -99,6 +99,11 @@ async def create_transaction(
             if not result.scalar_one_or_none():
                 raise HTTPException(status_code=404, detail="Category not found")
     
+    # Генерация номера операции
+    last_num_result = await db.execute(select(func.max(Transaction.number)).where(Transaction.company_id == company_id))
+    last_num = last_num_result.scalar() or 0
+    new_number = last_num + 1
+    
     # Приводим дату
     if trans_data.date.tzinfo is not None:
         trans_data.date = trans_data.date.replace(tzinfo=None)
@@ -107,18 +112,46 @@ async def create_transaction(
     new_trans = Transaction(
         company_id=company_id,
         account_id=trans_data.account_id,
-        type=trans_data.type.value,  # строка
+        type=trans_data.type.value,
         amount=trans_data.amount,
         date=trans_data.date,
-        category_id=trans_data.category_id,
+        category_id=trans_data.category_id if not is_transfer and not trans_data.items else None,
         description=trans_data.description,
         created_by=current_user.id,
-        transfer_to_account_id=trans_data.transfer_to_account_id if is_transfer else None
+        transfer_to_account_id=trans_data.transfer_to_account_id if is_transfer else None,
+        number=new_number,
+        counterparty=trans_data.counterparty   # <-- добавлено
     )
     db.add(new_trans)
-    await db.flush()  # отправляем в БД
+    await db.flush()
     
-    # Пересчёт балансов
+    # Обработка товаров и сохранение в transaction_items
+    if not is_transfer and trans_data.items:
+        for item in trans_data.items:
+            # Проверяем товар
+            prod_result = await db.execute(select(Product).where(Product.id == item.product_id, Product.company_id == company_id))
+            product = prod_result.scalar_one_or_none()
+            if not product:
+                raise HTTPException(status_code=404, detail=f"Product {item.product_id} not found")
+            # Обновляем остаток на складе
+            if trans_data.type.value == 'income':
+                # Приход (продажа) – списываем товар
+                if product.current_quantity < Decimal(str(item.quantity)):
+                    raise HTTPException(status_code=400, detail=f"Insufficient stock for {product.name}")
+                product.current_quantity -= Decimal(str(item.quantity))
+            else:  # expense
+                # Расход (покупка) – добавляем товар
+                product.current_quantity += Decimal(str(item.quantity))
+            # Сохраняем запись в transaction_items с ценой за единицу
+            trans_item = TransactionItem(
+                transaction_id=new_trans.id,
+                product_id=item.product_id,
+                quantity=item.quantity,
+                price_per_unit=item.price_per_unit
+            )
+            db.add(trans_item)
+    
+    # Пересчёт балансов счетов
     await recalc_account_balance(new_trans.account_id, db)
     if is_transfer and new_trans.transfer_to_account_id is not None:
         await recalc_account_balance(new_trans.transfer_to_account_id, db)
@@ -126,6 +159,22 @@ async def create_transaction(
     await db.commit()
     await db.refresh(new_trans)
     await db.refresh(new_trans, attribute_names=['creator', 'updater'])
+    
+    # Загружаем товары для ответа
+    items_result = await db.execute(
+        select(TransactionItem).where(TransactionItem.transaction_id == new_trans.id)
+        .options(selectinload(TransactionItem.product))
+    )
+    items = items_result.scalars().all()
+    items_response = [
+        TransactionItemResponse(
+            product_id=it.product_id,
+            product_name=it.product.name,
+            quantity=it.quantity,
+            price_per_unit=it.price_per_unit,
+            total=it.quantity * (it.price_per_unit or 0)
+        ) for it in items
+    ]
     
     return TransactionResponse(
         id=new_trans.id,
@@ -143,7 +192,10 @@ async def create_transaction(
         deleted_at=new_trans.deleted_at,
         transfer_to_account_id=new_trans.transfer_to_account_id,
         creator_name=new_trans.creator.display_name if new_trans.creator else None,
-        updater_name=new_trans.updater.display_name if new_trans.updater else None
+        updater_name=new_trans.updater.display_name if new_trans.updater else None,
+        number=new_trans.number,
+        items=items_response,
+        counterparty=new_trans.counterparty   # <-- добавлено
     )
 
 @router.get("/", response_model=List[TransactionResponse])
@@ -187,16 +239,26 @@ async def get_transactions(
     query = query.order_by(Transaction.date.desc())
     query = query.options(
         selectinload(Transaction.creator),
-        selectinload(Transaction.updater)
+        selectinload(Transaction.updater),
+        selectinload(Transaction.items).selectinload(TransactionItem.product)
     )
     result = await db.execute(query)
     transactions = result.scalars().all()
     
     response = []
     for t in transactions:
+        items_response = [
+            TransactionItemResponse(
+                product_id=it.product_id,
+                product_name=it.product.name,
+                quantity=it.quantity,
+                price_per_unit=it.price_per_unit,
+                total=it.quantity * (it.price_per_unit or 0)
+            ) for it in t.items
+        ]
         response.append(TransactionResponse(
             id=t.id,
-            type=t.type, 
+            type=t.type,
             amount=t.amount,
             date=t.date,
             account_id=t.account_id,
@@ -210,7 +272,10 @@ async def get_transactions(
             deleted_at=t.deleted_at,
             transfer_to_account_id=t.transfer_to_account_id,
             creator_name=t.creator.display_name if t.creator else None,
-            updater_name=t.updater.display_name if t.updater else None
+            updater_name=t.updater.display_name if t.updater else None,
+            number=t.number,
+            items=items_response,
+            counterparty=t.counterparty   # <-- добавлено
         ))
     return response
 
@@ -232,15 +297,26 @@ async def get_transaction(
     query = select(Transaction).where(Transaction.id == transaction_id, Transaction.company_id == company_id)
     query = query.options(
         selectinload(Transaction.creator),
-        selectinload(Transaction.updater)
+        selectinload(Transaction.updater),
+        selectinload(Transaction.items).selectinload(TransactionItem.product)
     )
     result = await db.execute(query)
     t = result.scalar_one_or_none()
     if not t:
         raise HTTPException(status_code=404, detail="Transaction not found")
+    
+    items_response = [
+        TransactionItemResponse(
+            product_id=it.product_id,
+            product_name=it.product.name,
+            quantity=it.quantity,
+            price_per_unit=it.price_per_unit,
+            total=it.quantity * (it.price_per_unit or 0)
+        ) for it in t.items
+    ]
     return TransactionResponse(
         id=t.id,
-        type=t.type, 
+        type=t.type,
         amount=t.amount,
         date=t.date,
         account_id=t.account_id,
@@ -254,7 +330,10 @@ async def get_transaction(
         deleted_at=t.deleted_at,
         transfer_to_account_id=t.transfer_to_account_id,
         creator_name=t.creator.display_name if t.creator else None,
-        updater_name=t.updater.display_name if t.updater else None
+        updater_name=t.updater.display_name if t.updater else None,
+        number=t.number,
+        items=items_response,
+        counterparty=t.counterparty   # <-- добавлено
     )
 
 @router.patch("/{transaction_id}", response_model=TransactionResponse)
@@ -284,6 +363,7 @@ async def update_transaction(
     if trans_data.date.tzinfo is not None:
         trans_data.date = trans_data.date.replace(tzinfo=None)
     
+    # Обновляем основные поля
     transaction.account_id = trans_data.account_id
     transaction.type = trans_data.type.value
     transaction.amount = trans_data.amount
@@ -291,8 +371,8 @@ async def update_transaction(
     transaction.category_id = trans_data.category_id
     transaction.description = trans_data.description
     transaction.updated_by = current_user.id
+    transaction.counterparty = trans_data.counterparty   # <-- добавлено
     
-    # Определяем, является ли операция переводом (используем строку)
     is_transfer = (trans_data.type.value == 'transfer')
     if is_transfer:
         transaction.transfer_to_account_id = trans_data.transfer_to_account_id
@@ -310,6 +390,41 @@ async def update_transaction(
     
     await db.flush()
     
+    # Обновление товаров: удаляем старые, добавляем новые
+    old_items_result = await db.execute(
+        select(TransactionItem).where(TransactionItem.transaction_id == transaction_id)
+        .options(selectinload(TransactionItem.product))
+    )
+    old_items = old_items_result.scalars().all()
+    for old_item in old_items:
+        product = old_item.product
+        if transaction.type == 'income':
+            product.current_quantity += Decimal(str(old_item.quantity))
+        else:
+            product.current_quantity -= Decimal(str(old_item.quantity))
+    
+    await db.execute(delete(TransactionItem).where(TransactionItem.transaction_id == transaction_id))
+    
+    if not is_transfer and trans_data.items:
+        for item in trans_data.items:
+            prod_result = await db.execute(select(Product).where(Product.id == item.product_id, Product.company_id == company_id))
+            product = prod_result.scalar_one_or_none()
+            if not product:
+                raise HTTPException(status_code=404, detail=f"Product {item.product_id} not found")
+            if trans_data.type.value == 'income':
+                if product.current_quantity < Decimal(str(item.quantity)):
+                    raise HTTPException(status_code=400, detail=f"Insufficient stock for {product.name}")
+                product.current_quantity -= Decimal(str(item.quantity))
+            else:
+                product.current_quantity += Decimal(str(item.quantity))
+            trans_item = TransactionItem(
+                transaction_id=transaction_id,
+                product_id=item.product_id,
+                quantity=item.quantity,
+                price_per_unit=item.price_per_unit
+            )
+            db.add(trans_item)
+    
     await recalc_account_balance(old_account_id, db)
     if old_transfer_to:
         await recalc_account_balance(old_transfer_to, db)
@@ -320,9 +435,25 @@ async def update_transaction(
     await db.commit()
     await db.refresh(transaction)
     await db.refresh(transaction, attribute_names=['creator', 'updater'])
+    
+    items_result = await db.execute(
+        select(TransactionItem).where(TransactionItem.transaction_id == transaction_id)
+        .options(selectinload(TransactionItem.product))
+    )
+    items = items_result.scalars().all()
+    items_response = [
+        TransactionItemResponse(
+            product_id=it.product_id,
+            product_name=it.product.name,
+            quantity=it.quantity,
+            price_per_unit=it.price_per_unit,
+            total=it.quantity * (it.price_per_unit or 0)
+        ) for it in items
+    ]
+    
     return TransactionResponse(
         id=transaction.id,
-        type=transaction.type, 
+        type=transaction.type,
         amount=transaction.amount,
         date=transaction.date,
         account_id=transaction.account_id,
@@ -336,8 +467,12 @@ async def update_transaction(
         deleted_at=transaction.deleted_at,
         transfer_to_account_id=transaction.transfer_to_account_id,
         creator_name=transaction.creator.display_name if transaction.creator else None,
-        updater_name=transaction.updater.display_name if transaction.updater else None
+        updater_name=transaction.updater.display_name if transaction.updater else None,
+        number=transaction.number,
+        items=items_response,
+        counterparty=transaction.counterparty
     )
+
 
 @router.delete("/{transaction_id}")
 async def delete_transaction(
@@ -359,7 +494,22 @@ async def delete_transaction(
     if not transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
     
+    # Загружаем товары транзакции
+    items_result = await db.execute(
+        select(TransactionItem).where(TransactionItem.transaction_id == transaction_id)
+        .options(selectinload(TransactionItem.product))
+    )
+    items = items_result.scalars().all()
+    
     if current_user.role == UserRole.FOUNDER:
+        # Полное удаление – откатываем остатки
+        for item in items:
+            product = item.product
+            if transaction.type == 'income':
+                product.current_quantity += Decimal(str(item.quantity))
+            else:  # expense
+                product.current_quantity -= Decimal(str(item.quantity))
+        
         if transaction.attachment_url and os.path.exists(transaction.attachment_url):
             try:
                 os.remove(transaction.attachment_url)

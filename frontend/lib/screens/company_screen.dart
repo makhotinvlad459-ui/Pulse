@@ -20,6 +20,7 @@ import '../widgets/company/manage_employees_dialog.dart';
 import '../widgets/company/chat_and_tasks_tab.dart';
 import '../screens/archive_screen.dart';
 import '../widgets/company/stock_tab.dart';
+import '../widgets/company/showcase_tab.dart';  // новый импорт
 
 class CompanyScreen extends ConsumerStatefulWidget {
   final Company company;
@@ -46,7 +47,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
   void initState() {
     super.initState();
     initializeDateFormatting('ru_RU', null);
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);  // 5 вкладок
     _loadData();
     _connectUserWebSocket();
   }
@@ -396,14 +397,10 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                         controller: _tabController,
                         tabs: [
                           const Tab(text: 'Операции'),
-                          const Tab(text: 'Отчеты'),
+                          const Tab(text: 'Витрина'),           // новая вкладка
+                          const Tab(text: 'Чат/Задачи'),
                           const Tab(text: 'Склад'),
-                          Tab(
-                            text: (_unreadMessagesCount + _pendingTasksCount) >
-                                    0
-                                ? 'Чат/Задачи (${_unreadMessagesCount + _pendingTasksCount})'
-                                : 'Чат/Задачи',
-                          ),
+                          const Tab(text: 'Отчеты'),
                         ],
                         labelColor: Colors.grey.shade800,
                         unselectedLabelColor: Colors.grey.shade500,
@@ -420,16 +417,15 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                               categories: _categories,
                               isFounder: isFounder,
                             ),
-                            IncomeExpenseTab(
-                                companyId: widget.company.id,
-                                categories: _categories),
-                            StockTab(companyId: widget.company.id),
+                            ShowcaseTab(companyId: widget.company.id), // новый виджет
                             ChatAndTasksTab(
                               companyId: widget.company.id,
                               isManager: isManager,
                               onPendingTasksChanged: _onPendingTasksChanged,
                               onUnreadMessagesChanged: _onUnreadMessagesChanged,
                             ),
+                            StockTab(companyId: widget.company.id),
+                            ReportsTab(companyId: widget.company.id),
                           ],
                         ),
                       ),

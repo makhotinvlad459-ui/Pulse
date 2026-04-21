@@ -66,6 +66,12 @@ class CategoryResponse(BaseModel):
         from_attributes = True
 
 # Transaction
+# Transaction
+class TransactionItemCreate(BaseModel):
+    product_id: int
+    quantity: float
+    price_per_unit: Optional[float] = None
+
 class TransactionCreate(BaseModel):
     type: TransactionType
     amount: float
@@ -75,6 +81,15 @@ class TransactionCreate(BaseModel):
     description: Optional[str] = None
     transfer_to_account_id: Optional[int] = None
     delete_attachment: bool = False
+    items: Optional[List[TransactionItemCreate]] = []
+    counterparty: Optional[str] = None   # <-- добавлено
+
+class TransactionItemResponse(BaseModel):
+    product_id: int
+    product_name: str
+    quantity: float
+    price_per_unit: Optional[float] = None
+    total: Optional[float] = None
 
 class TransactionResponse(BaseModel):
     id: int
@@ -93,6 +108,9 @@ class TransactionResponse(BaseModel):
     transfer_to_account_id: Optional[int]
     creator_name: Optional[str] = None
     updater_name: Optional[str] = None
+    number: int  
+    items: List[TransactionItemResponse] = []
+    counterparty: Optional[str] = None   # <-- добавлено
     class Config:
         from_attributes = True
 

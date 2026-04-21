@@ -1,3 +1,26 @@
+class TransactionItem {
+  final int productId;
+  final String productName;
+  final double quantity;
+  final double? pricePerUnit;
+
+  TransactionItem({
+    required this.productId,
+    required this.productName,
+    required this.quantity,
+    this.pricePerUnit,
+  });
+
+  factory TransactionItem.fromJson(Map<String, dynamic> json) {
+    return TransactionItem(
+      productId: json['product_id'] ?? 0,
+      productName: json['product_name']?.toString() ?? '',
+      quantity: (json['quantity'] as num?)?.toDouble() ?? 0,
+      pricePerUnit: json['price_per_unit'] != null ? (json['price_per_unit'] as num).toDouble() : null,
+    );
+  }
+}
+
 class Transaction {
   final int id;
   final String type;
@@ -15,6 +38,9 @@ class Transaction {
   final int? transferToAccountId;
   final String? creatorName;
   final String? updaterName;
+  final int number;
+  final List<TransactionItem> items;
+  final String? counterparty;  // <-- добавлено
 
   Transaction({
     required this.id,
@@ -33,6 +59,9 @@ class Transaction {
     this.transferToAccountId,
     this.creatorName,
     this.updaterName,
+    required this.number,
+    required this.items,
+    this.counterparty,
   });
 
   factory Transaction.fromJson(Map<String, dynamic> json) {
@@ -49,12 +78,13 @@ class Transaction {
       updatedBy: json['updated_by'],
       isDeleted: json['is_deleted'],
       deletedBy: json['deleted_by'],
-      deletedAt: json['deleted_at'] != null
-          ? DateTime.parse(json['deleted_at'])
-          : null,
+      deletedAt: json['deleted_at'] != null ? DateTime.parse(json['deleted_at']) : null,
       transferToAccountId: json['transfer_to_account_id'],
       creatorName: json['creator_name'],
       updaterName: json['updater_name'],
+      number: json['number'],
+      items: (json['items'] as List?)?.map((i) => TransactionItem.fromJson(i)).toList() ?? [],
+      counterparty: json['counterparty'],
     );
   }
 }
