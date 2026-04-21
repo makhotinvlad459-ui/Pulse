@@ -1,0 +1,39 @@
+# Environment files
+.env
+.env.local
+.env.*.local
+*.secret
+
+# Backend (Python)
+backend/__pycache__/
+backend/*.pyc
+backend/.venv/
+backend/venv/
+backend/.env
+backend/alembic/versions/*.pyc
+backend/migrations/__pycache__/
+
+# Frontend (Flutter)
+frontend/.dart_tool/
+frontend/.pub/
+frontend/build/
+frontend/.flutter-plugins
+frontend/.flutter-plugins-dependencies
+frontend/*.lock
+frontend/ios/Podfile.lock
+frontend/ios/Pods/
+frontend/android/local.properties
+
+# Docker
+docker-compose.override.yml
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db

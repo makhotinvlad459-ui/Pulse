@@ -1,8 +1,8 @@
-"""initial
+"""initial_migration
 
-Revision ID: 2f07c38b06d1
-Revises: c44e8bca6850
-Create Date: 2026-04-08 17:56:02.937610
+Revision ID: e35491dbafd6
+Revises: 
+Create Date: 2026-04-20 12:55:42.774807
 
 """
 from typing import Sequence, Union
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '2f07c38b06d1'
-down_revision: Union[str, None] = 'c44e8bca6850'
+revision: str = 'e35491dbafd6'
+down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -26,11 +26,12 @@ def upgrade() -> None:
     sa.Column('phone', sa.String(length=20), nullable=False),
     sa.Column('full_name', sa.String(length=255), nullable=False),
     sa.Column('password_hash', sa.String(length=255), nullable=False),
-    sa.Column('role', sa.Enum('FOUNDER', 'EMPLOYEE', name='userrole'), nullable=False),
+    sa.Column('role', sa.Enum('FOUNDER', 'EMPLOYEE', 'SUPERADMIN', name='userrole'), nullable=False),
     sa.Column('subscription_until', sa.DateTime(), nullable=True),
     sa.Column('soft_delete_retention_days', sa.Integer(), nullable=False),
     sa.Column('created_at', sa.DateTime(), nullable=False),
     sa.Column('is_active', sa.Boolean(), nullable=False),
+    sa.Column('last_login', sa.DateTime(), nullable=True),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_users_email'), 'users', ['email'], unique=True)
@@ -64,12 +65,25 @@ def upgrade() -> None:
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('company_id', sa.Integer(), nullable=False),
     sa.Column('name', sa.String(length=100), nullable=False),
-    sa.Column('type', sa.Enum('INCOME', 'EXPENSE', 'TRANSFER', name='transactiontype'), nullable=False),
+    sa.Column('type', sa.String(length=20), nullable=False),
     sa.Column('is_system', sa.Boolean(), nullable=False),
     sa.Column('created_by', sa.Integer(), nullable=False),
     sa.Column('created_at', sa.DateTime(), nullable=False),
+    sa.Column('icon', sa.String(length=10), nullable=False),
     sa.ForeignKeyConstraint(['company_id'], ['companies.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['created_by'], ['users.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_table('chat_messages',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('company_id', sa.Integer(), nullable=False),
+    sa.Column('user_id', sa.Integer(), nullable=False),
+    sa.Column('message', sa.String(length=1000), nullable=False),
+    sa.Column('created_at', sa.DateTime(), nullable=False),
+    sa.Column('edited', sa.Boolean(), nullable=False),
+    sa.Column('updated_at', sa.DateTime(), nullable=True),
+    sa.ForeignKeyConstraint(['company_id'], ['companies.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_table('company_members',
@@ -85,11 +99,76 @@ def upgrade() -> None:
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
+    op.create_table('products',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('company_id', sa.Integer(), nullable=False),
+    sa.Column('name', sa.String(length=100), nullable=False),
+    sa.Column('unit', sa.String(length=20), nullable=False),
+    sa.Column('current_quantity', sa.Numeric(precision=15, scale=3), nullable=False),
+    sa.Column('price_per_unit', sa.Numeric(precision=15, scale=2), nullable=True),
+    sa.Column('created_at', sa.DateTime(), nullable=False),
+    sa.ForeignKeyConstraint(['company_id'], ['companies.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_table('tasks',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('company_id', sa.Integer(), nullable=False),
+    sa.Column('author_id', sa.Integer(), nullable=False),
+    sa.Column('assignee_id', sa.Integer(), nullable=True),
+    sa.Column('title', sa.String(length=255), nullable=False),
+    sa.Column('description', sa.String(length=1000), nullable=True),
+    sa.Column('status', sa.Enum('PENDING', 'ACCEPTED', 'COMPLETED', 'FAILED', name='taskstatus'), nullable=False),
+    sa.Column('created_at', sa.DateTime(), nullable=False),
+    sa.Column('updated_at', sa.DateTime(), nullable=False),
+    sa.Column('deadline', sa.DateTime(), nullable=True),
+    sa.ForeignKeyConstraint(['assignee_id'], ['users.id'], ),
+    sa.ForeignKeyConstraint(['author_id'], ['users.id'], ),
+    sa.ForeignKeyConstraint(['company_id'], ['companies.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_table('user_chat_visits',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('user_id', sa.Integer(), nullable=False),
+    sa.Column('company_id', sa.Integer(), nullable=False),
+    sa.Column('last_visit_at', sa.DateTime(), nullable=False),
+    sa.ForeignKeyConstraint(['company_id'], ['companies.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('user_id', 'company_id', name='uq_user_company_visit')
+    )
+    op.create_table('stock_entries',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('company_id', sa.Integer(), nullable=False),
+    sa.Column('product_id', sa.Integer(), nullable=False),
+    sa.Column('quantity', sa.Numeric(precision=15, scale=3), nullable=False),
+    sa.Column('price_per_unit', sa.Numeric(precision=15, scale=2), nullable=False),
+    sa.Column('date', sa.DateTime(), nullable=False),
+    sa.Column('description', sa.String(length=200), nullable=True),
+    sa.Column('created_by', sa.Integer(), nullable=False),
+    sa.ForeignKeyConstraint(['company_id'], ['companies.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['created_by'], ['users.id'], ),
+    sa.ForeignKeyConstraint(['product_id'], ['products.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_table('stock_write_offs',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('company_id', sa.Integer(), nullable=False),
+    sa.Column('product_id', sa.Integer(), nullable=False),
+    sa.Column('quantity', sa.Numeric(precision=15, scale=3), nullable=False),
+    sa.Column('reason', sa.String(length=100), nullable=False),
+    sa.Column('date', sa.DateTime(), nullable=False),
+    sa.Column('description', sa.String(length=200), nullable=True),
+    sa.Column('created_by', sa.Integer(), nullable=False),
+    sa.ForeignKeyConstraint(['company_id'], ['companies.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['created_by'], ['users.id'], ),
+    sa.ForeignKeyConstraint(['product_id'], ['products.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id')
+    )
     op.create_table('transactions',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('company_id', sa.Integer(), nullable=False),
     sa.Column('account_id', sa.Integer(), nullable=False),
-    sa.Column('type', sa.Enum('INCOME', 'EXPENSE', 'TRANSFER', name='transactiontype'), nullable=False),
+    sa.Column('type', sa.String(length=20), nullable=False),
     sa.Column('amount', sa.Numeric(precision=15, scale=2), nullable=False),
     sa.Column('date', sa.DateTime(), nullable=False),
     sa.Column('category_id', sa.Integer(), nullable=True),
@@ -103,6 +182,7 @@ def upgrade() -> None:
     sa.Column('transfer_to_account_id', sa.Integer(), nullable=True),
     sa.Column('created_at', sa.DateTime(), nullable=False),
     sa.Column('updated_at', sa.DateTime(), nullable=False),
+    sa.Column('attachment_uploaded_at', sa.DateTime(), nullable=True),
     sa.ForeignKeyConstraint(['account_id'], ['accounts.id'], ),
     sa.ForeignKeyConstraint(['category_id'], ['categories.id'], ),
     sa.ForeignKeyConstraint(['company_id'], ['companies.id'], ondelete='CASCADE'),
@@ -113,14 +193,31 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_transactions_date'), 'transactions', ['date'], unique=False)
+    op.create_table('transaction_comments',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('transaction_id', sa.Integer(), nullable=False),
+    sa.Column('user_id', sa.Integer(), nullable=False),
+    sa.Column('comment', sa.String(length=500), nullable=False),
+    sa.Column('created_at', sa.DateTime(), nullable=False),
+    sa.ForeignKeyConstraint(['transaction_id'], ['transactions.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
     # ### end Alembic commands ###
 
 
 def downgrade() -> None:
     # ### commands auto generated by Alembic - please adjust! ###
+    op.drop_table('transaction_comments')
     op.drop_index(op.f('ix_transactions_date'), table_name='transactions')
     op.drop_table('transactions')
+    op.drop_table('stock_write_offs')
+    op.drop_table('stock_entries')
+    op.drop_table('user_chat_visits')
+    op.drop_table('tasks')
+    op.drop_table('products')
     op.drop_table('company_members')
+    op.drop_table('chat_messages')
     op.drop_table('categories')
     op.drop_table('accounts')
     op.drop_index(op.f('ix_companies_inn'), table_name='companies')

@@ -19,6 +19,7 @@ import '../widgets/company/manage_categories_dialog.dart';
 import '../widgets/company/manage_employees_dialog.dart';
 import '../widgets/company/chat_and_tasks_tab.dart';
 import '../screens/archive_screen.dart';
+import '../widgets/company/stock_tab.dart';
 
 class CompanyScreen extends ConsumerStatefulWidget {
   final Company company;
@@ -395,8 +396,8 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                         controller: _tabController,
                         tabs: [
                           const Tab(text: 'Операции'),
-                          const Tab(text: 'Приход/Расход'),
-                          const Tab(text: 'График'),
+                          const Tab(text: 'Отчеты'),
+                          const Tab(text: 'Склад'),
                           Tab(
                             text: (_unreadMessagesCount + _pendingTasksCount) >
                                     0
@@ -422,7 +423,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                             IncomeExpenseTab(
                                 companyId: widget.company.id,
                                 categories: _categories),
-                            ReportsTab(companyId: widget.company.id),
+                            StockTab(companyId: widget.company.id),
                             ChatAndTasksTab(
                               companyId: widget.company.id,
                               isManager: isManager,

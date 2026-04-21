@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from app.auth import router as auth_router
-from app.routers import companies, accounts, categories, transactions, statistics, admin, chat, tasks, websocket, notifications
+from app.routers import companies, accounts, categories, transactions, statistics, admin, chat, tasks, websocket, notifications, products, stock
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
@@ -17,6 +17,10 @@ app.include_router(chat.router)
 app.include_router(tasks.router)
 app.include_router(websocket.router)
 app.include_router(notifications.router)
+app.include_router(products.router)
+app.include_router(stock.router)
+
+
 
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)

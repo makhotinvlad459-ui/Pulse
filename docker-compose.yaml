@@ -1,19 +1,19 @@
-version: '3.8'
+
 
 services:
   db:
     image: postgres:15
     container_name: pulse_db
     environment:
-      POSTGRES_DB: pulse
-      POSTGRES_USER: pulse_user
-      POSTGRES_PASSWORD: pulse_secret
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
-      - "5432:5432"
+      - "${DB_PORT}:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - ${DB_VOLUME:-postgres_data}:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U pulse_user -d pulse"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -22,15 +22,15 @@ services:
     build: ./backend
     container_name: pulse_backend
     ports:
-      - "8000:8000"
+      - "${BACKEND_PORT}:8000"
     depends_on:
       db:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql+asyncpg://pulse_user:pulse_secret@db:5432/pulse
-      SECRET_KEY: change_this_in_production_please
-      ALGORITHM: HS256
-      ACCESS_TOKEN_EXPIRE_MINUTES: 30
+      DATABASE_URL: ${DATABASE_URL}
+      SECRET_KEY: ${SECRET_KEY}
+      ALGORITHM: ${ALGORITHM}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES}
     volumes:
       - ./backend:/app
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
