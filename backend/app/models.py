@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import String, Boolean, DateTime, ForeignKey, Numeric, Enum, Integer, CheckConstraint
+from sqlalchemy import String, Boolean, DateTime, ForeignKey, Numeric, Enum, Integer, CheckConstraint, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from enum import Enum as PyEnum
 from app.database import Base
@@ -69,7 +69,7 @@ class Company(Base):
     chat_messages: Mapped[list["ChatMessage"]] = relationship(back_populates="company", cascade="all, delete-orphan")
     tasks: Mapped[list["Task"]] = relationship("Task", back_populates="company", cascade="all, delete-orphan")
     products: Mapped[list["Product"]] = relationship(back_populates="company", cascade="all, delete-orphan")
-
+    showcase_items: Mapped[list["ShowcaseItem"]] = relationship(back_populates="company", cascade="all, delete-orphan")
 
 class CompanyMember(Base):
     __tablename__ = "company_members"
@@ -115,12 +115,14 @@ class Category(Base):
     created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     icon: Mapped[str] = mapped_column(String(10), default="📁")
+    category_id: Mapped[int | None] = mapped_column(ForeignKey("categories.id"), nullable=True)
 
 
     # relationships
     company: Mapped["Company"] = relationship("Company", back_populates="categories")
     creator: Mapped["User"] = relationship("User", foreign_keys=[created_by], back_populates="created_categories")
     transactions: Mapped[list["Transaction"]] = relationship("Transaction", back_populates="category")
+    category: Mapped["Category"] = relationship()
 
 class Transaction(Base):
     __tablename__ = "transactions"
@@ -283,3 +285,22 @@ class TransactionItem(Base):
     # relationships
     transaction: Mapped["Transaction"] = relationship(back_populates="items")
     product: Mapped["Product"] = relationship() 
+
+class ShowcaseItem(Base):
+    __tablename__ = "showcase_items"
+
+   
+    id: Mapped[int] = mapped_column(primary_key=True)
+    company_id: Mapped[int] = mapped_column(ForeignKey("companies.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(100))
+    price: Mapped[float] = mapped_column(Numeric(15, 2))
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    recipe: Mapped[str | None] = mapped_column(Text, nullable=True)  # теперь Text импортирован
+    category_id: Mapped[int | None] = mapped_column(ForeignKey("categories.id"), nullable=True)  # добавить
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # relationships
+    company: Mapped["Company"] = relationship(back_populates="showcase_items")
+    category: Mapped["Category"] = relationship()

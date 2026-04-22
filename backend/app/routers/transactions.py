@@ -120,7 +120,7 @@ async def create_transaction(
         created_by=current_user.id,
         transfer_to_account_id=trans_data.transfer_to_account_id if is_transfer else None,
         number=new_number,
-        counterparty=trans_data.counterparty   # <-- добавлено
+        counterparty=trans_data.counterparty
     )
     db.add(new_trans)
     await db.flush()
@@ -135,9 +135,7 @@ async def create_transaction(
                 raise HTTPException(status_code=404, detail=f"Product {item.product_id} not found")
             # Обновляем остаток на складе
             if trans_data.type.value == 'income':
-                # Приход (продажа) – списываем товар
-                if product.current_quantity < Decimal(str(item.quantity)):
-                    raise HTTPException(status_code=400, detail=f"Insufficient stock for {product.name}")
+                # Приход (продажа) – списываем товар, разрешаем уходить в минус (нет проверки)
                 product.current_quantity -= Decimal(str(item.quantity))
             else:  # expense
                 # Расход (покупка) – добавляем товар
@@ -195,7 +193,7 @@ async def create_transaction(
         updater_name=new_trans.updater.display_name if new_trans.updater else None,
         number=new_trans.number,
         items=items_response,
-        counterparty=new_trans.counterparty   # <-- добавлено
+        counterparty=new_trans.counterparty
     )
 
 @router.get("/", response_model=List[TransactionResponse])
@@ -275,7 +273,7 @@ async def get_transactions(
             updater_name=t.updater.display_name if t.updater else None,
             number=t.number,
             items=items_response,
-            counterparty=t.counterparty   # <-- добавлено
+            counterparty=t.counterparty
         ))
     return response
 
@@ -333,7 +331,7 @@ async def get_transaction(
         updater_name=t.updater.display_name if t.updater else None,
         number=t.number,
         items=items_response,
-        counterparty=t.counterparty   # <-- добавлено
+        counterparty=t.counterparty
     )
 
 @router.patch("/{transaction_id}", response_model=TransactionResponse)
@@ -371,7 +369,7 @@ async def update_transaction(
     transaction.category_id = trans_data.category_id
     transaction.description = trans_data.description
     transaction.updated_by = current_user.id
-    transaction.counterparty = trans_data.counterparty   # <-- добавлено
+    transaction.counterparty = trans_data.counterparty
     
     is_transfer = (trans_data.type.value == 'transfer')
     if is_transfer:
@@ -399,8 +397,10 @@ async def update_transaction(
     for old_item in old_items:
         product = old_item.product
         if transaction.type == 'income':
+            # Откат старого прихода (продажи) – возвращаем товар
             product.current_quantity += Decimal(str(old_item.quantity))
         else:
+            # Откат старого расхода (покупки) – списываем товар
             product.current_quantity -= Decimal(str(old_item.quantity))
     
     await db.execute(delete(TransactionItem).where(TransactionItem.transaction_id == transaction_id))
@@ -412,10 +412,10 @@ async def update_transaction(
             if not product:
                 raise HTTPException(status_code=404, detail=f"Product {item.product_id} not found")
             if trans_data.type.value == 'income':
-                if product.current_quantity < Decimal(str(item.quantity)):
-                    raise HTTPException(status_code=400, detail=f"Insufficient stock for {product.name}")
+                # При обновлении прихода (продажи) – списываем товар (минус разрешён)
                 product.current_quantity -= Decimal(str(item.quantity))
             else:
+                # Расход (покупка) – добавляем товар
                 product.current_quantity += Decimal(str(item.quantity))
             trans_item = TransactionItem(
                 transaction_id=transaction_id,

@@ -83,6 +83,7 @@ class TransactionCreate(BaseModel):
     delete_attachment: bool = False
     items: Optional[List[TransactionItemCreate]] = []
     counterparty: Optional[str] = None   # <-- добавлено
+    showcase_item_id: Optional[int] = None
 
 class TransactionItemResponse(BaseModel):
     product_id: int
@@ -119,3 +120,33 @@ class UpdateMemberRole(BaseModel):
 
 class SetManagerRequest(BaseModel):
     user_id: int
+
+class ShowcaseItemCreate(BaseModel):
+    name: str
+    price: float
+    sort_order: Optional[int] = 0
+    image_url: Optional[str] = None
+    recipe: Optional[str] = None  # JSON
+    category_id: Optional[int] = None
+
+class ShowcaseItemUpdate(BaseModel):
+    name: Optional[str] = None
+    price: Optional[float] = None
+    sort_order: Optional[int] = None
+    image_url: Optional[str] = None
+    recipe: Optional[str] = None
+    category_id: Optional[int] = None
+
+class ShowcaseItemResponse(BaseModel):
+    id: int
+    company_id: int
+    name: str
+    price: float
+    sort_order: int
+    image_url: Optional[str]
+    recipe: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+    category_id: Optional[int] = None
+    class Config:
+        from_attributes = True    

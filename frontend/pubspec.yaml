@@ -13,6 +13,8 @@ dependencies:
   cupertino_icons: ^1.0.6
   dio: ^5.4.0
   riverpod: ^2.4.9
+  reorderable_grid: ^1.0.8
+
   flutter_riverpod: ^2.4.9
   riverpod_annotation: ^2.3.0
   flutter_secure_storage: ^9.0.0

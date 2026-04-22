@@ -1,8 +1,8 @@
 """initial_migration
 
-Revision ID: c04717d4a6ce
+Revision ID: 7f8a3aee40df
 Revises: 
-Create Date: 2026-04-21 15:05:04.911882
+Create Date: 2026-04-22 08:29:55.920067
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'c04717d4a6ce'
+revision: str = '7f8a3aee40df'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -70,6 +70,8 @@ def upgrade() -> None:
     sa.Column('created_by', sa.Integer(), nullable=False),
     sa.Column('created_at', sa.DateTime(), nullable=False),
     sa.Column('icon', sa.String(length=10), nullable=False),
+    sa.Column('category_id', sa.Integer(), nullable=True),
+    sa.ForeignKeyConstraint(['category_id'], ['categories.id'], ),
     sa.ForeignKeyConstraint(['company_id'], ['companies.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['created_by'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id')
@@ -105,7 +107,6 @@ def upgrade() -> None:
     sa.Column('name', sa.String(length=100), nullable=False),
     sa.Column('unit', sa.String(length=20), nullable=False),
     sa.Column('current_quantity', sa.Numeric(precision=15, scale=3), nullable=False),
-    sa.Column('price_per_unit', sa.Numeric(precision=15, scale=2), nullable=True),
     sa.Column('created_at', sa.DateTime(), nullable=False),
     sa.ForeignKeyConstraint(['company_id'], ['companies.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
@@ -135,6 +136,21 @@ def upgrade() -> None:
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('user_id', 'company_id', name='uq_user_company_visit')
+    )
+    op.create_table('showcase_items',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('company_id', sa.Integer(), nullable=False),
+    sa.Column('name', sa.String(length=100), nullable=False),
+    sa.Column('price', sa.Numeric(precision=15, scale=2), nullable=False),
+    sa.Column('sort_order', sa.Integer(), nullable=False),
+    sa.Column('image_url', sa.String(length=500), nullable=True),
+    sa.Column('recipe', sa.Text(), nullable=True),
+    sa.Column('category_id', sa.Integer(), nullable=True),
+    sa.Column('created_at', sa.DateTime(), nullable=False),
+    sa.Column('updated_at', sa.DateTime(), nullable=False),
+    sa.ForeignKeyConstraint(['category_id'], ['categories.id'], ),
+    sa.ForeignKeyConstraint(['company_id'], ['companies.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id')
     )
     op.create_table('stock_entries',
     sa.Column('id', sa.Integer(), nullable=False),
@@ -184,6 +200,7 @@ def upgrade() -> None:
     sa.Column('updated_at', sa.DateTime(), nullable=False),
     sa.Column('attachment_uploaded_at', sa.DateTime(), nullable=True),
     sa.Column('number', sa.Integer(), nullable=False),
+    sa.Column('counterparty', sa.String(length=200), nullable=True),
     sa.ForeignKeyConstraint(['account_id'], ['accounts.id'], ),
     sa.ForeignKeyConstraint(['category_id'], ['categories.id'], ),
     sa.ForeignKeyConstraint(['company_id'], ['companies.id'], ondelete='CASCADE'),
@@ -225,6 +242,7 @@ def downgrade() -> None:
     op.drop_table('transactions')
     op.drop_table('stock_write_offs')
     op.drop_table('stock_entries')
+    op.drop_table('showcase_items')
     op.drop_table('user_chat_visits')
     op.drop_table('tasks')
     op.drop_table('products')
