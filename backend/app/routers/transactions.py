@@ -115,12 +115,13 @@ async def create_transaction(
         type=trans_data.type.value,
         amount=trans_data.amount,
         date=trans_data.date,
-        category_id=trans_data.category_id if not is_transfer and not trans_data.items else None,
+        category_id=trans_data.category_id,
         description=trans_data.description,
         created_by=current_user.id,
         transfer_to_account_id=trans_data.transfer_to_account_id if is_transfer else None,
         number=new_number,
-        counterparty=trans_data.counterparty
+        counterparty=trans_data.counterparty,
+        showcase_item_id=trans_data.showcase_item_id
     )
     db.add(new_trans)
     await db.flush()
@@ -128,14 +129,13 @@ async def create_transaction(
     # Обработка товаров и сохранение в transaction_items
     if not is_transfer and trans_data.items:
         for item in trans_data.items:
-            # Проверяем товар
             prod_result = await db.execute(select(Product).where(Product.id == item.product_id, Product.company_id == company_id))
             product = prod_result.scalar_one_or_none()
             if not product:
                 raise HTTPException(status_code=404, detail=f"Product {item.product_id} not found")
             # Обновляем остаток на складе
             if trans_data.type.value == 'income':
-                # Приход (продажа) – списываем товар, разрешаем уходить в минус (нет проверки)
+                # Приход (продажа) – списываем товар (разрешаем минус)
                 product.current_quantity -= Decimal(str(item.quantity))
             else:  # expense
                 # Расход (покупка) – добавляем товар
@@ -193,7 +193,8 @@ async def create_transaction(
         updater_name=new_trans.updater.display_name if new_trans.updater else None,
         number=new_trans.number,
         items=items_response,
-        counterparty=new_trans.counterparty
+        counterparty=new_trans.counterparty,
+        showcase_item_id=new_trans.showcase_item_id
     )
 
 @router.get("/", response_model=List[TransactionResponse])
@@ -273,7 +274,8 @@ async def get_transactions(
             updater_name=t.updater.display_name if t.updater else None,
             number=t.number,
             items=items_response,
-            counterparty=t.counterparty
+            counterparty=t.counterparty,
+            showcase_item_id=t.showcase_item_id
         ))
     return response
 
@@ -331,7 +333,8 @@ async def get_transaction(
         updater_name=t.updater.display_name if t.updater else None,
         number=t.number,
         items=items_response,
-        counterparty=t.counterparty
+        counterparty=t.counterparty,
+        showcase_item_id=t.showcase_item_id
     )
 
 @router.patch("/{transaction_id}", response_model=TransactionResponse)
@@ -370,6 +373,7 @@ async def update_transaction(
     transaction.description = trans_data.description
     transaction.updated_by = current_user.id
     transaction.counterparty = trans_data.counterparty
+    transaction.showcase_item_id = trans_data.showcase_item_id
     
     is_transfer = (trans_data.type.value == 'transfer')
     if is_transfer:
@@ -397,10 +401,8 @@ async def update_transaction(
     for old_item in old_items:
         product = old_item.product
         if transaction.type == 'income':
-            # Откат старого прихода (продажи) – возвращаем товар
             product.current_quantity += Decimal(str(old_item.quantity))
         else:
-            # Откат старого расхода (покупки) – списываем товар
             product.current_quantity -= Decimal(str(old_item.quantity))
     
     await db.execute(delete(TransactionItem).where(TransactionItem.transaction_id == transaction_id))
@@ -412,10 +414,8 @@ async def update_transaction(
             if not product:
                 raise HTTPException(status_code=404, detail=f"Product {item.product_id} not found")
             if trans_data.type.value == 'income':
-                # При обновлении прихода (продажи) – списываем товар (минус разрешён)
                 product.current_quantity -= Decimal(str(item.quantity))
             else:
-                # Расход (покупка) – добавляем товар
                 product.current_quantity += Decimal(str(item.quantity))
             trans_item = TransactionItem(
                 transaction_id=transaction_id,
@@ -470,9 +470,9 @@ async def update_transaction(
         updater_name=transaction.updater.display_name if transaction.updater else None,
         number=transaction.number,
         items=items_response,
-        counterparty=transaction.counterparty
+        counterparty=transaction.counterparty,
+        showcase_item_id=transaction.showcase_item_id
     )
-
 
 @router.delete("/{transaction_id}")
 async def delete_transaction(

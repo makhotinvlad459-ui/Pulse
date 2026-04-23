@@ -82,9 +82,9 @@ class TransactionCreate(BaseModel):
     transfer_to_account_id: Optional[int] = None
     delete_attachment: bool = False
     items: Optional[List[TransactionItemCreate]] = []
-    counterparty: Optional[str] = None   # <-- добавлено
+    counterparty: Optional[str] = None  
     showcase_item_id: Optional[int] = None
-
+    
 class TransactionItemResponse(BaseModel):
     product_id: int
     product_name: str
@@ -111,7 +111,8 @@ class TransactionResponse(BaseModel):
     updater_name: Optional[str] = None
     number: int  
     items: List[TransactionItemResponse] = []
-    counterparty: Optional[str] = None   # <-- добавлено
+    counterparty: Optional[str] = None  
+    showcase_item_id: Optional[int] = None
     class Config:
         from_attributes = True
 

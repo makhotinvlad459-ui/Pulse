@@ -108,4 +108,54 @@ class ApiClient {
   Future<String?> getToken() async {
     return await _storage.read(key: 'access_token');
   }
+  Future<dynamic> getDynamics(int companyId, DateTime startDate, DateTime endDate, String interval) async {
+  return await get('/statistics/dynamics', queryParameters: {
+    'company_id': companyId,
+    'start_date': startDate.toIso8601String(),
+    'end_date': endDate.toIso8601String(),
+    'interval': interval,
+  });
+}
+
+Future<dynamic> getIncomeByCategory(int companyId, DateTime startDate, DateTime endDate) async {
+  return await get('/statistics/income-by-category', queryParameters: {
+    'company_id': companyId,
+    'start_date': startDate.toIso8601String(),
+    'end_date': endDate.toIso8601String(),
+  });
+}
+
+Future<dynamic> getExpenseByCategory(int companyId, DateTime startDate, DateTime endDate) async {
+  return await get('/statistics/expense-by-category', queryParameters: {
+    'company_id': companyId,
+    'start_date': startDate.toIso8601String(),
+    'end_date': endDate.toIso8601String(),
+  });
+}
+
+Future<dynamic> getCashVsNoncash(int companyId, DateTime startDate, DateTime endDate) async {
+  return await get('/statistics/cash-vs-noncash', queryParameters: {
+    'company_id': companyId,
+    'start_date': startDate.toIso8601String(),
+    'end_date': endDate.toIso8601String(),
+  });
+}
+
+Future<dynamic> getProductSales(int companyId, DateTime startDate, DateTime endDate, String sortBy) async {
+  return await get('/statistics/product-sales', queryParameters: {
+    'company_id': companyId,
+    'start_date': startDate.toIso8601String(),
+    'end_date': endDate.toIso8601String(),
+    'sort_by': sortBy,
+  });
+}
+
+Future<dynamic> getShowcaseSales(int companyId, DateTime startDate, DateTime endDate, String sortBy) async {
+  return await get('/statistics/showcase-sales', queryParameters: {
+    'company_id': companyId,
+    'start_date': startDate.toIso8601String(),
+    'end_date': endDate.toIso8601String(),
+    'sort_by': sortBy,
+  });
+}
 }

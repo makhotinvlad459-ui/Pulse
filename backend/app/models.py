@@ -43,11 +43,10 @@ class User(Base):
 
     @property
     def display_name(self) -> str:
-        """Возвращает 'Основатель' для учредителя, иначе full_name"""
         if self.role == UserRole.FOUNDER:
             return "Основатель"
         return self.full_name
-    
+
 class Company(Base):
     __tablename__ = "companies"
 
@@ -117,11 +116,43 @@ class Category(Base):
     icon: Mapped[str] = mapped_column(String(10), default="📁")
     category_id: Mapped[int | None] = mapped_column(ForeignKey("categories.id"), nullable=True)
 
-
     # relationships
     company: Mapped["Company"] = relationship("Company", back_populates="categories")
     creator: Mapped["User"] = relationship("User", foreign_keys=[created_by], back_populates="created_categories")
     transactions: Mapped[list["Transaction"]] = relationship("Transaction", back_populates="category")
+    category: Mapped["Category"] = relationship()
+
+class Product(Base):
+    __tablename__ = "products"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    company_id: Mapped[int] = mapped_column(ForeignKey("companies.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(100))
+    unit: Mapped[str] = mapped_column(String(20))
+    current_quantity: Mapped[float] = mapped_column(Numeric(15, 3), default=0.0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    # relationships
+    company: Mapped["Company"] = relationship(back_populates="products")
+    stock_entries: Mapped[list["StockEntry"]] = relationship(back_populates="product", cascade="all, delete-orphan")
+    write_offs: Mapped[list["StockWriteOff"]] = relationship(back_populates="product", cascade="all, delete-orphan")
+
+class ShowcaseItem(Base):
+    __tablename__ = "showcase_items"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    company_id: Mapped[int] = mapped_column(ForeignKey("companies.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(100))
+    price: Mapped[float] = mapped_column(Numeric(15, 2))
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    recipe: Mapped[str | None] = mapped_column(Text, nullable=True)
+    category_id: Mapped[int | None] = mapped_column(ForeignKey("categories.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # relationships
+    company: Mapped["Company"] = relationship(back_populates="showcase_items")
     category: Mapped["Category"] = relationship()
 
 class Transaction(Base):
@@ -146,7 +177,8 @@ class Transaction(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     attachment_uploaded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     number: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    counterparty: Mapped[str | None] = mapped_column(String(200), nullable=True)   # <-- добавлено
+    counterparty: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    showcase_item_id: Mapped[int | None] = mapped_column(ForeignKey("showcase_items.id"), nullable=True)
 
     # relationships
     company: Mapped["Company"] = relationship(back_populates="transactions")
@@ -158,6 +190,7 @@ class Transaction(Base):
     updater: Mapped["User"] = relationship(foreign_keys=[updated_by], back_populates="updated_transactions")
     deleter: Mapped["User"] = relationship(foreign_keys=[deleted_by], back_populates="deleted_transactions")
     items: Mapped[list["TransactionItem"]] = relationship(back_populates="transaction", cascade="all, delete-orphan")
+    showcase_item: Mapped["ShowcaseItem"] = relationship()
 
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
@@ -167,13 +200,12 @@ class ChatMessage(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     message: Mapped[str] = mapped_column(String(1000))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    edited: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)  # добавлено
-    updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True) # добавлено
+    edited: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # relationships
     company: Mapped["Company"] = relationship(back_populates="chat_messages")
     user: Mapped["User"] = relationship(back_populates="chat_messages")
-
 
 class TransactionComment(Base):
     __tablename__ = "transaction_comments"
@@ -189,10 +221,10 @@ class TransactionComment(Base):
     user: Mapped["User"] = relationship(back_populates="transaction_comments")
 
 class TaskStatus(PyEnum):
-    PENDING = "pending"      # ожидает принятия
-    ACCEPTED = "accepted"    # принята
-    COMPLETED = "completed"  # исполнена
-    FAILED = "failed"        # провалена
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    COMPLETED = "completed"
+    FAILED = "failed"
 
 class Task(Base):
     __tablename__ = "tasks"
@@ -200,7 +232,7 @@ class Task(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     company_id: Mapped[int] = mapped_column(ForeignKey("companies.id", ondelete="CASCADE"))
     author_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
-    assignee_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=True)  # кому назначена
+    assignee_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     title: Mapped[str] = mapped_column(String(255))
     description: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     status: Mapped[TaskStatus] = mapped_column(Enum(TaskStatus), default=TaskStatus.PENDING)
@@ -211,7 +243,7 @@ class Task(Base):
     # relationships
     company: Mapped["Company"] = relationship(back_populates="tasks")
     author: Mapped["User"] = relationship(foreign_keys=[author_id])
-    assignee: Mapped["User"] = relationship(foreign_keys=[assignee_id])    
+    assignee: Mapped["User"] = relationship(foreign_keys=[assignee_id])
 
 class UserChatVisit(Base):
     __tablename__ = "user_chat_visits"
@@ -223,22 +255,6 @@ class UserChatVisit(Base):
 
     __table_args__ = (UniqueConstraint("user_id", "company_id", name="uq_user_company_visit"),)
 
-class Product(Base):
-    __tablename__ = "products"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    company_id: Mapped[int] = mapped_column(ForeignKey("companies.id", ondelete="CASCADE"))
-    name: Mapped[str] = mapped_column(String(100))
-    unit: Mapped[str] = mapped_column(String(20))
-    current_quantity: Mapped[float] = mapped_column(Numeric(15, 3), default=0.0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    # price_per_unit удалено
-
-    # relationships
-    company: Mapped["Company"] = relationship(back_populates="products")
-    stock_entries: Mapped[list["StockEntry"]] = relationship(back_populates="product", cascade="all, delete-orphan")
-    write_offs: Mapped[list["StockWriteOff"]] = relationship(back_populates="product", cascade="all, delete-orphan")
-
 class StockEntry(Base):
     __tablename__ = "stock_entries"
 
@@ -246,7 +262,7 @@ class StockEntry(Base):
     company_id: Mapped[int] = mapped_column(ForeignKey("companies.id", ondelete="CASCADE"))
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"))
     quantity: Mapped[float] = mapped_column(Numeric(15, 3))
-    price_per_unit: Mapped[float] = mapped_column(Numeric(15, 2))  # цена за единицу в этом приходе
+    price_per_unit: Mapped[float] = mapped_column(Numeric(15, 2))
     date: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     description: Mapped[str | None] = mapped_column(String(200), nullable=True)
     created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
@@ -254,7 +270,7 @@ class StockEntry(Base):
     # relationships
     company: Mapped["Company"] = relationship()
     product: Mapped["Product"] = relationship(back_populates="stock_entries")
-    creator: Mapped["User"] = relationship()  
+    creator: Mapped["User"] = relationship()
 
 class StockWriteOff(Base):
     __tablename__ = "stock_write_offs"
@@ -263,7 +279,7 @@ class StockWriteOff(Base):
     company_id: Mapped[int] = mapped_column(ForeignKey("companies.id", ondelete="CASCADE"))
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"))
     quantity: Mapped[float] = mapped_column(Numeric(15, 3))
-    reason: Mapped[str] = mapped_column(String(100))  
+    reason: Mapped[str] = mapped_column(String(100))
     date: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     description: Mapped[str | None] = mapped_column(String(200), nullable=True)
     created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
@@ -284,23 +300,4 @@ class TransactionItem(Base):
 
     # relationships
     transaction: Mapped["Transaction"] = relationship(back_populates="items")
-    product: Mapped["Product"] = relationship() 
-
-class ShowcaseItem(Base):
-    __tablename__ = "showcase_items"
-
-   
-    id: Mapped[int] = mapped_column(primary_key=True)
-    company_id: Mapped[int] = mapped_column(ForeignKey("companies.id", ondelete="CASCADE"))
-    name: Mapped[str] = mapped_column(String(100))
-    price: Mapped[float] = mapped_column(Numeric(15, 2))
-    sort_order: Mapped[int] = mapped_column(Integer, default=0)
-    image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    recipe: Mapped[str | None] = mapped_column(Text, nullable=True)  # теперь Text импортирован
-    category_id: Mapped[int | None] = mapped_column(ForeignKey("categories.id"), nullable=True)  # добавить
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    # relationships
-    company: Mapped["Company"] = relationship(back_populates="showcase_items")
-    category: Mapped["Category"] = relationship()
+    product: Mapped["Product"] = relationship()

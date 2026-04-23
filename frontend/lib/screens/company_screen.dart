@@ -11,7 +11,6 @@ import '../widgets/matrix_rain.dart';
 import '../models/company.dart';
 import '../widgets/company/account_card.dart';
 import '../widgets/company/transactions_tab.dart';
-import '../widgets/company/income_expense_tab.dart';
 import '../widgets/company/reports_tab.dart';
 import '../widgets/company/edit_company_dialog.dart';
 import '../widgets/company/add_account_dialog.dart';
@@ -20,7 +19,7 @@ import '../widgets/company/manage_employees_dialog.dart';
 import '../widgets/company/chat_and_tasks_tab.dart';
 import '../screens/archive_screen.dart';
 import '../widgets/company/stock_tab.dart';
-import '../widgets/company/showcase_tab.dart';  // новый импорт
+import '../widgets/company/showcase_tab.dart';
 
 class CompanyScreen extends ConsumerStatefulWidget {
   final Company company;
@@ -47,7 +46,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
   void initState() {
     super.initState();
     initializeDateFormatting('ru_RU', null);
-    _tabController = TabController(length: 5, vsync: this);  // 5 вкладок
+    _tabController = TabController(length: 5, vsync: this);
     _loadData();
     _connectUserWebSocket();
   }
@@ -395,12 +394,12 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                     children: [
                       TabBar(
                         controller: _tabController,
-                        tabs: [
-                          const Tab(text: 'Операции'),
-                          const Tab(text: 'Витрина'),           // новая вкладка
-                          const Tab(text: 'Чат/Задачи'),
-                          const Tab(text: 'Склад'),
-                          const Tab(text: 'Отчеты'),
+                        tabs: const [
+                          Tab(text: 'Операции'),
+                          Tab(text: 'Витрина'),
+                          Tab(text: 'Чат/Задачи'),
+                          Tab(text: 'Склад'),
+                          Tab(text: 'Отчеты'),
                         ],
                         labelColor: Colors.grey.shade800,
                         unselectedLabelColor: Colors.grey.shade500,
@@ -417,7 +416,10 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                               categories: _categories,
                               isFounder: isFounder,
                             ),
-                            ShowcaseTab(companyId: widget.company.id), // новый виджет
+                            ShowcaseTab(
+                              companyId: widget.company.id,
+                              onRefresh: _refresh,   // передаём callback
+                            ),
                             ChatAndTasksTab(
                               companyId: widget.company.id,
                               isManager: isManager,

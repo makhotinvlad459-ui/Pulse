@@ -11,7 +11,8 @@ import 'recipe_editor.dart';
 
 class ShowcaseTab extends ConsumerStatefulWidget {
   final int companyId;
-  const ShowcaseTab({super.key, required this.companyId});
+  final VoidCallback? onRefresh;
+  const ShowcaseTab({super.key, required this.companyId, this.onRefresh});
 
   @override
   ConsumerState<ShowcaseTab> createState() => _ShowcaseTabState();
@@ -173,10 +174,10 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                   final price = double.tryParse(priceController.text);
                   if (name.isEmpty || price == null) return;
                   final recipeJson = localRecipeItems.isNotEmpty
-                      ? jsonEncode(localRecipeItems.map((i) => {
+                      ? jsonEncode(localRecipeItems.map((i) => ({
                           'product_id': i['product_id'],
                           'quantity': i['quantity'],
-                        }).toList())
+                        })).toList())
                       : null;
                   try {
                     await _api.post('/showcase', queryParameters: {'company_id': widget.companyId}, data: {
@@ -210,11 +211,11 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
       try {
         final decoded = jsonDecode(item.recipe!);
         if (decoded is List) {
-          localRecipeItems = decoded.map((r) => {
+          localRecipeItems = decoded.map((r) => ({
             'product_id': r['product_id'],
             'product_name': '',
             'quantity': (r['quantity'] as num).toDouble(),
-          }).toList();
+          })).toList();
         }
       } catch (e) {
         print('Error parsing recipe: $e');
@@ -263,10 +264,10 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                   final price = double.tryParse(priceController.text);
                   if (name.isEmpty || price == null) return;
                   final recipeJson = localRecipeItems.isNotEmpty
-                      ? jsonEncode(localRecipeItems.map((i) => {
+                      ? jsonEncode(localRecipeItems.map((i) => ({
                           'product_id': i['product_id'],
                           'quantity': i['quantity'],
-                        }).toList())
+                        })).toList())
                       : null;
                   try {
                     await _api.patch('/showcase/${item.id}', queryParameters: {'company_id': widget.companyId}, data: {
@@ -452,11 +453,14 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                     'counterparty': counterparty.isNotEmpty ? counterparty : null,
                     'items': items,
                     'category_id': item.categoryId,
+                    'showcase_item_id': item.id,
                   };
                   try {
                     await _api.post('/transactions', queryParameters: {'company_id': widget.companyId}, data: data);
                     Navigator.pop(context);
                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Продажа оформлена')));
+                    widget.onRefresh?.call();
+                    _loadData();
                   } catch (e) {
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
                   }
@@ -471,205 +475,202 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
   }
 
   Future<void> _openBulkSaleDialog() async {
-  _bulkSaleItems = _items.map((item) => {
-    'id': item.id,
-    'name': item.name,
-    'price': item.price,
-    'quantity': 0.0,
-    'recipe': item.recipe,
-  }).toList();
-  
-  // Создаём контроллеры для каждого товара
-  Map<int, TextEditingController> controllers = {};
-  for (int i = 0; i < _bulkSaleItems.length; i++) {
-    final controller = TextEditingController(text: '0');
-    controllers[i] = controller;
-  }
+    _bulkSaleItems = _items.map((item) => {
+      'id': item.id,
+      'name': item.name,
+      'price': item.price,
+      'quantity': 0.0,
+      'recipe': item.recipe,
+      'category_id': item.categoryId,
+    }).toList();
 
-  int? cashAccountId, bankAccountId, selectedAccountId;
-  DateTime date = DateTime.now();
-  String counterparty = '';
-  final accountsRes = await _api.get('/accounts', queryParameters: {'company_id': widget.companyId});
-  final accounts = accountsRes.data as List;
-  cashAccountId = accounts.firstWhere((a) => a['type'] == 'cash', orElse: () => null)?['id'];
-  bankAccountId = accounts.firstWhere((a) => a['type'] == 'bank', orElse: () => null)?['id'];
-  selectedAccountId = cashAccountId;
+    Map<int, TextEditingController> controllers = {};
+    for (int i = 0; i < _bulkSaleItems.length; i++) {
+      controllers[i] = TextEditingController(text: '0');
+    }
 
-  await showDialog(
-    context: context,
-    builder: (context) => StatefulBuilder(
-      builder: (context, setStateDialog) {
-        return AlertDialog(
-          title: const Text('Продажа списком'),
-          content: Container(
-            width: double.maxFinite,
-            height: MediaQuery.of(context).size.height * 0.6,
-            child: Column(
-              children: [
-                Expanded(
-                  child: ListView.builder(
-                    itemCount: _bulkSaleItems.length,
-                    itemBuilder: (context, index) {
-                      final item = _bulkSaleItems[index];
-                      final controller = controllers[index]!;
-                      // Синхронизируем контроллер, если quantity изменилась извне (например, через кнопки)
-                      if (controller.text != item['quantity'].toString()) {
-                        controller.text = item['quantity'].toString();
-                      }
-                      return ListTile(
-                        title: Text(item['name']),
-                        subtitle: Text('${item['price']} ₽'),
-                        trailing: SizedBox(
-                          width: 130,
-                          child: Row(
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.remove, size: 20),
-                                onPressed: () {
-                                  double newVal = (item['quantity'] as double) - 1;
-                                  if (newVal < 0) newVal = 0;
-                                  setStateDialog(() {
-                                    item['quantity'] = newVal;
-                                    controller.text = newVal.toString();
-                                  });
-                                },
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(minWidth: 30),
-                              ),
-                              Expanded(
-                                child: TextFormField(
-                                  controller: controller,
-                                  keyboardType: TextInputType.number,
-                                  textAlign: TextAlign.center,
-                                  decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true),
-                                  onChanged: (v) {
-                                    final q = double.tryParse(v) ?? 0;
+    int? cashAccountId, bankAccountId, selectedAccountId;
+    DateTime date = DateTime.now();
+    String counterparty = '';
+
+    final accountsRes = await _api.get('/accounts', queryParameters: {'company_id': widget.companyId});
+    final accounts = accountsRes.data as List;
+    cashAccountId = accounts.firstWhere((a) => a['type'] == 'cash', orElse: () => null)?['id'];
+    bankAccountId = accounts.firstWhere((a) => a['type'] == 'bank', orElse: () => null)?['id'];
+    selectedAccountId = cashAccountId;
+
+    await showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setStateDialog) {
+          return AlertDialog(
+            title: const Text('Продажа списком'),
+            content: Container(
+              width: double.maxFinite,
+              height: MediaQuery.of(context).size.height * 0.6,
+              child: Column(
+                children: [
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: _bulkSaleItems.length,
+                      itemBuilder: (context, index) {
+                        final item = _bulkSaleItems[index];
+                        final controller = controllers[index]!;
+                        if (controller.text != item['quantity'].toString()) {
+                          controller.text = item['quantity'].toString();
+                        }
+                        return ListTile(
+                          title: Text(item['name']),
+                          subtitle: Text('${item['price']} ₽'),
+                          trailing: SizedBox(
+                            width: 130,
+                            child: Row(
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.remove, size: 20),
+                                  onPressed: () {
+                                    double newVal = (item['quantity'] as double) - 1;
+                                    if (newVal < 0) newVal = 0;
                                     setStateDialog(() {
-                                      item['quantity'] = q;
+                                      item['quantity'] = newVal;
+                                      controller.text = newVal.toString();
                                     });
                                   },
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(minWidth: 30),
                                 ),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.add, size: 20),
-                                onPressed: () {
-                                  double newVal = (item['quantity'] as double) + 1;
-                                  setStateDialog(() {
-                                    item['quantity'] = newVal;
-                                    controller.text = newVal.toString();
-                                  });
-                                },
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(minWidth: 30),
-                              ),
-                            ],
+                                Expanded(
+                                  child: TextFormField(
+                                    controller: controller,
+                                    keyboardType: TextInputType.number,
+                                    textAlign: TextAlign.center,
+                                    decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true),
+                                    onChanged: (v) {
+                                      final q = double.tryParse(v) ?? 0;
+                                      setStateDialog(() {
+                                        item['quantity'] = q;
+                                      });
+                                    },
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.add, size: 20),
+                                  onPressed: () {
+                                    double newVal = (item['quantity'] as double) + 1;
+                                    setStateDialog(() {
+                                      item['quantity'] = newVal;
+                                      controller.text = newVal.toString();
+                                    });
+                                  },
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(minWidth: 30),
+                                ),
+                              ],
+                            ),
                           ),
+                        );
+                      },
+                    ),
+                  ),
+                  const Divider(),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () => setStateDialog(() => selectedAccountId = cashAccountId),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: selectedAccountId == cashAccountId ? Colors.blue.shade200 : Colors.grey.shade200,
+                          ),
+                          child: const Text('Наличные'),
                         ),
-                      );
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () => setStateDialog(() => selectedAccountId = bankAccountId),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: selectedAccountId == bankAccountId ? Colors.blue.shade200 : Colors.grey.shade200,
+                          ),
+                          child: const Text('Банк'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  ListTile(
+                    title: const Text('Дата'),
+                    trailing: Text(DateFormat('dd.MM.yyyy').format(date)),
+                    onTap: () async {
+                      final picked = await showDatePicker(context: context, initialDate: date, firstDate: DateTime(2000), lastDate: DateTime.now());
+                      if (picked != null) setStateDialog(() => date = picked);
                     },
                   ),
-                ),
-                const Divider(),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () => setStateDialog(() => selectedAccountId = cashAccountId),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: selectedAccountId == cashAccountId ? Colors.blue.shade200 : Colors.grey.shade200,
-                        ),
-                        child: const Text('Наличные'),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () => setStateDialog(() => selectedAccountId = bankAccountId),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: selectedAccountId == bankAccountId ? Colors.blue.shade200 : Colors.grey.shade200,
-                        ),
-                        child: const Text('Банк'),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                ListTile(
-                  title: const Text('Дата'),
-                  trailing: Text(DateFormat('dd.MM.yyyy').format(date)),
-                  onTap: () async {
-                    final picked = await showDatePicker(context: context, initialDate: date, firstDate: DateTime(2000), lastDate: DateTime.now());
-                    if (picked != null) setStateDialog(() => date = picked);
-                  },
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  onChanged: (v) => counterparty = v,
-                  decoration: const InputDecoration(labelText: 'Контрагент (необязательно)'),
-                ),
-              ],
+                  const SizedBox(height: 8),
+                  TextField(
+                    onChanged: (v) => counterparty = v,
+                    decoration: const InputDecoration(labelText: 'Контрагент (необязательно)'),
+                  ),
+                ],
+              ),
             ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
-            ElevatedButton(
-              onPressed: () async {
-                final selectedItems = _bulkSaleItems.where((i) => i['quantity'] > 0).toList();
-                if (selectedItems.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Выберите хотя бы один товар')));
-                  return;
-                }
-                if (selectedAccountId == null) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Выберите способ оплаты')));
-                  return;
-                }
-                List<Map<String, dynamic>> items = [];
-                double totalAmount = 0;
-                for (var si in selectedItems) {
-                  final qty = si['quantity'];
-                  final price = si['price'];
-                  final total = qty * price;
-                  totalAmount += total;
-                  if (si['recipe'] != null && si['recipe'].isNotEmpty) {
-                    try {
-                      final recipe = jsonDecode(si['recipe']);
-                      for (var r in recipe) {
-                        items.add({
-                          'product_id': r['product_id'],
-                          'quantity': r['quantity'] * qty,
-                          'price_per_unit': 0,
-                        });
-                      }
-                    } catch (e) {
-                      print('Recipe parse error: $e');
-                    }
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
+              ElevatedButton(
+                onPressed: () async {
+                  final selectedItems = _bulkSaleItems.where((i) => i['quantity'] > 0).toList();
+                  if (selectedItems.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Выберите хотя бы один товар')));
+                    return;
                   }
-                }
-                final data = {
-                  'type': 'income',
-                  'amount': totalAmount,
-                  'date': date.toIso8601String(),
-                  'account_id': selectedAccountId,
-                  'description': 'Массовая продажа с витрины (${selectedItems.map((i) => '${i['name']} ${i['quantity']} шт').join(', ')})',
-                  'counterparty': counterparty.isNotEmpty ? counterparty : null,
-                  'items': items,
-                };
-                try {
-                  await _api.post('/transactions', queryParameters: {'company_id': widget.companyId}, data: data);
+                  if (selectedAccountId == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Выберите способ оплаты')));
+                    return;
+                  }
+                  for (var si in selectedItems) {
+                    final qty = si['quantity'];
+                    final price = si['price'];
+                    final salePrice = qty * price;
+                    List<Map<String, dynamic>> items = [];
+                    if (si['recipe'] != null && si['recipe'].isNotEmpty) {
+                      try {
+                        final recipe = jsonDecode(si['recipe']);
+                        for (var r in recipe) {
+                          items.add({
+                            'product_id': r['product_id'],
+                            'quantity': r['quantity'] * qty,
+                            'price_per_unit': 0,
+                          });
+                        }
+                      } catch (e) {
+                        print('Recipe parse error: $e');
+                      }
+                    }
+                    final data = {
+                      'type': 'income',
+                      'amount': salePrice,
+                      'date': date.toIso8601String(),
+                      'account_id': selectedAccountId,
+                      'description': 'Продажа с витрины: ${si['name']} (${qty.toStringAsFixed(2)} шт)',
+                      'counterparty': counterparty.isNotEmpty ? counterparty : null,
+                      'items': items,
+                      'category_id': si['category_id'],
+                      'showcase_item_id': si['id'],
+                    };
+                    await _api.post('/transactions', queryParameters: {'company_id': widget.companyId}, data: data);
+                  }
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Продажа оформлена')));
-                } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
-                }
-              },
-              child: const Text('Продать'),
-            ),
-          ],
-        );
-      },
-    ),
-  );
-}
+                  widget.onRefresh?.call();
+                  _loadData();
+                },
+                child: const Text('Продать'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
 
   void _showMenu(ShowcaseItem item) {
     showGeneralDialog(

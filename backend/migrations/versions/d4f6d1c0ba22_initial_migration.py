@@ -1,8 +1,8 @@
 """initial_migration
 
-Revision ID: 7f8a3aee40df
+Revision ID: d4f6d1c0ba22
 Revises: 
-Create Date: 2026-04-22 08:29:55.920067
+Create Date: 2026-04-22 19:08:29.743264
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '7f8a3aee40df'
+revision: str = 'd4f6d1c0ba22'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -201,11 +201,13 @@ def upgrade() -> None:
     sa.Column('attachment_uploaded_at', sa.DateTime(), nullable=True),
     sa.Column('number', sa.Integer(), nullable=False),
     sa.Column('counterparty', sa.String(length=200), nullable=True),
+    sa.Column('showcase_item_id', sa.Integer(), nullable=True),
     sa.ForeignKeyConstraint(['account_id'], ['accounts.id'], ),
     sa.ForeignKeyConstraint(['category_id'], ['categories.id'], ),
     sa.ForeignKeyConstraint(['company_id'], ['companies.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['created_by'], ['users.id'], ),
     sa.ForeignKeyConstraint(['deleted_by'], ['users.id'], ),
+    sa.ForeignKeyConstraint(['showcase_item_id'], ['showcase_items.id'], ),
     sa.ForeignKeyConstraint(['transfer_to_account_id'], ['accounts.id'], ),
     sa.ForeignKeyConstraint(['updated_by'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id')
