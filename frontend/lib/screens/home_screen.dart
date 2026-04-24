@@ -5,8 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../providers/home_provider.dart';
 import '../providers/auth_provider.dart';
-import '../widgets/matrix_rain.dart';
-import '../widgets/ecg_widget.dart';
+import '../widgets/video_background.dart';
 import '../models/company.dart';
 import '../screens/create_company_screen.dart';
 import '../screens/company_screen.dart';
@@ -63,140 +62,118 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget build(BuildContext context) {
     final homeAsync = ref.watch(homeProvider);
 
-    return Scaffold(
-      drawer: const SettingsDrawer(),
-      backgroundColor: Colors.white,
-      body: Stack(
-        children: [
-          Container(
-            color: const Color(0xFFF2F2F2),
-            child: CustomPaint(
-              painter: _LightGridPainter(),
-              size: Size.infinite,
-            ),
-          ),
-          MatrixRain(color: Colors.black, opacity: 0.4),
-          SafeArea(
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(top: 32),
-                  child: ECGWidget(
-                    color: Colors.grey.shade600,
-                    width: 200,
-                    height: 60,
-                  ),
-                ),
-                Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Пульс',
-                        style: GoogleFonts.caveat(
-                          fontSize: 32,
-                          color: Colors.grey.shade800,
+    return VideoBackground(
+      videoPath: 'assets/videos/for_home.mp4',  
+      fit: BoxFit.cover,
+      muted: true,
+      loop: true,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        drawer: const SettingsDrawer(),
+        body: SafeArea(
+          child: Column(
+            children: [
+              // Заголовок "Пульс" и иконки (ECGWidget удалён)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Пульс',
+                      style: GoogleFonts.caveat(
+                        fontSize: 32,
+                        color: Colors.grey.shade800,
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        IconButton(
+                          icon: Icon(Icons.bar_chart, color: Colors.grey.shade700),
+                          onPressed: () {},
                         ),
-                      ),
-                      Row(
-                        children: [
-                          IconButton(
-                            icon: Icon(Icons.bar_chart,
-                                color: Colors.grey.shade700),
-                            onPressed: () {},
+                        Builder(
+                          builder: (context) => IconButton(
+                            icon: Icon(Icons.settings, color: Colors.grey.shade700),
+                            onPressed: () => Scaffold.of(context).openDrawer(),
                           ),
-                          Builder(
-                            builder: (context) => IconButton(
-                              icon: Icon(Icons.settings,
-                                  color: Colors.grey.shade700),
-                              onPressed: () =>
-                                  Scaffold.of(context).openDrawer(),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-                Expanded(
-                  child: RefreshIndicator(
-                    onRefresh: () async {
-                      ref.invalidate(homeProvider);
-                      await Future.delayed(Duration.zero);
+              ),
+              Expanded(
+                child: RefreshIndicator(
+                  onRefresh: () async {
+                    ref.invalidate(homeProvider);
+                    await Future.delayed(Duration.zero);
+                  },
+                  child: homeAsync.when(
+                    data: (data) {
+                      final companies = data.companies;
+                      final overview = data.overview;
+                      final counts =
+                          data.counts as Map<String, dynamic>? ?? {};
+                      return ListView(
+                        padding: const EdgeInsets.all(16),
+                        children: [
+                          Row(
+                            children: [
+                              _StatCard(title: 'Суммарно', amount: overview.totalAll),
+                              const SizedBox(width: 8),
+                              _StatCard(title: 'Наличные', amount: overview.totalCash),
+                              const SizedBox(width: 8),
+                              _StatCard(title: 'Банк', amount: overview.totalBank),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          ...companies.map((company) {
+                            final unread = counts[company.id.toString()]
+                                    ?['unread_messages'] ??
+                                0;
+                            final pending = counts[company.id.toString()]
+                                    ?['pending_tasks'] ??
+                                0;
+                            return _CompanyCard(
+                              company: company,
+                              ref: ref,
+                              unreadMessages: unread,
+                              pendingTasks: pending,
+                            );
+                          }),
+                        ],
+                      );
                     },
-                    child: homeAsync.when(
-                      data: (data) {
-                        final companies = data.companies;
-                        final overview = data.overview;
-                        final counts =
-                            data.counts as Map<String, dynamic>? ?? {};
-                        return ListView(
-                          padding: const EdgeInsets.all(16),
-                          children: [
-                            Row(
-                              children: [
-                                _StatCard(
-                                    title: 'Суммарно',
-                                    amount: overview.totalAll),
-                                const SizedBox(width: 8),
-                                _StatCard(
-                                    title: 'Наличные',
-                                    amount: overview.totalCash),
-                                const SizedBox(width: 8),
-                                _StatCard(
-                                    title: 'Банк', amount: overview.totalBank),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-                            ...companies.map((company) {
-                              final unread = counts[company.id.toString()]
-                                      ?['unread_messages'] ??
-                                  0;
-                              final pending = counts[company.id.toString()]
-                                      ?['pending_tasks'] ??
-                                  0;
-                              return _CompanyCard(
-                                company: company,
-                                ref: ref,
-                                unreadMessages: unread,
-                                pendingTasks: pending,
-                              );
-                            }),
-                          ],
-                        );
-                      },
-                      loading: () =>
-                          const Center(child: CircularProgressIndicator()),
-                      error: (error, stack) => Center(
-                        child: Text('Ошибка: $error',
-                            style: const TextStyle(color: Colors.red)),
-                      ),
+                    loading: () => const Center(child: CircularProgressIndicator()),
+                    error: (error, stack) => Center(
+                      child: Text('Ошибка: $error',
+                          style: const TextStyle(color: Colors.red)),
                     ),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          final result = await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const CreateCompanyScreen()),
-          );
-          if (result == true) ref.invalidate(homeProvider);
-        },
-        backgroundColor: Colors.blueGrey.shade300,
-        foregroundColor: Colors.black87,
-        child: const Icon(Icons.add),
+        ),
+        floatingActionButton: FloatingActionButton(
+          onPressed: () async {
+            final result = await Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const CreateCompanyScreen()),
+            );
+            if (result == true) ref.invalidate(homeProvider);
+          },
+          backgroundColor: Colors.blueGrey.shade300,
+          foregroundColor: Colors.black87,
+          child: const Icon(Icons.add),
+        ),
       ),
     );
   }
 }
 
+// ---------- Статистическая карточка ----------
 class _StatCard extends StatelessWidget {
   final String title;
   final double amount;
@@ -234,6 +211,7 @@ class _StatCard extends StatelessWidget {
   }
 }
 
+// ---------- Карточка компании ----------
 class _CompanyCard extends StatelessWidget {
   final Company company;
   final WidgetRef ref;
@@ -269,30 +247,26 @@ class _CompanyCard extends StatelessWidget {
                   if (unreadMessages > 0)
                     Container(
                       margin: const EdgeInsets.only(right: 8),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
                         color: Colors.red,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
                         'Сообщения: $unreadMessages',
-                        style:
-                            const TextStyle(color: Colors.white, fontSize: 10),
+                        style: const TextStyle(color: Colors.white, fontSize: 10),
                       ),
                     ),
                   if (pendingTasks > 0)
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
                         color: Colors.orange,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
                         'Задачи: $pendingTasks',
-                        style:
-                            const TextStyle(color: Colors.white, fontSize: 10),
+                        style: const TextStyle(color: Colors.white, fontSize: 10),
                       ),
                     ),
                 ],
@@ -323,6 +297,7 @@ class _CompanyCard extends StatelessWidget {
   }
 }
 
+// ---------- Drawer настроек ----------
 class SettingsDrawer extends StatelessWidget {
   const SettingsDrawer({super.key});
 
@@ -335,8 +310,7 @@ class SettingsDrawer extends StatelessWidget {
         padding: EdgeInsets.zero,
         children: [
           const DrawerHeader(
-            decoration:
-                BoxDecoration(color: Color.fromARGB(255, 191, 193, 194)),
+            decoration: BoxDecoration(color: Color.fromARGB(255, 191, 193, 194)),
             child: Text('Настройки',
                 style: TextStyle(fontSize: 28, color: Colors.white)),
           ),
@@ -345,8 +319,7 @@ class SettingsDrawer extends StatelessWidget {
             title: const Text('Сотрудники'),
             onTap: () {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                    content: Text('Список сотрудников в разработке')),
+                const SnackBar(content: Text('Список сотрудников в разработке')),
               );
             },
           ),
@@ -374,23 +347,4 @@ class SettingsDrawer extends StatelessWidget {
       ),
     );
   }
-}
-
-class _LightGridPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.grey.shade300.withOpacity(0.5)
-      ..strokeWidth = 0.5;
-    const double spacing = 30.0;
-    for (double x = 0; x < size.width; x += spacing) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
-    }
-    for (double y = 0; y < size.height; y += spacing) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

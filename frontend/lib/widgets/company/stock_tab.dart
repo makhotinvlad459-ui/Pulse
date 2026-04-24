@@ -26,7 +26,7 @@ class _StockTabState extends ConsumerState<StockTab> {
     setState(() => _loading = true);
     final api = ApiClient();
     try {
-      final res = await api.get('/products', queryParameters: {'company_id': widget.companyId});
+      final res = await api.get('/products/', queryParameters: {'company_id': widget.companyId});
       setState(() {
         _products = res.data;
         _applySorting();
@@ -101,7 +101,7 @@ class _StockTabState extends ConsumerState<StockTab> {
               if (nameController.text.isEmpty || unit == null) return;
               final api = ApiClient();
               try {
-                await api.post('/products', queryParameters: {'company_id': widget.companyId}, data: {
+                await api.post('/products/', queryParameters: {'company_id': widget.companyId}, data: {
                   'name': nameController.text,
                   'unit': unit,
                 });

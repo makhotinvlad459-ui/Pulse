@@ -9,17 +9,27 @@ import '../models/statistics.dart';
 class ApiClient {
   static String get baseUrl {
     if (kIsWeb) return 'http://localhost:8000';
-    if (Platform.isAndroid) return 'http://10.0.2.2:8000';
+    if (Platform.isAndroid) return 'http://192.168.0.115:8000';
     return 'http://localhost:8000';
   }
 
-  final Dio _dio = Dio(BaseOptions(baseUrl: baseUrl));
+  final Dio _dio = Dio(); // ← убрали BaseOptions из конструктора
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
   // Публичный геттер для доступа к Dio
   Dio get dio => _dio;
 
   ApiClient() {
+    // Устанавливаем опции с followRedirects и validateStatus
+    _dio.options = BaseOptions(
+      baseUrl: baseUrl,
+      connectTimeout: const Duration(seconds: 30),
+      receiveTimeout: const Duration(seconds: 30),
+      followRedirects: true,               // ← автоматом следовать редиректам
+      maxRedirects: 5,
+      validateStatus: (status) => status! < 500, // ← не считать 3xx ошибкой
+    );
+
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
         final token = await _storage.read(key: 'access_token');

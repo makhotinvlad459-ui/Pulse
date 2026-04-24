@@ -21,7 +21,7 @@ class _AddAccountDialogState extends State<AddAccountDialog> {
     setState(() => _loading = true);
     final api = ApiClient();
     try {
-      await api.post('/accounts', queryParameters: {
+      await api.post('/accounts/', queryParameters: {
         'company_id': widget.companyId
       }, data: {
         'name': _nameController.text,

@@ -30,7 +30,7 @@ class _CreateCompanyScreenState extends ConsumerState<CreateCompanyScreen> {
     setState(() => _isLoading = true);
     try {
       final api = ApiClient();
-      final response = await api.post('/companies', data: {
+      final response = await api.post('/companies/', data: {
         'inn': _innController.text,
         'name': _nameController.text,
         'bank_account': _bankAccountController.text,

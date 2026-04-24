@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'dart:html' as html;
+import 'package:universal_html/html.dart' as html;
 import '../../services/api_client.dart';
 import '../../models/transaction.dart';
 import 'edit_transaction_dialog.dart';

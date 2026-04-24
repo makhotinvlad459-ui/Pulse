@@ -456,7 +456,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                     'showcase_item_id': item.id,
                   };
                   try {
-                    await _api.post('/transactions', queryParameters: {'company_id': widget.companyId}, data: data);
+                    await _api.post('/transactions/', queryParameters: {'company_id': widget.companyId}, data: data);
                     Navigator.pop(context);
                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Продажа оформлена')));
                     widget.onRefresh?.call();
@@ -656,7 +656,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                       'category_id': si['category_id'],
                       'showcase_item_id': si['id'],
                     };
-                    await _api.post('/transactions', queryParameters: {'company_id': widget.companyId}, data: data);
+                    await _api.post('/transactions/', queryParameters: {'company_id': widget.companyId}, data: data);
                   }
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Продажа оформлена')));

@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 class MatrixRain extends StatefulWidget {
   final Color color;
   final double opacity;
-  const MatrixRain({super.key, this.color = Colors.green, this.opacity = 0.2});
+  const MatrixRain({super.key, this.color = Colors.black87, this.opacity = 0.15});
 
   @override
   State<MatrixRain> createState() => _MatrixRainState();
@@ -37,7 +37,7 @@ class _MatrixRainState extends State<MatrixRain>
       if (drop.y > 1.0) {
         drop.y = -0.1;
         drop.symbol = _random.nextInt(2).toString();
-        drop.speed = 0.005 + _random.nextDouble() * 0.01;
+        drop.speed = 0.002 + _random.nextDouble() * 0.004;
       }
     }
   }
@@ -46,16 +46,17 @@ class _MatrixRainState extends State<MatrixRain>
   void didChangeDependencies() {
     super.didChangeDependencies();
     final size = MediaQuery.of(context).size;
-    final newColumns = (size.width / 20).ceil();
+    final newColumns = (size.width / 15).ceil();
     if (_numberOfColumns != newColumns) {
       _numberOfColumns = newColumns;
       _drops.clear();
+      final stepX = size.width / _numberOfColumns;
       for (int i = 0; i < _numberOfColumns; i++) {
         _drops.add(RainDrop(
-          x: i * 20.0,
+          x: i * stepX,
           y: _random.nextDouble(),
           symbol: _random.nextInt(2).toString(),
-          speed: 0.005 + _random.nextDouble() * 0.01,
+          speed: 0.002 + _random.nextDouble() * 0.004,
         ));
       }
     }
@@ -82,11 +83,12 @@ class RainDrop {
   double y;
   String symbol;
   double speed;
-  RainDrop(
-      {required this.x,
-      required this.y,
-      required this.symbol,
-      required this.speed});
+  RainDrop({
+    required this.x,
+    required this.y,
+    required this.symbol,
+    required this.speed,
+  });
 }
 
 class _MatrixPainter extends CustomPainter {
@@ -94,16 +96,20 @@ class _MatrixPainter extends CustomPainter {
   final Color color;
   final double opacity;
 
-  _MatrixPainter(
-      {required this.drops, required this.color, required this.opacity});
+  _MatrixPainter({
+    required this.drops,
+    required this.color,
+    required this.opacity,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color.withOpacity(opacity)
-      ..style = PaintingStyle.fill;
-    final textStyle =
-        TextStyle(color: color.withOpacity(opacity), fontSize: 14);
+    final textStyle = TextStyle(
+      color: color.withOpacity(opacity), // ← теперь прозрачность работает
+      fontSize: 14,
+      fontWeight: FontWeight.bold,
+      fontFamily: 'monospace',
+    );
     final textPainter = TextPainter(textDirection: TextDirection.ltr);
 
     for (var drop in drops) {

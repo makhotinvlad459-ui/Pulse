@@ -29,12 +29,19 @@ class _ReportsTabState extends ConsumerState<ReportsTab> {
   double _totalExpense = 0;
   double _totalProfit = 0;
 
-  int _activeSalesTab = 0; // 0 - товары, 1 - витрина
+  int _activeSalesTab = 0;
+  final ScrollController _chartScrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
     _loadData();
+  }
+
+  @override
+  void dispose() {
+    _chartScrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadData() async {
@@ -49,6 +56,12 @@ class _ReportsTabState extends ConsumerState<ReportsTab> {
     ]);
     _calculateTotals();
     setState(() => _loading = false);
+    // После загрузки данных прокручиваем график в конец (последние данные)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_chartScrollController.hasClients && _dynamics.length > 7) {
+        _chartScrollController.jumpTo(_chartScrollController.position.maxScrollExtent);
+      }
+    });
   }
 
   Future<void> _loadDynamics() async {
@@ -140,11 +153,35 @@ class _ReportsTabState extends ConsumerState<ReportsTab> {
     _loadData();
   }
 
-  void _onCategoryTap(int categoryId, bool isIncome) {
-    // TODO: реализовать переход к операциям с фильтром
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Переход к операциям с категорией ID=$categoryId (в разработке)')),
-    );
+  String _formatPeriod(String period, String interval) {
+    if (interval == 'day') {
+      final parts = period.split('-');
+      if (parts.length == 3) {
+        final date = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+        return DateFormat('d MMM', 'ru').format(date);
+      }
+      return period;
+    } else if (interval == 'week') {
+      final parts = period.split('-');
+      if (parts.length == 2) {
+        final year = int.parse(parts[0]);
+        final week = int.parse(parts[1]);
+        final firstDayOfYear = DateTime(year, 1, 1);
+        final daysOffset = (week - 1) * 7 - firstDayOfYear.weekday + 1;
+        final weekStart = firstDayOfYear.add(Duration(days: daysOffset));
+        return DateFormat('MMM yyyy', 'ru').format(weekStart);
+      }
+      return period;
+    } else if (interval == 'month') {
+      final parts = period.split('-');
+      if (parts.length == 2) {
+        final date = DateTime(int.parse(parts[0]), int.parse(parts[1]), 1);
+        return DateFormat('MMM yyyy', 'ru').format(date);
+      }
+      return period;
+    } else {
+      return period;
+    }
   }
 
   @override
@@ -158,21 +195,34 @@ class _ReportsTabState extends ConsumerState<ReportsTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Переключатель периода
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
-              ElevatedButton(onPressed: () => _setQuickPeriod(1), child: const Text('День')),
-              ElevatedButton(onPressed: () => _setQuickPeriod(7), child: const Text('Неделя')),
-              ElevatedButton(onPressed: () => _setQuickPeriod(30), child: const Text('Месяц')),
-              ElevatedButton(onPressed: () => _setQuickPeriod(90), child: const Text('Квартал')),
-              ElevatedButton(onPressed: () => _setQuickPeriod(365), child: const Text('Год')),
+              ElevatedButton(
+                onPressed: () { setState(() { _interval = 'day'; }); _loadData(); },
+                style: ElevatedButton.styleFrom(backgroundColor: _interval == 'day' ? Colors.blue : null),
+                child: const Text('День'),
+              ),
+              ElevatedButton(
+                onPressed: () { setState(() { _interval = 'week'; }); _loadData(); },
+                style: ElevatedButton.styleFrom(backgroundColor: _interval == 'week' ? Colors.blue : null),
+                child: const Text('Неделя'),
+              ),
+              ElevatedButton(
+                onPressed: () { setState(() { _interval = 'month'; }); _loadData(); },
+                style: ElevatedButton.styleFrom(backgroundColor: _interval == 'month' ? Colors.blue : null),
+                child: const Text('Месяц'),
+              ),
+              ElevatedButton(
+                onPressed: () { setState(() { _interval = 'year'; }); _loadData(); },
+                style: ElevatedButton.styleFrom(backgroundColor: _interval == 'year' ? Colors.blue : null),
+                child: const Text('Год'),
+              ),
               ElevatedButton(onPressed: _selectPeriod, child: const Text('Выбрать')),
             ],
           ),
           const SizedBox(height: 16),
-          // Карточки итогов
           Row(
             children: [
               _SummaryCard(title: 'Доход', amount: _totalIncome, color: Colors.green),
@@ -183,17 +233,12 @@ class _ReportsTabState extends ConsumerState<ReportsTab> {
             ],
           ),
           const SizedBox(height: 24),
-          // Динамика (линейный график) с легендой
-          const Text('Динамика доходов, расходов и прибыли', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const Text('Динамика доходов и расходов', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           _buildLegend(),
           const SizedBox(height: 8),
-          SizedBox(
-            height: 300,
-            child: _buildLineChart(),
-          ),
+          _buildScrollableBarChart(),
           const SizedBox(height: 24),
-          // Структура доходов и расходов в одной строке
           const Text('Структура', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           Row(
@@ -204,7 +249,7 @@ class _ReportsTabState extends ConsumerState<ReportsTab> {
                   children: [
                     const Text('Доходы', style: TextStyle(fontWeight: FontWeight.bold)),
                     const SizedBox(height: 4),
-                    SizedBox(height: 220, child: _buildPieChart(_incomeByCategory, Colors.green, isIncome: true)),
+                    SizedBox(height: 220, child: _buildPieChart(_incomeByCategory, Colors.green)),
                   ],
                 ),
               ),
@@ -214,19 +259,17 @@ class _ReportsTabState extends ConsumerState<ReportsTab> {
                   children: [
                     const Text('Расходы', style: TextStyle(fontWeight: FontWeight.bold)),
                     const SizedBox(height: 4),
-                    SizedBox(height: 220, child: _buildPieChart(_expenseByCategory, Colors.red, isIncome: false)),
+                    SizedBox(height: 220, child: _buildPieChart(_expenseByCategory, Colors.red)),
                   ],
                 ),
               ),
             ],
           ),
           const SizedBox(height: 24),
-          // Наличные vs Безналичные
           const Text('Наличные vs Безналичные', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           SizedBox(height: 220, child: _buildCashPieChart()),
           const SizedBox(height: 24),
-          // Продажи товаров и витрины – вкладки
           const Text('Продажи', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           SegmentedButton<int>(
@@ -236,9 +279,7 @@ class _ReportsTabState extends ConsumerState<ReportsTab> {
             ],
             selected: {_activeSalesTab},
             onSelectionChanged: (Set<int> newSelection) {
-              setState(() {
-                _activeSalesTab = newSelection.first;
-              });
+              setState(() => _activeSalesTab = newSelection.first);
             },
           ),
           const SizedBox(height: 12),
@@ -255,8 +296,6 @@ class _ReportsTabState extends ConsumerState<ReportsTab> {
         _LegendItem(color: Colors.green, label: 'Доход'),
         const SizedBox(width: 16),
         _LegendItem(color: Colors.red, label: 'Расход'),
-        const SizedBox(width: 16),
-        _LegendItem(color: Colors.blue, label: 'Прибыль'),
       ],
     );
   }
@@ -289,100 +328,119 @@ class _ReportsTabState extends ConsumerState<ReportsTab> {
       ),
     );
   }
-
-  Widget _buildLineChart() {
-    if (_dynamics.isEmpty) return const Center(child: Text('Нет данных'));
-    double maxValue = 0;
-    for (var item in _dynamics) {
-      maxValue = maxValue > (item['income'] as num).toDouble() ? maxValue : (item['income'] as num).toDouble();
-      maxValue = maxValue > (item['expense'] as num).toDouble() ? maxValue : (item['expense'] as num).toDouble();
-      maxValue = maxValue > (item['profit'] as num).toDouble() ? maxValue : (item['profit'] as num).toDouble();
-    }
-    maxValue = maxValue * 1.1;
-
-    return LineChart(
-      LineChartData(
-        gridData: FlGridData(show: true),
-        titlesData: FlTitlesData(
-          leftTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              reservedSize: 40,
-              getTitlesWidget: (value, meta) {
-                return Text(NumberFormat.compact().format(value));
-              },
-            ),
+  Widget _buildScrollableBarChart() {
+  if (_dynamics.isEmpty) return const Center(child: Text('Нет данных'));
+  
+  final barGroups = <BarChartGroupData>[];
+  for (int i = 0; i < _dynamics.length; i++) {
+    final item = _dynamics[i];
+    final income = (item['income'] as num).toDouble();
+    final expense = (item['expense'] as num).toDouble();
+    barGroups.add(
+      BarChartGroupData(
+        x: i,
+        barRods: [
+          BarChartRodData(
+            toY: income,
+            color: Colors.green.withOpacity(0.8),
+            width: 16,
+            borderRadius: BorderRadius.circular(4),
           ),
-          bottomTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              reservedSize: 30,
-              getTitlesWidget: (value, meta) {
-                final index = value.toInt();
-                if (index < 0 || index >= _dynamics.length) return const Text('');
-                return Text(_dynamics[index]['period']);
-              },
-            ),
-          ),
-          rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-        ),
-        borderData: FlBorderData(show: true),
-        minY: 0,
-        maxY: maxValue,
-        lineBarsData: [
-          LineChartBarData(
-            spots: _dynamics.asMap().entries.map((e) => FlSpot(e.key.toDouble(), e.value['income'])).toList(),
-            color: Colors.green,
-            isCurved: true,
-            barWidth: 2,
-            dotData: FlDotData(show: false),
-          ),
-          LineChartBarData(
-            spots: _dynamics.asMap().entries.map((e) => FlSpot(e.key.toDouble(), e.value['expense'])).toList(),
-            color: Colors.red,
-            isCurved: true,
-            barWidth: 2,
-            dotData: FlDotData(show: false),
-          ),
-          LineChartBarData(
-            spots: _dynamics.asMap().entries.map((e) => FlSpot(e.key.toDouble(), e.value['profit'])).toList(),
-            color: Colors.blue,
-            isCurved: true,
-            barWidth: 2,
-            dotData: FlDotData(show: false),
+          BarChartRodData(
+            toY: expense,
+            color: Colors.red.withOpacity(0.8),
+            width: 16,
+            borderRadius: BorderRadius.circular(4),
           ),
         ],
       ),
     );
   }
+  
+  const double groupWidth = 60;
+  final totalWidth = barGroups.length * groupWidth;
+  
+  return LayoutBuilder(
+    builder: (context, constraints) {
+      final availableWidth = constraints.maxWidth;
+      // Если данных мало, делаем ширину равной доступной, иначе — totalWidth для скролла
+      final width = totalWidth < availableWidth ? availableWidth : totalWidth;
+      return SingleChildScrollView(
+        controller: _chartScrollController,
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+          child: SizedBox(
+            width: width,
+            height: 300,
+            child: BarChart(
+              BarChartData(
+                alignment: BarChartAlignment.spaceAround,
+                barGroups: barGroups,
+                titlesData: FlTitlesData(
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 40,
+                      getTitlesWidget: (value, meta) => Text(NumberFormat.compact().format(value)),
+                    ),
+                  ),
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 70, // Увеличено для подписей
+                      getTitlesWidget: (value, meta) {
+                        final index = value.toInt();
+                        if (index < 0 || index >= _dynamics.length) return const Text('');
+                        return Transform.rotate(
+                          angle: -0.3, // Уменьшен угол наклона
+                          child: Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: Text(
+                              _formatPeriod(_dynamics[index]['period'], _interval),
+                              style: const TextStyle(fontSize: 10),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                ),
+                borderData: FlBorderData(show: true),
+                gridData: FlGridData(show: true),
+                backgroundColor: Colors.grey.shade50,
+              ),
+            ),
+          ),
+        ),
+      );
+    },
+  );
+}
+  
 
-  Widget _buildPieChart(List<dynamic> data, Color defaultColor, {required bool isIncome}) {
+  Widget _buildPieChart(List<dynamic> data, Color defaultColor) {
     if (data.isEmpty) return const Center(child: Text('Нет данных'));
     final total = data.fold(0.0, (sum, item) => sum + (item['total'] as num).toDouble());
     if (total == 0) return const Center(child: Text('Нет данных'));
-    final sections = <PieChartSectionData>[];
-    for (int i = 0; i < data.length; i++) {
-      final item = data[i];
-      final value = (item['total'] as num).toDouble();
-      final percentage = value / total;
-      sections.add(
-        PieChartSectionData(
-          value: value,
-          title: '${item['category_name']}\n${value.toStringAsFixed(0)} ₽\n(${(percentage * 100).toStringAsFixed(1)}%)',
-          color: Colors.primaries[i % Colors.primaries.length],
-          radius: 90,
-          titleStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
-        ),
-      );
-    }
-    return GestureDetector(
-      onTapDown: (details) {
-        // Здесь можно реализовать определение нажатого сектора через PieTouchDetector,
-        // но для простоты пока оставим без обработки клика.
-      },
-      child: PieChart(
-        PieChartData(sections: sections),
+    return PieChart(
+      PieChartData(
+        sections: data.asMap().entries.map((entry) {
+          final index = entry.key;
+          final item = entry.value;
+          final value = (item['total'] as num).toDouble();
+          final percentage = value / total;
+          return PieChartSectionData(
+            value: value,
+            title: '${item['category_name']}\n${value.toStringAsFixed(0)} ₽\n(${(percentage * 100).toStringAsFixed(1)}%)',
+            color: Colors.primaries[index % Colors.primaries.length],
+            radius: 90,
+            titleStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
+          );
+        }).toList(),
       ),
     );
   }
@@ -390,23 +448,26 @@ class _ReportsTabState extends ConsumerState<ReportsTab> {
   Widget _buildCashPieChart() {
     final total = _cashVsNoncash['cash']! + _cashVsNoncash['noncash']!;
     if (total == 0) return const Center(child: Text('Нет данных'));
-    final sections = [
-      PieChartSectionData(
-        value: _cashVsNoncash['cash']!,
-        title: 'Наличные\n${_cashVsNoncash['cash']!.toStringAsFixed(0)} ₽',
-        color: Colors.orange,
-        radius: 90,
-        titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+    return PieChart(
+      PieChartData(
+        sections: [
+          PieChartSectionData(
+            value: _cashVsNoncash['cash']!,
+            title: 'Наличные\n${_cashVsNoncash['cash']!.toStringAsFixed(0)} ₽',
+            color: Colors.orange,
+            radius: 90,
+            titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+          ),
+          PieChartSectionData(
+            value: _cashVsNoncash['noncash']!,
+            title: 'Безналичные\n${_cashVsNoncash['noncash']!.toStringAsFixed(0)} ₽',
+            color: Colors.blue,
+            radius: 90,
+            titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+          ),
+        ],
       ),
-      PieChartSectionData(
-        value: _cashVsNoncash['noncash']!,
-        title: 'Безналичные\n${_cashVsNoncash['noncash']!.toStringAsFixed(0)} ₽',
-        color: Colors.blue,
-        radius: 90,
-        titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
-      ),
-    ];
-    return PieChart(PieChartData(sections: sections));
+    );
   }
 
   Widget _buildSalesTable(List<dynamic> data, {required bool isProduct}) {
@@ -417,35 +478,31 @@ class _ReportsTabState extends ConsumerState<ReportsTab> {
       totalAmount += (item['amount'] as num).toDouble();
       totalQuantity += (item['quantity'] as num).toInt();
     }
-    return Column(
-      children: [
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: DataTable(
-            columns: const [
-              DataColumn(label: Text('Название')),
-              DataColumn(label: Text('Кол-во')),
-              DataColumn(label: Text('Сумма')),
-            ],
-            rows: [
-              ...data.map((item) {
-                return DataRow(cells: [
-                  DataCell(Text(item[isProduct ? 'product_name' : 'name'])),
-                  DataCell(Text(item['quantity'].toString())),
-                  DataCell(Text('${(item['amount'] as num).toStringAsFixed(2)} ₽')),
-                ]);
-              }).toList(),
-              DataRow(
-                cells: [
-                  const DataCell(Text('Итого', style: TextStyle(fontWeight: FontWeight.bold))),
-                  DataCell(Text(totalQuantity.toString(), style: const TextStyle(fontWeight: FontWeight.bold))),
-                  DataCell(Text('${totalAmount.toStringAsFixed(2)} ₽', style: const TextStyle(fontWeight: FontWeight.bold))),
-                ],
-              ),
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: DataTable(
+        columns: const [
+          DataColumn(label: Text('Название')),
+          DataColumn(label: Text('Кол-во')),
+          DataColumn(label: Text('Сумма')),
+        ],
+        rows: [
+          ...data.map((item) {
+            return DataRow(cells: [
+              DataCell(Text(item[isProduct ? 'product_name' : 'name'])),
+              DataCell(Text(item['quantity'].toString())),
+              DataCell(Text('${(item['amount'] as num).toStringAsFixed(2)} ₽')),
+            ]);
+          }).toList(),
+          DataRow(
+            cells: [
+              const DataCell(Text('Итого', style: TextStyle(fontWeight: FontWeight.bold))),
+              DataCell(Text(totalQuantity.toString(), style: const TextStyle(fontWeight: FontWeight.bold))),
+              DataCell(Text('${totalAmount.toStringAsFixed(2)} ₽', style: const TextStyle(fontWeight: FontWeight.bold))),
             ],
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

@@ -7,7 +7,6 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import '../services/api_client.dart';
 import '../providers/auth_provider.dart';
 import '../models/user.dart';
-import '../widgets/matrix_rain.dart';
 import '../models/company.dart';
 import '../widgets/company/account_card.dart';
 import '../widgets/company/transactions_tab.dart';
@@ -188,21 +187,20 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
     final currentUserRole = widget.company.currentUserRole;
     final isManager = currentUserRole == 'manager';
 
-    final bool showEditCompany = isFounder;
-    final bool showAddAccount = isFounder || isManager;
-    final bool showManageCategories = isFounder || isManager;
-    final bool showManageEmployees = isFounder || isManager;
-    final bool showArchive =
+    final showEditCompany = isFounder;
+    final showAddAccount = isFounder || isManager;
+    final showManageCategories = isFounder || isManager;
+    final showManageEmployees = isFounder || isManager;
+    final showArchive =
         (isFounder || isManager) && _archiveAccountId != null;
-    final bool showDeleteCompany = isFounder;
-    final bool showMenu = isFounder || isManager;
-
-    final double rainHeight = 200;
+    final showDeleteCompany = isFounder;
+    final showMenu = isFounder || isManager;
 
     return Scaffold(
       backgroundColor: Colors.white,
       body: Stack(
         children: [
+          // Фон: светло-серый + сетка (как было в оригинале)
           Container(
             color: const Color(0xFFF2F2F2),
             child: CustomPaint(
@@ -210,24 +208,16 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
               size: Size.infinite,
             ),
           ),
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            height: rainHeight,
-            child: MatrixRain(color: Colors.black, opacity: 0.3),
-          ),
+          // Тело экрана (без дождя)
           SafeArea(
             child: Column(
               children: [
                 Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   child: Row(
                     children: [
                       IconButton(
-                        icon:
-                            Icon(Icons.arrow_back, color: Colors.grey.shade800),
+                        icon: Icon(Icons.arrow_back, color: Colors.grey.shade800),
                         onPressed: () => Navigator.pop(context, _hasChanges),
                       ),
                       const Spacer(),
@@ -300,17 +290,16 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                             }
                             return items;
                           },
-                          icon: Icon(Icons.more_vert,
-                              color: Colors.grey.shade800),
+                          icon: Icon(Icons.more_vert, color: Colors.grey.shade800),
                         ),
                     ],
                   ),
                 ),
+                // Название компании и бейджи
                 Column(
                   children: [
                     Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                       child: Text(
                         widget.company.name,
                         style: GoogleFonts.orbitron(
@@ -330,30 +319,26 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                             if (_unreadMessagesCount > 0)
                               Container(
                                 margin: const EdgeInsets.only(right: 8),
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 2),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                 decoration: BoxDecoration(
                                   color: Colors.red,
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Text(
                                   'Сообщения: $_unreadMessagesCount',
-                                  style: const TextStyle(
-                                      color: Colors.white, fontSize: 12),
+                                  style: const TextStyle(color: Colors.white, fontSize: 12),
                                 ),
                               ),
                             if (_pendingTasksCount > 0)
                               Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 2),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                 decoration: BoxDecoration(
                                   color: Colors.orange,
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Text(
                                   'Задачи: $_pendingTasksCount',
-                                  style: const TextStyle(
-                                      color: Colors.white, fontSize: 12),
+                                  style: const TextStyle(color: Colors.white, fontSize: 12),
                                 ),
                               ),
                           ],
@@ -361,6 +346,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                       ),
                   ],
                 ),
+                // Горизонтальный список счетов
                 SizedBox(
                   height: 100,
                   child: SingleChildScrollView(
@@ -368,27 +354,31 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Row(
                       children: _accounts
-                          .map((acc) => AccountCard(
-                                account: acc,
-                                onDelete: () async {
-                                  final api = ApiClient();
-                                  try {
-                                    await api.delete('/accounts/${acc['id']}',
-                                        queryParameters: {
-                                          'company_id': widget.company.id
-                                        });
-                                    await _refresh();
-                                  } catch (e) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text('Ошибка: $e')));
-                                  }
-                                },
-                                isFounder: isFounder,
+                          .map((acc) => Padding(
+                                padding: const EdgeInsets.only(right: 12),
+                                child: AccountCard(
+                                  account: acc,
+                                  onDelete: () async {
+                                    final api = ApiClient();
+                                    try {
+                                      await api.delete('/accounts/${acc['id']}',
+                                          queryParameters: {
+                                            'company_id': widget.company.id
+                                          });
+                                      await _refresh();
+                                    } catch (e) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(content: Text('Ошибка: $e')));
+                                    }
+                                  },
+                                  isFounder: isFounder,
+                                ),
                               ))
                           .toList(),
                     ),
                   ),
                 ),
+                // Вкладки
                 Expanded(
                   child: Column(
                     children: [
@@ -418,7 +408,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                             ),
                             ShowcaseTab(
                               companyId: widget.company.id,
-                              onRefresh: _refresh,   // передаём callback
+                              onRefresh: _refresh,
                             ),
                             ChatAndTasksTab(
                               companyId: widget.company.id,
@@ -454,8 +444,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
               child: const Text('Отмена')),
           TextButton(
               onPressed: () => Navigator.pop(context, true),
-              child:
-                  const Text('Удалить', style: TextStyle(color: Colors.red))),
+              child: const Text('Удалить', style: TextStyle(color: Colors.red))),
         ],
       ),
     );
@@ -477,6 +466,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
   }
 }
 
+// Класс для рисования сетки (оставлен без изменений)
 class _LightGridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {

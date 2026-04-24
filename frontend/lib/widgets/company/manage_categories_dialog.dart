@@ -81,7 +81,7 @@ class _ManageCategoriesDialogState extends State<ManageCategoriesDialog> {
     setState(() => _loading = true);
     final api = ApiClient();
     try {
-      final response = await api.post('/categories', queryParameters: {
+      final response = await api.post('/categories/', queryParameters: {
         'company_id': widget.companyId
       }, data: {
         'name': _nameController.text,

@@ -246,14 +246,14 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
       data['transfer_to_account_id'] = _transferToAccountId;
     }
     try {
-      final response = await api.post('/transactions',
+      final response = await api.post('/transactions/',
           queryParameters: {'company_id': widget.companyId}, data: data);
       final transactionId = response.data['id'];
       if (_photo != null) {
         await api.uploadPhoto('/transactions/$transactionId/upload', _photo!,
             queryParameters: {'company_id': widget.companyId});
       } else if (_webFile != null && _webFile!.bytes != null) {
-        await api.uploadPhotoBytes('/transactions/$transactionId/upload',
+        await api.uploadPhotoBytes('/transactions/$transactionId/upload/',
             _webFile!.bytes!, _webFile!.name,
             queryParameters: {'company_id': widget.companyId});
       }
