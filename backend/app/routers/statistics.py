@@ -360,6 +360,8 @@ async def get_transaction_photo(
 
 # ===================== НОВЫЕ ЭНДПОИНТЫ ДЛЯ ОТЧЁТОВ =====================
 
+from sqlalchemy import text
+
 @router.get("/dynamics")
 async def get_dynamics(
     company_id: int,
@@ -369,7 +371,7 @@ async def get_dynamics(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # Проверка доступа
+    # Проверка доступа (как было)
     if current_user.role == UserRole.FOUNDER:
         result = await db.execute(select(Company).where(Company.id == company_id, Company.founder_id == current_user.id))
     else:
@@ -377,64 +379,57 @@ async def get_dynamics(
     if not result.scalar_one_or_none():
         raise HTTPException(status_code=403, detail="Access denied")
     
-    # Приводим даты к naive (без часового пояса)
+    # Приводим даты к naive
     if start_date.tzinfo is not None:
         start_date = start_date.replace(tzinfo=None)
     if end_date.tzinfo is not None:
         end_date = end_date.replace(tzinfo=None)
     
-    # Используем cast для преобразования даты
+    # Формат группировки
     if interval == 'day':
-        date_trunc = func.date_trunc('day', Transaction.date)
+        format_sql = "to_char(date_trunc('day', date), 'YYYY-MM-DD')"
     elif interval == 'week':
-        date_trunc = func.date_trunc('week', Transaction.date)
+        format_sql = "to_char(date_trunc('week', date), 'IYYY-IW')"
+    elif interval == 'month':
+        format_sql = "to_char(date_trunc('month', date), 'YYYY-MM')"
+    elif interval == 'year':
+        format_sql = "to_char(date_trunc('year', date), 'YYYY')"
     else:
-        date_trunc = func.date_trunc('month', Transaction.date)
+        format_sql = "to_char(date_trunc('day', date), 'YYYY-MM-DD')"
     
-    # Доходы
-    income_query = select(
-        date_trunc.label("period"),
-        func.sum(Transaction.amount).label("total")
-    ).where(
-        Transaction.company_id == company_id,
-        Transaction.type == 'income',
-        Transaction.is_deleted == False,
-        Transaction.date >= start_date,
-        Transaction.date <= end_date
-    ).group_by(date_trunc).order_by(date_trunc)
+    query = text(f"""
+        WITH periods AS (
+            SELECT {format_sql} AS period,
+                   SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) AS income,
+                   SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) AS expense
+            FROM transactions
+            WHERE company_id = :company_id
+              AND is_deleted = false
+              AND date >= :start_date
+              AND date <= :end_date
+            GROUP BY period
+            ORDER BY period
+        )
+        SELECT period, income, expense, income - expense AS profit
+        FROM periods
+    """)
     
-    # Расходы
-    expense_query = select(
-        date_trunc.label("period"),
-        func.sum(Transaction.amount).label("total")
-    ).where(
-        Transaction.company_id == company_id,
-        Transaction.type == 'expense',
-        Transaction.is_deleted == False,
-        Transaction.date >= start_date,
-        Transaction.date <= end_date
-    ).group_by(date_trunc).order_by(date_trunc)
+    result = await db.execute(query, {
+        "company_id": company_id,
+        "start_date": start_date,
+        "end_date": end_date
+    })
     
-    income_result = await db.execute(income_query)
-    expense_result = await db.execute(expense_query)
-    
-    income_map = {row.period.strftime('%Y-%m-%d'): float(row.total) for row in income_result}
-    expense_map = {row.period.strftime('%Y-%m-%d'): float(row.total) for row in expense_result}
-    
-    all_periods = sorted(set(income_map.keys()) | set(expense_map.keys()))
-    
-    result = []
-    for period in all_periods:
-        inc = income_map.get(period, 0)
-        exp = expense_map.get(period, 0)
-        result.append({
-            "period": period,
-            "income": inc,
-            "expense": exp,
-            "profit": inc - exp
-        })
-    
-    return result
+    rows = result.fetchall()
+    return [
+        {
+            "period": row[0],
+            "income": float(row[1]),
+            "expense": float(row[2]),
+            "profit": float(row[3])
+        }
+        for row in rows
+    ]
 
 
 @router.get("/income-by-category")
