@@ -312,3 +312,28 @@ async def get_transaction_comments(
         )
         for c in comments
     ]
+
+@router.delete("/message/{message_id}")
+async def delete_message(
+    message_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    result = await db.execute(select(ChatMessage).where(ChatMessage.id == message_id))
+    msg = result.scalar_one_or_none()
+    if not msg:
+        raise HTTPException(status_code=404, detail="Message not found")
+    if msg.user_id != current_user.id and current_user.role != UserRole.FOUNDER:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    await db.delete(msg)
+    await db.commit()
+    # Отправить WebSocket событие об удалении
+    await manager.broadcast_chat(msg.company_id, {
+        "type": "delete_message",
+        "message_id": message_id,
+    })
+    await manager.notify_company_members(msg.company_id, {
+        "type": "update_counters",
+        "company_id": msg.company_id
+    }, db)
+    return {"detail": "Message deleted"}

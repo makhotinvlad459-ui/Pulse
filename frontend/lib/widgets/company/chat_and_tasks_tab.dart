@@ -16,6 +16,9 @@ import '../../services/image_compression.dart';
 import '../../providers/auth_provider.dart';
 import '../../models/user.dart';
 
+// Перечисление для действий с сообщением
+enum _MessageAction { edit, delete, cancel }
+
 class ChatAndTasksTab extends ConsumerStatefulWidget {
   final int companyId;
   final bool isManager;
@@ -88,7 +91,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
     super.dispose();
   }
 
-  // ======================= ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ ВЛОЖЕНИЙ =======================
+  // ==================== ВЛОЖЕНИЯ И ФАЙЛЫ ====================
   Future<void> _showAttachmentPicker(BuildContext context) async {
     showModalBottomSheet(
       context: context,
@@ -219,7 +222,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
     }
   }
 
-  // ======================= ОСНОВНЫЕ МЕТОДЫ =======================
+  // ==================== ОСНОВНЫЕ МЕТОДЫ ====================
   Future<void> _connectWebSockets() async {
     final api = ApiClient();
     final token = await api.getToken();
@@ -263,6 +266,10 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
             _messages[index]['edited'] = true;
             _messages[index]['updated_at'] = data['updated_at'];
           }
+          break;
+        case 'delete_message':
+          final messageId = data['message_id'];
+          _messages.removeWhere((m) => m['id'] == messageId);
           break;
         case 'clear_chat':
           _messages.clear();
@@ -450,7 +457,44 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
     }
   }
 
-  Future<void> _editMessage(Map<String, dynamic> msg) async {
+  // ==================== ДЕЙСТВИЯ С СООБЩЕНИЯМИ ====================
+  Future<void> _showMessageActions(Map<String, dynamic> msg) async {
+    final colorScheme = Theme.of(context).colorScheme;
+    final action = await showDialog<_MessageAction>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Действия с сообщением', style: TextStyle(color: colorScheme.onSurface)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Icon(Icons.edit, color: colorScheme.primary),
+              title: Text('Редактировать', style: TextStyle(color: colorScheme.onSurface)),
+              onTap: () => Navigator.pop(context, _MessageAction.edit),
+            ),
+            ListTile(
+              leading: Icon(Icons.delete, color: Colors.red),
+              title: Text('Удалить', style: TextStyle(color: Colors.red)),
+              onTap: () => Navigator.pop(context, _MessageAction.delete),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, _MessageAction.cancel),
+            child: Text('Отмена', style: TextStyle(color: colorScheme.onSurfaceVariant)),
+          ),
+        ],
+      ),
+    );
+    if (action == _MessageAction.edit) {
+      await _editMessageContent(msg);
+    } else if (action == _MessageAction.delete) {
+      await _deleteMessage(msg);
+    }
+  }
+
+  Future<void> _editMessageContent(Map<String, dynamic> msg) async {
     final controller = TextEditingController(text: msg['message']);
     final colorScheme = Theme.of(context).colorScheme;
     await showDialog(
@@ -458,26 +502,26 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
       builder: (context) => AlertDialog(
         title: Text('Редактировать сообщение', style: TextStyle(color: colorScheme.onSurface)),
         content: TextField(
-            controller: controller,
-            decoration: InputDecoration(hintText: 'Новый текст', hintStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
-            style: TextStyle(color: colorScheme.onSurface),
-            maxLines: 3),
+          controller: controller,
+          decoration: InputDecoration(hintText: 'Новый текст', hintStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+          style: TextStyle(color: colorScheme.onSurface),
+          maxLines: 3,
+        ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: Text('Отмена', style: TextStyle(color: colorScheme.onSurfaceVariant))),
+            onPressed: () => Navigator.pop(context),
+            child: Text('Отмена', style: TextStyle(color: colorScheme.onSurfaceVariant)),
+          ),
           ElevatedButton(
             onPressed: () async {
               final newText = controller.text.trim();
               if (newText.isEmpty) return;
               final api = ApiClient();
               try {
-                await api.patch('/chat/message/${msg['id']}',
-                    data: {'message': newText});
-                Navigator.pop(context, true);
+                await api.patch('/chat/message/${msg['id']}', data: {'message': newText});
+                if (mounted) Navigator.pop(context);
               } catch (e) {
-                ScaffoldMessenger.of(context)
-                    .showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
               }
             },
             style: ElevatedButton.styleFrom(
@@ -491,7 +535,36 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
     );
   }
 
+  Future<void> _deleteMessage(Map<String, dynamic> msg) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Удалить сообщение?'),
+        content: const Text('Сообщение будет удалено безвозвратно.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отмена')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Удалить', style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    final api = ApiClient();
+    try {
+      await api.delete('/chat/message/${msg['id']}');
+      // Локальное удаление для отзывчивости (WebSocket тоже удалит, но сразу)
+      setState(() {
+        _messages.removeWhere((m) => m['id'] == msg['id']);
+      });
+      _updateUnreadCount();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка удаления: $e')));
+    }
+  }
+
+  // ==================== ЗАДАЧИ (без изменений) ====================
   Future<void> _createTask() async {
+    // ... (ваш существующий код создания задачи)
     if (_employees.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Загрузка списка сотрудников... Попробуйте позже')));
@@ -670,6 +743,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
   List<Map<String, dynamic>> get _acceptedTasks =>
       _tasks.where((t) => t['status'] == 'accepted').toList();
 
+  // ==================== UI ====================
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -692,7 +766,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
           child: TabBarView(
             controller: _tabController,
             children: [
-              // ===================== ЧАТ =====================
+              // ==================== ЧАТ ====================
               Column(
                 children: [
                   if (isFounder)
@@ -789,7 +863,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
                     ),
                 ],
               ),
-              // ===================== ЗАДАЧИ =====================
+              // ==================== ЗАДАЧИ ====================
               Column(
                 children: [
                   if (canCreateTask)
@@ -872,8 +946,8 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
               const Spacer(),
               if (isMe || isFounder)
                 IconButton(
-                  icon: Icon(Icons.edit, size: 16, color: colorScheme.onSurfaceVariant),
-                  onPressed: () => _editMessage(msg),
+                  icon: Icon(Icons.more_vert, size: 16, color: colorScheme.onSurfaceVariant),
+                  onPressed: () => _showMessageActions(msg),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                 ),
@@ -915,13 +989,16 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.attach_file, size: 14),
+                            _getFileIcon(msg['attachment_url']),
                             const SizedBox(width: 4),
-                            Text(
-                              'Вложение',
-                              style: TextStyle(
-                                fontSize: 12,
-                                decoration: TextDecoration.underline,
+                            Flexible(
+                              child: Text(
+                                _getFileName(msg['attachment_url']),
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  decoration: TextDecoration.underline,
+                                ),
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           ],
@@ -938,6 +1015,22 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
         ],
       ),
     );
+  }
+
+  String _getFileName(String url) {
+    return url.split('/').last;
+  }
+
+  Widget _getFileIcon(String url) {
+    final ext = url.split('.').last.toLowerCase();
+    if (ext == 'jpg' || ext == 'jpeg' || ext == 'png') {
+      return const Icon(Icons.image, size: 14, color: Colors.blue);
+    } else if (ext == 'pdf') {
+      return const Icon(Icons.picture_as_pdf, size: 14, color: Colors.blue);
+    } else if (ext == 'doc' || ext == 'docx') {
+      return const Icon(Icons.description, size: 14, color: Colors.blue);
+    }
+    return const Icon(Icons.attach_file, size: 14, color: Colors.blue);
   }
 
   Widget _buildTaskSection(String title, List<Map<String, dynamic>> tasks,
