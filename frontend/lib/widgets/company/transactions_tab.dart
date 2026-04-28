@@ -302,6 +302,7 @@ class _TransactionsTabState extends State<TransactionsTab> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     Map<DateTime, List<Transaction>> grouped = {};
     for (var t in _transactions) {
       DateTime date = t.date.toLocal();
@@ -321,12 +322,13 @@ class _TransactionsTabState extends State<TransactionsTab> {
                 children: [
                   TextButton.icon(
                     onPressed: _selectPeriod,
-                    icon: const Icon(Icons.calendar_today),
+                    icon: Icon(Icons.calendar_today, color: colorScheme.onSurfaceVariant),
                     label: Text(
-                        '${DateFormat('dd.MM.yyyy', 'ru').format(_startDate)} - ${DateFormat('dd.MM.yyyy', 'ru').format(_endDate)}'),
+                        '${DateFormat('dd.MM.yyyy', 'ru').format(_startDate)} - ${DateFormat('dd.MM.yyyy', 'ru').format(_endDate)}',
+                        style: TextStyle(color: colorScheme.onSurfaceVariant)),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.refresh),
+                    icon: Icon(Icons.refresh, color: colorScheme.onSurfaceVariant),
                     onPressed: _loadTransactions,
                   ),
                 ],
@@ -336,8 +338,9 @@ class _TransactionsTabState extends State<TransactionsTab> {
               child: _loading
                   ? const Center(child: CircularProgressIndicator())
                   : _transactions.isEmpty
-                      ? const Center(
-                          child: Text('Нет операций за выбранный период'))
+                      ? Center(
+                          child: Text('Нет операций за выбранный период',
+                              style: TextStyle(color: colorScheme.onSurfaceVariant)))
                       : RefreshIndicator(
                           onRefresh: _loadTransactions,
                           child: ListView.builder(
@@ -372,9 +375,10 @@ class _TransactionsTabState extends State<TransactionsTab> {
                                         Text(
                                           DateFormat('EEEE, d MMMM yyyy', 'ru')
                                               .format(date),
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                               fontWeight: FontWeight.bold,
-                                              fontSize: 16),
+                                              fontSize: 16,
+                                              color: colorScheme.onSurface),
                                         ),
                                         const SizedBox(height: 4),
                                         Wrap(
@@ -384,20 +388,17 @@ class _TransactionsTabState extends State<TransactionsTab> {
                                                 '💹 Оборот: ${turnover.toStringAsFixed(2)} ₽',
                                                 style: TextStyle(
                                                     fontSize: 12,
-                                                    color:
-                                                        Colors.grey.shade700)),
+                                                    color: colorScheme.onSurfaceVariant)),
                                             Text(
                                                 '💵 Нал: ${cashIncome.toStringAsFixed(2)} ₽',
                                                 style: TextStyle(
                                                     fontSize: 12,
-                                                    color:
-                                                        Colors.grey.shade700)),
+                                                    color: colorScheme.onSurfaceVariant)),
                                             Text(
                                                 '💳 Безнал: ${nonCashIncome.toStringAsFixed(2)} ₽',
                                                 style: TextStyle(
                                                     fontSize: 12,
-                                                    color:
-                                                        Colors.grey.shade700)),
+                                                    color: colorScheme.onSurfaceVariant)),
                                           ],
                                         ),
                                       ],
@@ -409,8 +410,8 @@ class _TransactionsTabState extends State<TransactionsTab> {
                                       margin: const EdgeInsets.symmetric(
                                           vertical: 4, horizontal: 8),
                                       color: isDeleted
-                                          ? Colors.grey.shade200
-                                          : Colors.white,
+                                          ? colorScheme.surfaceContainerHighest
+                                          : colorScheme.surface,
                                       child: ListTile(
                                         title: Row(
                                           children: [
@@ -419,10 +420,10 @@ class _TransactionsTabState extends State<TransactionsTab> {
                                               style: TextStyle(
                                                 color: t.type == 'income'
                                                     ? (isDeleted
-                                                        ? Colors.grey
+                                                        ? colorScheme.onSurfaceVariant
                                                         : Colors.green)
                                                     : (isDeleted
-                                                        ? Colors.grey
+                                                        ? colorScheme.onSurfaceVariant
                                                         : Colors.red),
                                                 decoration: isDeleted
                                                     ? TextDecoration.lineThrough
@@ -434,7 +435,7 @@ class _TransactionsTabState extends State<TransactionsTab> {
                                             Text(
                                               'Операция №${t.number}',
                                               style: TextStyle(
-                                                color: isDeleted ? Colors.grey : Colors.black87,
+                                                color: isDeleted ? colorScheme.onSurfaceVariant : colorScheme.onSurface,
                                                 fontSize: 12,
                                               ),
                                             ),
@@ -448,8 +449,8 @@ class _TransactionsTabState extends State<TransactionsTab> {
                                               '${_typeName(t.type)} • ${getCategoryName(t.categoryId)} • ${getAccountName(t.accountId)} • ${t.description ?? ''}',
                                               style: TextStyle(
                                                   color: isDeleted
-                                                      ? Colors.grey
-                                                      : Colors.black87,
+                                                      ? colorScheme.onSurfaceVariant
+                                                      : colorScheme.onSurface,
                                                   fontSize: 12),
                                             ),
                                             if (t.counterparty != null && t.counterparty!.isNotEmpty)
@@ -459,7 +460,7 @@ class _TransactionsTabState extends State<TransactionsTab> {
                                                   'Контрагент: ${t.counterparty}',
                                                   style: TextStyle(
                                                     fontSize: 11,
-                                                    color: isDeleted ? Colors.grey : Colors.grey.shade700,
+                                                    color: isDeleted ? colorScheme.onSurfaceVariant : colorScheme.onSurfaceVariant,
                                                   ),
                                                 ),
                                               ),
@@ -475,7 +476,7 @@ class _TransactionsTabState extends State<TransactionsTab> {
                                                         'Товары: ${t.items.map((i) => '${i.productName} (${i.quantity} шт)').join(', ')}',
                                                         style: TextStyle(
                                                           fontSize: 11,
-                                                          color: Colors.grey.shade700,
+                                                          color: colorScheme.onSurfaceVariant,
                                                         ),
                                                       ),
                                                     ),
@@ -488,8 +489,8 @@ class _TransactionsTabState extends State<TransactionsTab> {
                                                 style: TextStyle(
                                                     fontSize: 10,
                                                     color: isDeleted
-                                                        ? Colors.grey
-                                                        : Colors.grey.shade600),
+                                                        ? colorScheme.onSurfaceVariant
+                                                        : colorScheme.onSurfaceVariant),
                                               ),
                                             if (t.updaterName != null &&
                                                 t.updaterName != t.creatorName)
@@ -498,8 +499,8 @@ class _TransactionsTabState extends State<TransactionsTab> {
                                                 style: TextStyle(
                                                     fontSize: 10,
                                                     color: isDeleted
-                                                        ? Colors.grey
-                                                        : Colors.grey.shade600),
+                                                        ? colorScheme.onSurfaceVariant
+                                                        : colorScheme.onSurfaceVariant),
                                               ),
                                           ],
                                         ),
@@ -540,8 +541,8 @@ class _TransactionsTabState extends State<TransactionsTab> {
                                                   .format(t.date.toLocal()),
                                               style: TextStyle(
                                                   color: isDeleted
-                                                      ? Colors.grey
-                                                      : Colors.black54),
+                                                      ? colorScheme.onSurfaceVariant
+                                                      : colorScheme.onSurfaceVariant),
                                             ),
                                           ],
                                         ),
@@ -577,7 +578,8 @@ class _TransactionsTabState extends State<TransactionsTab> {
                 ),
               );
             },
-            backgroundColor: Colors.blueGrey.shade300,
+            backgroundColor: colorScheme.primary,
+            foregroundColor: colorScheme.onPrimary,
             child: const Icon(Icons.add),
           ),
         ),

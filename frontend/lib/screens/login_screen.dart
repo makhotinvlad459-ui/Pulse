@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shimmer/shimmer.dart';
 import '../providers/auth_provider.dart';
+import '../providers/theme_provider.dart';
 import '../widgets/video_background.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -22,11 +24,28 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
+  String _getVideoPath(AppTheme theme) {
+    switch (theme) {
+      case AppTheme.light:
+        return 'assets/videos/city.mp4';
+      case AppTheme.dark:
+        return 'assets/videos/dark1.mp4';
+      case AppTheme.blue:
+        return 'assets/videos/city_blue.mp4'; // если нет, используйте city.mp4
+      case AppTheme.green:
+        return 'assets/videos/city_green.mp4';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
+    final currentTheme = ref.watch(themeProvider);
+    final videoPath = _getVideoPath(currentTheme);
+
     return VideoBackground(
-      videoPath: 'assets/videos/city.mp4',
+      key: ValueKey(videoPath),
+      videoPath: videoPath,
       fit: BoxFit.cover,
       muted: true,
       loop: true,
@@ -38,48 +57,50 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Заголовок
                 TweenAnimationBuilder(
                   tween: Tween<double>(begin: 0.9, end: 1.0),
                   duration: const Duration(milliseconds: 800),
                   builder: (context, double scale, child) {
                     return Transform.scale(
                       scale: scale,
-                      child: Column(
-                        children: [
-                          Text(
-                            'Пульс',
-                            style: GoogleFonts.orbitron(
-                              fontSize: 52,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 2,
-                              color: Colors.grey.shade800,
-                              shadows: [
-                                Shadow(
-                                  offset: const Offset(0, 0),
-                                  blurRadius: 6,
-                                  color: Colors.grey.shade400,
+                      child: Shimmer.fromColors(
+                        baseColor: Colors.grey.shade400,
+                        highlightColor: Colors.grey.shade800,
+                        period: const Duration(seconds: 2),
+                        child: Column(
+                          children: [
+                            Text(
+                              'Пульс',
+                              style: GoogleFonts.orbitron(
+                                fontSize: 52,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 2,
+                                color: Colors.grey.shade800,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Shimmer.fromColors(
+                              baseColor: Colors.grey.shade400,
+                              highlightColor: Colors.grey.shade700,
+                              period: const Duration(seconds: 2),
+                              child: Text(
+                                'ваших финансов',
+                                style: GoogleFonts.orbitron(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                  letterSpacing: 1.5,
+                                  color: Colors.grey.shade600,
                                 ),
-                              ],
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'ваших предприятий',
-                            style: GoogleFonts.orbitron(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                              letterSpacing: 1.5,
-                              color: Colors.grey.shade600,
-                            ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     );
                   },
                 ),
                 const SizedBox(height: 40),
-                // Карточка входа (полупрозрачная)
+                // Карточка входа (без изменений)
                 Card(
                   elevation: 0,
                   color: Colors.white.withOpacity(0.5),
@@ -152,7 +173,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               }
                             },
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.grey.shade800.withOpacity(0.8), // полупрозрачный
+                              backgroundColor: Colors.grey.shade800.withOpacity(0.8),
                               foregroundColor: Colors.white,
                               minimumSize: const Size(double.infinity, 48),
                               shape: RoundedRectangleBorder(
@@ -167,7 +188,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             Navigator.pushNamed(context, '/register');
                           },
                           style: TextButton.styleFrom(
-                            foregroundColor: Colors.grey.shade900, // более контрастный
+                            foregroundColor: Colors.grey.shade900,
                           ),
                           child: Text(
                             'Нет аккаунта? Создать аккаунт',
@@ -182,7 +203,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           'Приложение не собирает персональные данные пользователей и не обрабатывает их.\n',
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            color: Colors.grey.shade700, // чуть темнее для читаемости
+                            color: Colors.grey.shade700,
                             fontSize: 12,
                             height: 1.4,
                           ),

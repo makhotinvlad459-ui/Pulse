@@ -23,51 +23,11 @@ class _ManageCategoriesDialogState extends State<ManageCategoriesDialog> {
   late List<dynamic> _localCategories;
 
   final List<String> _icons = [
-    '💼',
-    '💰',
-    '🏦',
-    '📈',
-    '📉',
-    '💳',
-    '💸',
-    '💵',
-    '💶',
-    '💷',
-    '👥',
-    '👤',
-    '🤝',
-    '👨‍💼',
-    '👩‍💼',
-    '🛒',
-    '📦',
-    '🚚',
-    '📊',
-    '📋',
-    '🗂️',
-    '📎',
-    '🍔',
-    '🍕',
-    '☕',
-    '🥗',
-    '🚗',
-    '⛽',
-    '✈️',
-    '🏠',
-    '🔧',
-    '💡',
-    '📱',
-    '🎓',
-    '💊',
-    '🎁',
-    '⚖️',
-    '🖥️',
-    '🎨',
-    '🌱',
-    '🐾',
-    '💪',
-    '🎬',
-    '📚',
-    '🔨'
+    '💼', '💰', '🏦', '📈', '📉', '💳', '💸', '💵', '💶', '💷',
+    '👥', '👤', '🤝', '👨‍💼', '👩‍💼', '🛒', '📦', '🚚', '📊', '📋',
+    '🗂️', '📎', '🍔', '🍕', '☕', '🥗', '🚗', '⛽', '✈️', '🏠',
+    '🔧', '💡', '📱', '🎓', '💊', '🎁', '⚖️', '🖥️', '🎨', '🌱',
+    '🐾', '💪', '🎬', '📚', '🔨'
   ];
 
   @override
@@ -88,13 +48,12 @@ class _ManageCategoriesDialogState extends State<ManageCategoriesDialog> {
         'type': 'income',
         'icon': _selectedIcon,
       });
-      // Добавляем новую категорию в локальный список
       final newCategory = response.data;
       setState(() {
         _localCategories.add(newCategory);
       });
       _nameController.clear();
-      widget.onSuccess(); // уведомляем родителя, что данные изменились
+      widget.onSuccess();
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('Категория добавлена')));
     } catch (e) {
@@ -124,8 +83,10 @@ class _ManageCategoriesDialogState extends State<ManageCategoriesDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return AlertDialog(
-      title: const Text('Управление категориями'),
+      title: Text('Управление категориями', style: TextStyle(color: colorScheme.onSurface)),
       content: SizedBox(
         width: 500,
         height: 500,
@@ -136,23 +97,41 @@ class _ManageCategoriesDialogState extends State<ManageCategoriesDialog> {
                 Expanded(
                     child: TextField(
                         controller: _nameController,
-                        decoration:
-                            const InputDecoration(labelText: 'Название'))),
+                        style: TextStyle(color: colorScheme.onSurface),
+                        decoration: InputDecoration(
+                          labelText: 'Название',
+                          labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+                          border: OutlineInputBorder(
+                            borderSide: BorderSide(color: colorScheme.outline),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderSide: BorderSide(color: colorScheme.outline),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderSide: BorderSide(color: colorScheme.primary),
+                          ),
+                        ))),
                 const SizedBox(width: 8),
                 DropdownButton<String>(
                   value: _selectedIcon,
                   items: _icons
                       .map((icon) =>
-                          DropdownMenuItem(value: icon, child: Text(icon)))
+                          DropdownMenuItem(value: icon, child: Text(icon, style: TextStyle(fontSize: 24))))
                       .toList(),
                   onChanged: (v) => setState(() => _selectedIcon = v!),
+                  dropdownColor: colorScheme.surface,
                 ),
                 const SizedBox(width: 8),
                 _loading
                     ? const SizedBox(
-                        width: 24, child: CircularProgressIndicator())
+                        width: 24, height: 24, child: CircularProgressIndicator())
                     : ElevatedButton(
-                        onPressed: _addCategory, child: const Text('Добавить')),
+                        onPressed: _addCategory,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: colorScheme.primary,
+                          foregroundColor: colorScheme.onPrimary,
+                        ),
+                        child: const Text('Добавить')),
               ],
             ),
             const SizedBox(height: 16),
@@ -163,8 +142,8 @@ class _ManageCategoriesDialogState extends State<ManageCategoriesDialog> {
                   final c = _localCategories[index];
                   if (c['is_system']) return const SizedBox.shrink();
                   return ListTile(
-                    leading: Text(c['icon'] ?? '📁'),
-                    title: Text(c['name']),
+                    leading: Text(c['icon'] ?? '📁', style: const TextStyle(fontSize: 24)),
+                    title: Text(c['name'], style: TextStyle(color: colorScheme.onSurface)),
                     trailing: IconButton(
                         icon: const Icon(Icons.delete, color: Colors.red),
                         onPressed: () => _deleteCategory(c['id'])),
@@ -178,7 +157,7 @@ class _ManageCategoriesDialogState extends State<ManageCategoriesDialog> {
       actions: [
         TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Закрыть')),
+            child: Text('Закрыть', style: TextStyle(color: colorScheme.onSurfaceVariant))),
       ],
     );
   }

@@ -18,7 +18,7 @@ dependencies:
   riverpod_annotation: ^2.3.0
   flutter_secure_storage: ^9.0.0
   image_picker: ^1.0.5
-  fl_chart: ^0.66.0
+  fl_chart: ^1.2.0
   intl: ^0.20.0
   table_calendar: ^3.0.9
   path_provider: ^2.1.1
@@ -28,6 +28,8 @@ dependencies:
   audioplayers: ^6.0.0
   background: ^1.3.0
   universal_html: ^2.3.0
+  shared_preferences: ^2.2.2
+  shimmer: ^3.0.0
   flutter_localizations:
     sdk: flutter
 
@@ -42,3 +44,7 @@ flutter:
   assets:
     - assets/videos/city.mp4
     - assets/videos/for_home.mp4
+    - assets/videos/dark1.mp4
+    - assets/videos/city_blue.mp4
+    - assets/videos/city_green.mp4
+  

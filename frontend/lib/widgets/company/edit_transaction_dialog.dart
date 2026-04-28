@@ -315,8 +315,7 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
         if (errorMessage.contains('Insufficient stock')) {
           errorMessage = 'Недостаточно товара на складе для продажи';
         }
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Ошибка: $errorMessage')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $errorMessage')));
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -341,7 +340,7 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
         content: Text(content),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отмена')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: Text(confirmText, style: TextStyle(color: Colors.red))),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: Text(confirmText, style: const TextStyle(color: Colors.red))),
         ],
       ),
     );
@@ -367,6 +366,7 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     final showAmountField = _selectedProducts.isEmpty;
     final effectiveAmount = showAmountField ? _amount : _calculatedAmount;
 
@@ -379,7 +379,10 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
     }
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      title: Text(_type == 'income' ? 'Редактировать приход (продажа)' : (_type == 'expense' ? 'Редактировать расход (покупка)' : 'Редактировать перевод')),
+      title: Text(
+        _type == 'income' ? 'Редактировать приход (продажа)' : (_type == 'expense' ? 'Редактировать расход (покупка)' : 'Редактировать перевод'),
+        style: TextStyle(color: colorScheme.onSurface),
+      ),
       content: Container(
         width: double.maxFinite,
         constraints: const BoxConstraints(maxHeight: 550),
@@ -393,12 +396,12 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
                     child: SegmentedButton<String>(
                       style: ButtonStyle(
                         foregroundColor: MaterialStateProperty.resolveWith((states) {
-                          if (states.contains(MaterialState.selected)) return Colors.black;
-                          return Colors.grey.shade700;
+                          if (states.contains(MaterialState.selected)) return colorScheme.onSurface;
+                          return colorScheme.onSurfaceVariant;
                         }),
                         backgroundColor: MaterialStateProperty.resolveWith((states) {
-                          if (states.contains(MaterialState.selected)) return Colors.blue.shade200;
-                          return Colors.grey.shade200;
+                          if (states.contains(MaterialState.selected)) return colorScheme.primary.withOpacity(0.2);
+                          return colorScheme.surfaceContainerHighest;
                         }),
                       ),
                       segments: const [
@@ -425,13 +428,23 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
               const SizedBox(height: 12),
               TextFormField(
                 initialValue: _counterparty,
-                decoration: const InputDecoration(labelText: 'Контрагент (необязательно)', border: OutlineInputBorder()),
+                decoration: InputDecoration(
+                  labelText: 'Контрагент (необязательно)',
+                  labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+                  border: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
+                  enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
+                  focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.primary)),
+                ),
+                style: TextStyle(color: colorScheme.onSurface),
                 onChanged: (v) => _counterparty = v,
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<int>(
                 value: _accountId,
-                items: widget.accounts.map<DropdownMenuItem<int>>((a) => DropdownMenuItem<int>(value: a['id'], child: Text(a['name']))).toList(),
+                items: widget.accounts.map<DropdownMenuItem<int>>((a) => DropdownMenuItem<int>(
+                      value: a['id'],
+                      child: Text(a['name'], style: TextStyle(color: colorScheme.onSurface)),
+                    )).toList(),
                 onChanged: (v) {
                   setState(() {
                     _accountId = v!;
@@ -442,22 +455,37 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
                     }
                   });
                 },
-                decoration: const InputDecoration(labelText: 'Счёт', border: OutlineInputBorder()),
+                decoration: InputDecoration(
+                  labelText: 'Счёт',
+                  labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+                  border: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
+                  enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
+                  focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.primary)),
+                ),
+                dropdownColor: colorScheme.surface,
+                style: TextStyle(color: colorScheme.onSurface),
               ),
               const SizedBox(height: 12),
               if (showAmountField)
                 TextFormField(
                   initialValue: _amount.toString(),
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Сумма', border: OutlineInputBorder()),
+                  decoration: InputDecoration(
+                    labelText: 'Сумма',
+                    labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+                    border: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
+                    enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
+                    focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.primary)),
+                  ),
+                  style: TextStyle(color: colorScheme.onSurface),
                   onChanged: (v) => _amount = double.tryParse(v) ?? 0,
                 ),
               if (!showAmountField)
-                Text('Сумма: ${effectiveAmount.toStringAsFixed(2)} ₽', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                Text('Сумма: ${effectiveAmount.toStringAsFixed(2)} ₽', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
               const SizedBox(height: 12),
               ListTile(
-                title: const Text('Дата'),
-                trailing: Text(DateFormat('dd.MM.yyyy', 'ru').format(_date)),
+                title: Text('Дата', style: TextStyle(color: colorScheme.onSurface)),
+                trailing: Text(DateFormat('dd.MM.yyyy', 'ru').format(_date), style: TextStyle(color: colorScheme.onSurfaceVariant)),
                 onTap: () async {
                   final picked = await showDatePicker(
                     context: context,
@@ -473,21 +501,50 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
               if ((_type == 'income' || _type == 'expense') && _selectedProducts.isEmpty)
                 DropdownButtonFormField<int>(
                   value: _categoryId,
-                  items: widget.categories.map<DropdownMenuItem<int>>((c) => DropdownMenuItem<int>(value: c['id'], child: Text('${c['icon'] ?? '📁'} ${c['name']}'))).toList(),
+                  items: widget.categories.map<DropdownMenuItem<int>>((c) => DropdownMenuItem<int>(
+                        value: c['id'],
+                        child: Text('${c['icon'] ?? '📁'} ${c['name']}', style: TextStyle(color: colorScheme.onSurface)),
+                      )).toList(),
                   onChanged: (v) => setState(() => _categoryId = v),
-                  decoration: const InputDecoration(labelText: 'Категория (необязательно)', border: OutlineInputBorder()),
+                  decoration: InputDecoration(
+                    labelText: 'Категория (необязательно)',
+                    labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+                    border: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
+                    enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
+                    focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.primary)),
+                  ),
+                  dropdownColor: colorScheme.surface,
+                  style: TextStyle(color: colorScheme.onSurface),
                 ),
               if (_type == 'transfer')
                 DropdownButtonFormField<int>(
                   value: _transferToAccountId,
-                  items: widget.accounts.map<DropdownMenuItem<int>>((a) => DropdownMenuItem<int>(value: a['id'], child: Text(a['name']))).toList(),
+                  items: widget.accounts.map<DropdownMenuItem<int>>((a) => DropdownMenuItem<int>(
+                        value: a['id'],
+                        child: Text(a['name'], style: TextStyle(color: colorScheme.onSurface)),
+                      )).toList(),
                   onChanged: (v) => setState(() => _transferToAccountId = v),
-                  decoration: const InputDecoration(labelText: 'Счёт получатель', border: OutlineInputBorder()),
+                  decoration: InputDecoration(
+                    labelText: 'Счёт получатель',
+                    labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+                    border: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
+                    enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
+                    focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.primary)),
+                  ),
+                  dropdownColor: colorScheme.surface,
+                  style: TextStyle(color: colorScheme.onSurface),
                 ),
               const SizedBox(height: 12),
               TextFormField(
                 initialValue: _description,
-                decoration: const InputDecoration(labelText: 'Описание', border: OutlineInputBorder()),
+                decoration: InputDecoration(
+                  labelText: 'Описание',
+                  labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+                  border: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
+                  enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
+                  focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.primary)),
+                ),
+                style: TextStyle(color: colorScheme.onSurface),
                 onChanged: (v) => _description = v,
               ),
               if (_type != 'transfer') ...[
@@ -499,14 +556,17 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
                         onPressed: _addProduct,
                         icon: const Icon(Icons.add_shopping_cart),
                         label: const Text('Добавить товар'),
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade200, foregroundColor: Colors.black),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: colorScheme.primary.withOpacity(0.2),
+                          foregroundColor: colorScheme.onSurface,
+                        ),
                       ),
                     ),
                   ],
                 ),
                 if (_selectedProducts.isNotEmpty) ...[
                   const SizedBox(height: 8),
-                  const Text('Товары в операции:', style: TextStyle(fontWeight: FontWeight.bold)),
+                  Text('Товары в операции:', style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
                   const SizedBox(height: 4),
                   ConstrainedBox(
                     constraints: const BoxConstraints(maxHeight: 150),
@@ -520,13 +580,13 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
                         final total = (p['total'] as num?)?.toDouble() ?? 0;
                         return ListTile(
                           dense: true,
-                          title: Text(productName),
-                          subtitle: Text('$quantity шт — ${total.toStringAsFixed(2)} ₽'),
+                          title: Text(productName, style: TextStyle(color: colorScheme.onSurface)),
+                          subtitle: Text('$quantity шт — ${total.toStringAsFixed(2)} ₽', style: TextStyle(color: colorScheme.onSurfaceVariant)),
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               IconButton(
-                                icon: const Icon(Icons.edit, size: 18, color: Colors.blue),
+                                icon: Icon(Icons.edit, size: 18, color: colorScheme.primary),
                                 onPressed: () => _editProduct(idx),
                               ),
                               IconButton(
@@ -549,13 +609,19 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
                     onPressed: _pickFile,
                     icon: const Icon(Icons.attach_file),
                     label: const Text('Файл'),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade200, foregroundColor: Colors.black),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: colorScheme.primary.withOpacity(0.2),
+                      foregroundColor: colorScheme.onSurface,
+                    ),
                   ),
                   ElevatedButton.icon(
                     onPressed: _takePhoto,
                     icon: const Icon(Icons.camera_alt),
                     label: const Text('Камера'),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade200, foregroundColor: Colors.black),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: colorScheme.primary.withOpacity(0.2),
+                      foregroundColor: colorScheme.onSurface,
+                    ),
                   ),
                 ],
               ),
@@ -564,9 +630,9 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
                   padding: const EdgeInsets.only(top: 8),
                   child: Row(
                     children: [
-                      const Icon(Icons.attachment, color: Colors.blue),
+                      Icon(Icons.attachment, color: colorScheme.primary),
                       const SizedBox(width: 8),
-                      const Text('Есть вложение'),
+                      Text('Есть вложение', style: TextStyle(color: colorScheme.onSurface)),
                       TextButton(onPressed: _deleteAttachment, child: const Text('Удалить', style: TextStyle(color: Colors.red))),
                     ],
                   ),
@@ -578,7 +644,7 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
                     children: [
                       const Icon(Icons.check_circle, color: Colors.green),
                       const SizedBox(width: 8),
-                      Text(_photo != null ? _photo!.name : _webFile!.name),
+                      Text(_photo != null ? _photo!.name : _webFile!.name, style: TextStyle(color: colorScheme.onSurface)),
                       IconButton(
                         icon: const Icon(Icons.clear, size: 16),
                         onPressed: () => setState(() {
@@ -594,11 +660,20 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
-        TextButton(onPressed: _deleteTransaction, child: const Text('Удалить', style: TextStyle(color: Colors.red))),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text('Отмена', style: TextStyle(color: colorScheme.onSurfaceVariant)),
+        ),
+        TextButton(
+          onPressed: _deleteTransaction,
+          child: const Text('Удалить', style: TextStyle(color: Colors.red)),
+        ),
         ElevatedButton(
           onPressed: _loading ? null : _save,
-          style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade200, foregroundColor: Colors.black),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: colorScheme.primary,
+            foregroundColor: colorScheme.onPrimary,
+          ),
           child: const Text('Сохранить'),
         ),
       ],

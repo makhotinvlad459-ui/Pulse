@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:convert';
 import '../../services/api_client.dart';
 
 class RecipeEditor extends StatefulWidget {
@@ -34,6 +33,7 @@ class _RecipeEditorState extends State<RecipeEditor> {
 
   Future<void> _addIngredient() async {
     List<dynamic> products = [];
+    final colorScheme = Theme.of(context).colorScheme;
     try {
       final res = await _api.get('/products', queryParameters: {'company_id': widget.companyId});
       products = res.data;
@@ -52,12 +52,26 @@ class _RecipeEditorState extends State<RecipeEditor> {
       builder: (context) => StatefulBuilder(
         builder: (context, setStateDialog) {
           return AlertDialog(
-            title: const Text('Добавить ингредиент'),
+            title: Text('Добавить ингредиент', style: TextStyle(color: colorScheme.onSurface)),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 DropdownButtonFormField<int>(
-                  decoration: const InputDecoration(labelText: 'Товар'),
+                  decoration: InputDecoration(
+                    labelText: 'Товар',
+                    labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+                    border: OutlineInputBorder(
+                      borderSide: BorderSide(color: colorScheme.outline),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: colorScheme.outline),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: colorScheme.primary),
+                    ),
+                  ),
+                  dropdownColor: colorScheme.surface,
+                  style: TextStyle(color: colorScheme.onSurface),
                   items: products.map((p) {
                     return DropdownMenuItem<int>(
                       value: p['id'],
@@ -74,13 +88,28 @@ class _RecipeEditorState extends State<RecipeEditor> {
                 const SizedBox(height: 8),
                 TextField(
                   controller: quantityController,
-                  decoration: const InputDecoration(labelText: 'Количество'),
+                  style: TextStyle(color: colorScheme.onSurface),
+                  decoration: InputDecoration(
+                    labelText: 'Количество',
+                    labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+                    border: OutlineInputBorder(
+                      borderSide: BorderSide(color: colorScheme.outline),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: colorScheme.outline),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: colorScheme.primary),
+                    ),
+                  ),
                   keyboardType: TextInputType.number,
                 ),
               ],
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
+              TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text('Отмена', style: TextStyle(color: colorScheme.onSurfaceVariant))),
               ElevatedButton(
                 onPressed: () {
                   final q = double.tryParse(quantityController.text);
@@ -98,6 +127,10 @@ class _RecipeEditorState extends State<RecipeEditor> {
                   });
                   Navigator.pop(context);
                 },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: colorScheme.primary,
+                  foregroundColor: colorScheme.onPrimary,
+                ),
                 child: const Text('Добавить'),
               ),
             ],
@@ -116,6 +149,8 @@ class _RecipeEditorState extends State<RecipeEditor> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -127,14 +162,17 @@ class _RecipeEditorState extends State<RecipeEditor> {
                 onPressed: _addIngredient,
                 icon: const Icon(Icons.add),
                 label: const Text('Добавить ингредиент'),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade200),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: colorScheme.primary.withOpacity(0.2),
+                  foregroundColor: colorScheme.onSurface,
+                ),
               ),
             ),
           ],
         ),
         const SizedBox(height: 8),
         if (_items.isNotEmpty) ...[
-          const Text('Ингредиенты:', style: TextStyle(fontWeight: FontWeight.bold)),
+          Text('Ингредиенты:', style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
           const SizedBox(height: 4),
           Wrap(
             spacing: 8,
@@ -143,9 +181,11 @@ class _RecipeEditorState extends State<RecipeEditor> {
               final idx = entry.key;
               final ing = entry.value;
               return Chip(
-                label: Text('${ing['product_name']} (${ing['quantity']} шт)'),
+                label: Text('${ing['product_name']} (${ing['quantity']} шт)',
+                    style: TextStyle(color: colorScheme.onSurface)),
                 onDeleted: () => _removeIngredient(idx),
-                deleteIcon: const Icon(Icons.close, size: 16),
+                deleteIcon: const Icon(Icons.close, size: 16, color: Colors.grey),
+                backgroundColor: colorScheme.surfaceContainerHighest,
               );
             }).toList(),
           ),

@@ -84,6 +84,7 @@ class TransactionCreate(BaseModel):
     items: Optional[List[TransactionItemCreate]] = []
     counterparty: Optional[str] = None  
     showcase_item_id: Optional[int] = None
+    quantity: Optional[int] = 1
     
 class TransactionItemResponse(BaseModel):
     product_id: int
@@ -113,6 +114,7 @@ class TransactionResponse(BaseModel):
     items: List[TransactionItemResponse] = []
     counterparty: Optional[str] = None  
     showcase_item_id: Optional[int] = None
+    quantity: int = 1
     class Config:
         from_attributes = True
 

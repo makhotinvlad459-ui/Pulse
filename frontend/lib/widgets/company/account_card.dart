@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 class AccountCard extends StatelessWidget {
   final Map<String, dynamic> account;
   final VoidCallback onDelete;
-  final bool isFounder; // новый параметр
+  final bool isFounder;
 
   const AccountCard({
     super.key,
@@ -14,6 +14,7 @@ class AccountCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     String icon;
     if (account['type'] == 'cash')
       icon = '💵';
@@ -24,12 +25,15 @@ class AccountCard extends StatelessWidget {
 
     final isArchive = account['name'] == 'Архив';
     final balance = (account['balance'] as num).toDouble();
-    // Удалять могут только учредители, и только не системные счета (не 'cash'/'bank') и не архив
     final canDelete = isFounder && account['type'] == 'other' && !isArchive;
 
     return Card(
       margin: const EdgeInsets.only(right: 12),
-      color: Colors.white,
+      color: colorScheme.surface,
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: SizedBox(
         width: 120,
         height: 90,
@@ -46,15 +50,17 @@ class AccountCard extends StatelessWidget {
                   Expanded(
                     child: Text(
                       account['name'],
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 12),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                        color: colorScheme.onSurface,
+                      ),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   if (canDelete)
                     IconButton(
-                      icon:
-                          const Icon(Icons.delete, size: 14, color: Colors.red),
+                      icon: const Icon(Icons.delete, size: 14, color: Colors.red),
                       onPressed: onDelete,
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
@@ -64,22 +70,29 @@ class AccountCard extends StatelessWidget {
               if (!isArchive || balance != 0)
                 Text(
                   '${balance.toStringAsFixed(2)} ₽',
-                  style: const TextStyle(
-                      fontSize: 14, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: colorScheme.onSurface,
+                  ),
                 )
               else
-                const Text(
+                Text(
                   'Архив',
                   style: TextStyle(
-                      fontSize: 12,
-                      fontStyle: FontStyle.italic,
-                      color: Colors.grey),
+                    fontSize: 12,
+                    fontStyle: FontStyle.italic,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
                 ),
               Text(
                 account['type'] == 'cash'
                     ? 'Наличные'
                     : (account['type'] == 'bank' ? 'Банк' : 'Пользовательский'),
-                style: const TextStyle(fontSize: 10),
+                style: TextStyle(
+                  fontSize: 10,
+                  color: colorScheme.onSurfaceVariant,
+                ),
               ),
             ],
           ),

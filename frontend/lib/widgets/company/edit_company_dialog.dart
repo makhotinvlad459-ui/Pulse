@@ -61,8 +61,10 @@ class _EditCompanyDialogState extends State<EditCompanyDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return AlertDialog(
-      title: const Text('Редактировать компанию'),
+      title: Text('Редактировать компанию', style: TextStyle(color: colorScheme.onSurface)),
       content: Form(
         key: _formKey,
         child: SingleChildScrollView(
@@ -70,24 +72,88 @@ class _EditCompanyDialogState extends State<EditCompanyDialog> {
             children: [
               TextFormField(
                   controller: _nameController,
-                  decoration: const InputDecoration(labelText: 'Название'),
+                  style: TextStyle(color: colorScheme.onSurface),
+                  decoration: InputDecoration(
+                    labelText: 'Название',
+                    labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+                    border: OutlineInputBorder(
+                      borderSide: BorderSide(color: colorScheme.outline),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: colorScheme.outline),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: colorScheme.primary),
+                    ),
+                  ),
                   validator: (v) => v!.isEmpty ? 'Введите название' : null),
               TextFormField(
                   controller: _innController,
-                  decoration: const InputDecoration(labelText: 'ИНН'),
+                  style: TextStyle(color: colorScheme.onSurface),
+                  decoration: InputDecoration(
+                    labelText: 'ИНН',
+                    labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+                    border: OutlineInputBorder(
+                      borderSide: BorderSide(color: colorScheme.outline),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: colorScheme.outline),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: colorScheme.primary),
+                    ),
+                  ),
                   validator: (v) => v!.isEmpty ? 'Введите ИНН' : null),
               TextFormField(
                   controller: _bankAccountController,
-                  decoration: const InputDecoration(labelText: 'Р/счёт'),
+                  style: TextStyle(color: colorScheme.onSurface),
+                  decoration: InputDecoration(
+                    labelText: 'Р/счёт',
+                    labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+                    border: OutlineInputBorder(
+                      borderSide: BorderSide(color: colorScheme.outline),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: colorScheme.outline),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: colorScheme.primary),
+                    ),
+                  ),
                   validator: (v) => v!.isEmpty ? 'Введите р/счёт' : null),
               TextFormField(
                   controller: _managerNameController,
-                  decoration:
-                      const InputDecoration(labelText: 'Управляющий (ФИО)'),
+                  style: TextStyle(color: colorScheme.onSurface),
+                  decoration: InputDecoration(
+                    labelText: 'Управляющий (ФИО)',
+                    labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+                    border: OutlineInputBorder(
+                      borderSide: BorderSide(color: colorScheme.outline),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: colorScheme.outline),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: colorScheme.primary),
+                    ),
+                  ),
                   validator: (v) => v!.isEmpty ? 'Введите ФИО' : null),
               TextFormField(
                   controller: _managerPhoneController,
-                  decoration: const InputDecoration(labelText: 'Телефон'),
+                  style: TextStyle(color: colorScheme.onSurface),
+                  decoration: InputDecoration(
+                    labelText: 'Телефон',
+                    labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+                    border: OutlineInputBorder(
+                      borderSide: BorderSide(color: colorScheme.outline),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: colorScheme.outline),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: colorScheme.primary),
+                    ),
+                  ),
                   validator: (v) => v!.isEmpty ? 'Введите телефон' : null),
             ],
           ),
@@ -96,9 +162,14 @@ class _EditCompanyDialogState extends State<EditCompanyDialog> {
       actions: [
         TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Отмена')),
+            child: Text('Отмена', style: TextStyle(color: colorScheme.onSurfaceVariant))),
         ElevatedButton(
-            onPressed: _saving ? null : _save, child: const Text('Сохранить')),
+            onPressed: _saving ? null : _save,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: colorScheme.primary,
+              foregroundColor: colorScheme.onPrimary,
+            ),
+            child: const Text('Сохранить')),
       ],
     );
   }

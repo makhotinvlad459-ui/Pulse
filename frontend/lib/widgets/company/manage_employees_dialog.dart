@@ -18,7 +18,7 @@ class _ManageEmployeesDialogState extends State<ManageEmployeesDialog> {
   final _formKey = GlobalKey<FormState>();
   final _phoneController = TextEditingController();
   final _fullNameController = TextEditingController();
-  String _selectedRole = 'employee'; // 'employee' или 'manager'
+  String _selectedRole = 'employee';
   bool _adding = false;
 
   @override
@@ -57,7 +57,6 @@ class _ManageEmployeesDialogState extends State<ManageEmployeesDialog> {
       );
       final data = response.data;
       final userId = data['user_id'];
-      // Если выбрана роль manager, то после добавления назначаем управляющим
       if (_selectedRole == 'manager') {
         await api.put('/companies/${widget.companyId}/manager',
             data: {'user_id': userId});
@@ -82,14 +81,16 @@ class _ManageEmployeesDialogState extends State<ManageEmployeesDialog> {
   }
 
   void _showPasswordDialog(String fullName, String password) {
+    final colorScheme = Theme.of(context).colorScheme;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Пароль для $fullName'),
+        title: Text('Пароль для $fullName', style: TextStyle(color: colorScheme.onSurface)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Логин: телефон\nПароль: $password'),
+            Text('Логин: телефон', style: TextStyle(color: colorScheme.onSurface)),
+            Text('Пароль: $password', style: TextStyle(color: colorScheme.onSurface)),
             const SizedBox(height: 16),
             ElevatedButton.icon(
               onPressed: () {
@@ -99,13 +100,17 @@ class _ManageEmployeesDialogState extends State<ManageEmployeesDialog> {
               },
               icon: const Icon(Icons.copy),
               label: const Text('Копировать пароль'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: colorScheme.primary,
+                foregroundColor: colorScheme.onPrimary,
+              ),
             ),
           ],
         ),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Закрыть')),
+              child: Text('Закрыть', style: TextStyle(color: colorScheme.onSurfaceVariant))),
         ],
       ),
     );
@@ -129,7 +134,7 @@ class _ManageEmployeesDialogState extends State<ManageEmployeesDialog> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Удалить $fullName?'),
+        title: Text('Удалить $fullName?', style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
         content: const Text('Сотрудник потеряет доступ к компании.'),
         actions: [
           TextButton(
@@ -137,8 +142,7 @@ class _ManageEmployeesDialogState extends State<ManageEmployeesDialog> {
               child: const Text('Отмена')),
           TextButton(
               onPressed: () => Navigator.pop(context, true),
-              child:
-                  const Text('Удалить', style: TextStyle(color: Colors.red))),
+              child: const Text('Удалить', style: TextStyle(color: Colors.red))),
         ],
       ),
     );
@@ -186,20 +190,25 @@ class _ManageEmployeesDialogState extends State<ManageEmployeesDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       child: Container(
         width: 600,
         constraints: const BoxConstraints(maxHeight: 600),
+        color: colorScheme.surface,
         child: Column(
           children: [
             AppBar(
               title: const Text('Управление сотрудниками'),
+              backgroundColor: colorScheme.surface,
+              foregroundColor: colorScheme.onSurface,
               automaticallyImplyLeading: false,
               actions: [
                 IconButton(
                     onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close))
+                    icon: Icon(Icons.close, color: colorScheme.onSurface))
               ],
             ),
             Padding(
@@ -213,7 +222,20 @@ class _ManageEmployeesDialogState extends State<ManageEmployeesDialog> {
                         Expanded(
                           child: TextFormField(
                             controller: _fullNameController,
-                            decoration: const InputDecoration(labelText: 'ФИО'),
+                            style: TextStyle(color: colorScheme.onSurface),
+                            decoration: InputDecoration(
+                              labelText: 'ФИО',
+                              labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+                              border: OutlineInputBorder(
+                                borderSide: BorderSide(color: colorScheme.outline),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderSide: BorderSide(color: colorScheme.outline),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderSide: BorderSide(color: colorScheme.primary),
+                              ),
+                            ),
                             validator: (v) =>
                                 v == null || v.isEmpty ? 'Введите ФИО' : null,
                           ),
@@ -222,8 +244,20 @@ class _ManageEmployeesDialogState extends State<ManageEmployeesDialog> {
                         Expanded(
                           child: TextFormField(
                             controller: _phoneController,
-                            decoration:
-                                const InputDecoration(labelText: 'Телефон'),
+                            style: TextStyle(color: colorScheme.onSurface),
+                            decoration: InputDecoration(
+                              labelText: 'Телефон',
+                              labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+                              border: OutlineInputBorder(
+                                borderSide: BorderSide(color: colorScheme.outline),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderSide: BorderSide(color: colorScheme.outline),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderSide: BorderSide(color: colorScheme.primary),
+                              ),
+                            ),
                             validator: (v) => v == null || v.isEmpty
                                 ? 'Введите телефон'
                                 : null,
@@ -239,10 +273,16 @@ class _ManageEmployeesDialogState extends State<ManageEmployeesDialog> {
                                 value: 'manager', child: Text('Управляющий')),
                           ],
                           onChanged: (v) => setState(() => _selectedRole = v!),
+                          dropdownColor: colorScheme.surface,
+                          style: TextStyle(color: colorScheme.onSurface),
                         ),
                         const SizedBox(width: 8),
                         ElevatedButton(
                           onPressed: _adding ? null : _addMember,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: colorScheme.primary,
+                            foregroundColor: colorScheme.onPrimary,
+                          ),
                           child: _adding
                               ? const SizedBox(
                                   width: 20,
@@ -267,37 +307,35 @@ class _ManageEmployeesDialogState extends State<ManageEmployeesDialog> {
                         final m = _members[index];
                         final isManager = m['role_in_company'] == 'manager';
                         return ListTile(
-                          title: Text(m['full_name']),
+                          title: Text(m['full_name'], style: TextStyle(color: colorScheme.onSurface)),
                           subtitle: Text(
-                              '${m['phone']} • Роль: ${isManager ? 'Управляющий' : 'Сотрудник'}'),
+                              '${m['phone']} • Роль: ${isManager ? 'Управляющий' : 'Сотрудник'}',
+                              style: TextStyle(color: colorScheme.onSurfaceVariant)),
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               if (!isManager)
                                 IconButton(
-                                  icon: const Icon(Icons.star,
-                                      color: Colors.orange),
+                                  icon: Icon(Icons.star, color: Colors.orange),
                                   onPressed: () => _setAsManager(
                                       m['user_id'], m['full_name']),
                                   tooltip: 'Назначить управляющим',
                                 ),
                               if (isManager)
                                 IconButton(
-                                  icon: const Icon(Icons.star_border,
-                                      color: Colors.grey),
+                                  icon: Icon(Icons.star_border, color: colorScheme.onSurfaceVariant),
                                   onPressed: () =>
                                       _demoteToEmployee(m['user_id']),
                                   tooltip: 'Понизить до сотрудника',
                                 ),
                               IconButton(
-                                icon: const Icon(Icons.refresh),
+                                icon: Icon(Icons.refresh, color: colorScheme.onSurfaceVariant),
                                 onPressed: () => _resetPassword(
                                     m['user_id'], m['full_name']),
                                 tooltip: 'Сбросить пароль',
                               ),
                               IconButton(
-                                icon:
-                                    const Icon(Icons.delete, color: Colors.red),
+                                icon: const Icon(Icons.delete, color: Colors.red),
                                 onPressed: () =>
                                     _removeMember(m['user_id'], m['full_name']),
                               ),

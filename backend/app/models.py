@@ -179,7 +179,7 @@ class Transaction(Base):
     number: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     counterparty: Mapped[str | None] = mapped_column(String(200), nullable=True)
     showcase_item_id: Mapped[int | None] = mapped_column(ForeignKey("showcase_items.id"), nullable=True)
-
+    quantity: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     # relationships
     company: Mapped["Company"] = relationship(back_populates="transactions")
     account: Mapped["Account"] = relationship(foreign_keys=[account_id], back_populates="transactions_from")

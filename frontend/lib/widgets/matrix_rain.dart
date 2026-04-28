@@ -4,7 +4,14 @@ import 'package:flutter/material.dart';
 class MatrixRain extends StatefulWidget {
   final Color color;
   final double opacity;
-  const MatrixRain({super.key, this.color = Colors.black87, this.opacity = 0.15});
+  final double speedFactor; // 1.0 = стандартная скорость, меньше – медленнее
+
+  const MatrixRain({
+    super.key,
+    this.color = Colors.black,
+    this.opacity = 0.3,
+    this.speedFactor = 0.4, // по умолчанию медленнее
+  });
 
   @override
   State<MatrixRain> createState() => _MatrixRainState();
@@ -37,7 +44,7 @@ class _MatrixRainState extends State<MatrixRain>
       if (drop.y > 1.0) {
         drop.y = -0.1;
         drop.symbol = _random.nextInt(2).toString();
-        drop.speed = 0.002 + _random.nextDouble() * 0.004;
+        drop.speed = (0.002 + _random.nextDouble() * 0.004) * widget.speedFactor;
       }
     }
   }
@@ -46,7 +53,7 @@ class _MatrixRainState extends State<MatrixRain>
   void didChangeDependencies() {
     super.didChangeDependencies();
     final size = MediaQuery.of(context).size;
-    final newColumns = (size.width / 15).ceil();
+    final newColumns = (size.width / 20).ceil();
     if (_numberOfColumns != newColumns) {
       _numberOfColumns = newColumns;
       _drops.clear();
@@ -56,7 +63,7 @@ class _MatrixRainState extends State<MatrixRain>
           x: i * stepX,
           y: _random.nextDouble(),
           symbol: _random.nextInt(2).toString(),
-          speed: 0.002 + _random.nextDouble() * 0.004,
+          speed: (0.002 + _random.nextDouble() * 0.004) * widget.speedFactor,
         ));
       }
     }
@@ -72,7 +79,10 @@ class _MatrixRainState extends State<MatrixRain>
   Widget build(BuildContext context) {
     return CustomPaint(
       painter: _MatrixPainter(
-          drops: _drops, color: widget.color, opacity: widget.opacity),
+        drops: _drops,
+        color: widget.color,
+        opacity: widget.opacity,
+      ),
       size: Size.infinite,
     );
   }
@@ -105,7 +115,7 @@ class _MatrixPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final textStyle = TextStyle(
-      color: color.withOpacity(opacity), // ← теперь прозрачность работает
+      color: color.withOpacity(opacity),
       fontSize: 14,
       fontWeight: FontWeight.bold,
       fontFamily: 'monospace',

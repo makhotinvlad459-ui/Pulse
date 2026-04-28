@@ -121,7 +121,8 @@ async def create_transaction(
         transfer_to_account_id=trans_data.transfer_to_account_id if is_transfer else None,
         number=new_number,
         counterparty=trans_data.counterparty,
-        showcase_item_id=trans_data.showcase_item_id
+        showcase_item_id=trans_data.showcase_item_id,
+        quantity=trans_data.quantity
     )
     db.add(new_trans)
     await db.flush()

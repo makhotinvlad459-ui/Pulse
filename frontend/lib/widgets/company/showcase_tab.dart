@@ -82,8 +82,9 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setStateDialog) {
+          final colorScheme = Theme.of(context).colorScheme;
           return AlertDialog(
-            title: const Text('Изменить порядок'),
+            title: Text('Изменить порядок', style: TextStyle(color: colorScheme.onSurface)),
             content: Container(
               width: double.maxFinite,
               height: 400,
@@ -100,13 +101,13 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                   return ListTile(
                     key: Key('${item.id}'),
                     leading: const Icon(Icons.drag_handle, color: Colors.grey),
-                    title: Text(item.name),
+                    title: Text(item.name, style: TextStyle(color: colorScheme.onSurface)),
                   );
                 },
               ),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
+              TextButton(onPressed: () => Navigator.pop(context), child: Text('Отмена', style: TextStyle(color: colorScheme.onSurfaceVariant))),
               ElevatedButton(
                 onPressed: () async {
                   await _saveOrder(tempItems);
@@ -135,15 +136,25 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setStateDialog) {
+          final colorScheme = Theme.of(context).colorScheme;
           return AlertDialog(
-            title: const Text('Новый товар/услуга'),
+            title: Text('Новый товар/услуга', style: TextStyle(color: colorScheme.onSurface)),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Название')),
+                  TextField(
+                    controller: nameController,
+                    decoration: InputDecoration(labelText: 'Название', labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+                    style: TextStyle(color: colorScheme.onSurface),
+                  ),
                   const SizedBox(height: 8),
-                  TextField(controller: priceController, decoration: const InputDecoration(labelText: 'Цена'), keyboardType: TextInputType.number),
+                  TextField(
+                    controller: priceController,
+                    decoration: InputDecoration(labelText: 'Цена', labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+                    keyboardType: TextInputType.number,
+                    style: TextStyle(color: colorScheme.onSurface),
+                  ),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<int>(
                     value: categoryId,
@@ -152,7 +163,9 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                       ..._categories.map((c) => DropdownMenuItem(value: c['id'], child: Text('${c['icon'] ?? '📁'} ${c['name']}'))),
                     ],
                     onChanged: (v) => categoryId = v,
-                    decoration: const InputDecoration(labelText: 'Категория (необязательно)'),
+                    decoration: InputDecoration(labelText: 'Категория (необязательно)', labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+                    dropdownColor: colorScheme.surface,
+                    style: TextStyle(color: colorScheme.onSurface),
                   ),
                   const SizedBox(height: 8),
                   RecipeEditor(
@@ -167,7 +180,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
               ),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
+              TextButton(onPressed: () => Navigator.pop(context), child: Text('Отмена', style: TextStyle(color: colorScheme.onSurfaceVariant))),
               ElevatedButton(
                 onPressed: () async {
                   final name = nameController.text.trim();
@@ -225,15 +238,25 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setStateDialog) {
+          final colorScheme = Theme.of(context).colorScheme;
           return AlertDialog(
-            title: const Text('Редактировать'),
+            title: Text('Редактировать', style: TextStyle(color: colorScheme.onSurface)),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Название')),
+                  TextField(
+                    controller: nameController,
+                    decoration: InputDecoration(labelText: 'Название', labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+                    style: TextStyle(color: colorScheme.onSurface),
+                  ),
                   const SizedBox(height: 8),
-                  TextField(controller: priceController, decoration: const InputDecoration(labelText: 'Цена'), keyboardType: TextInputType.number),
+                  TextField(
+                    controller: priceController,
+                    decoration: InputDecoration(labelText: 'Цена', labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+                    keyboardType: TextInputType.number,
+                    style: TextStyle(color: colorScheme.onSurface),
+                  ),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<int>(
                     value: categoryId,
@@ -242,7 +265,9 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                       ..._categories.map((c) => DropdownMenuItem(value: c['id'], child: Text('${c['icon'] ?? '📁'} ${c['name']}'))),
                     ],
                     onChanged: (v) => categoryId = v,
-                    decoration: const InputDecoration(labelText: 'Категория (необязательно)'),
+                    decoration: InputDecoration(labelText: 'Категория (необязательно)', labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+                    dropdownColor: colorScheme.surface,
+                    style: TextStyle(color: colorScheme.onSurface),
                   ),
                   const SizedBox(height: 8),
                   RecipeEditor(
@@ -257,7 +282,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
               ),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
+              TextButton(onPressed: () => Navigator.pop(context), child: Text('Отмена', style: TextStyle(color: colorScheme.onSurfaceVariant))),
               ElevatedButton(
                 onPressed: () async {
                   final name = nameController.text.trim();
@@ -313,9 +338,12 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
     }
   }
 
+  // ИСПРАВЛЕННЫЙ МЕТОД ПРОДАЖИ
   Future<void> _sellItem(ShowcaseItem item) async {
     double quantity = 1.0;
     double salePrice = item.price;
+    final quantityController = TextEditingController(text: quantity.toString());
+
     final accountsRes = await _api.get('/accounts', queryParameters: {'company_id': widget.companyId});
     final accounts = accountsRes.data as List;
     int? cashAccountId = accounts.firstWhere((a) => a['type'] == 'cash', orElse: () => null)?['id'];
@@ -323,12 +351,14 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
     int? selectedAccountId = cashAccountId;
     DateTime date = DateTime.now();
     String counterparty = '';
+
     await showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setStateDialog) {
+          final colorScheme = Theme.of(context).colorScheme;
           return AlertDialog(
-            title: Text('Продажа: ${item.name}'),
+            title: Text('Продажа: ${item.name}', style: TextStyle(color: colorScheme.onSurface)),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -336,10 +366,11 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                   Row(
                     children: [
                       Expanded(
-                        child: TextFormField(
-                          initialValue: quantity.toString(),
-                          decoration: const InputDecoration(labelText: 'Количество'),
+                        child: TextField(
+                          controller: quantityController,
+                          decoration: InputDecoration(labelText: 'Количество', labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
                           keyboardType: TextInputType.number,
+                          style: TextStyle(color: colorScheme.onSurface),
                           onChanged: (v) {
                             final q = double.tryParse(v) ?? 1;
                             if (q <= 0) return;
@@ -356,6 +387,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                             onPressed: () {
                               quantity += 1;
                               salePrice = item.price * quantity;
+                              quantityController.text = quantity.toString();
                               setStateDialog(() {});
                             },
                           ),
@@ -365,6 +397,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                               if (quantity > 1) {
                                 quantity -= 1;
                                 salePrice = item.price * quantity;
+                                quantityController.text = quantity.toString();
                                 setStateDialog(() {});
                               }
                             },
@@ -374,7 +407,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Text('Итого: ${salePrice.toStringAsFixed(2)} ₽', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  Text('Итого: ${salePrice.toStringAsFixed(2)} ₽', style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
                   const SizedBox(height: 8),
                   Row(
                     children: [
@@ -382,8 +415,8 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                         child: ElevatedButton(
                           onPressed: () => setStateDialog(() => selectedAccountId = cashAccountId),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: selectedAccountId == cashAccountId ? Colors.blue.shade200 : Colors.grey.shade200,
-                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            backgroundColor: selectedAccountId == cashAccountId ? colorScheme.primary.withOpacity(0.2) : colorScheme.surfaceContainerHighest,
+                            foregroundColor: colorScheme.onSurface,
                           ),
                           child: const Text('Наличные'),
                         ),
@@ -393,8 +426,8 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                         child: ElevatedButton(
                           onPressed: () => setStateDialog(() => selectedAccountId = bankAccountId),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: selectedAccountId == bankAccountId ? Colors.blue.shade200 : Colors.grey.shade200,
-                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            backgroundColor: selectedAccountId == bankAccountId ? colorScheme.primary.withOpacity(0.2) : colorScheme.surfaceContainerHighest,
+                            foregroundColor: colorScheme.onSurface,
                           ),
                           child: const Text('Банк'),
                         ),
@@ -403,8 +436,8 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                   ),
                   const SizedBox(height: 8),
                   ListTile(
-                    title: const Text('Дата'),
-                    trailing: Text(DateFormat('dd.MM.yyyy').format(date)),
+                    title: Text('Дата', style: TextStyle(color: colorScheme.onSurface)),
+                    trailing: Text(DateFormat('dd.MM.yyyy').format(date), style: TextStyle(color: colorScheme.onSurfaceVariant)),
                     onTap: () async {
                       final picked = await showDatePicker(context: context, initialDate: date, firstDate: DateTime(2000), lastDate: DateTime.now());
                       if (picked != null) setStateDialog(() => date = picked);
@@ -413,13 +446,14 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                   const SizedBox(height: 8),
                   TextField(
                     onChanged: (v) => counterparty = v,
-                    decoration: const InputDecoration(labelText: 'Контрагент (необязательно)'),
+                    decoration: InputDecoration(labelText: 'Контрагент (необязательно)', labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+                    style: TextStyle(color: colorScheme.onSurface),
                   ),
                 ],
               ),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
+              TextButton(onPressed: () => Navigator.pop(context), child: Text('Отмена', style: TextStyle(color: colorScheme.onSurfaceVariant))),
               ElevatedButton(
                 onPressed: () async {
                   if (selectedAccountId == null) {
@@ -454,6 +488,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                     'items': items,
                     'category_id': item.categoryId,
                     'showcase_item_id': item.id,
+                    'quantity': quantity.toInt(),
                   };
                   try {
                     await _api.post('/transactions/', queryParameters: {'company_id': widget.companyId}, data: data);
@@ -503,8 +538,9 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setStateDialog) {
+          final colorScheme = Theme.of(context).colorScheme;
           return AlertDialog(
-            title: const Text('Продажа списком'),
+            title: Text('Продажа списком', style: TextStyle(color: colorScheme.onSurface)),
             content: Container(
               width: double.maxFinite,
               height: MediaQuery.of(context).size.height * 0.6,
@@ -520,8 +556,8 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                           controller.text = item['quantity'].toString();
                         }
                         return ListTile(
-                          title: Text(item['name']),
-                          subtitle: Text('${item['price']} ₽'),
+                          title: Text(item['name'], style: TextStyle(color: colorScheme.onSurface)),
+                          subtitle: Text('${item['price']} ₽', style: TextStyle(color: colorScheme.onSurfaceVariant)),
                           trailing: SizedBox(
                             width: 130,
                             child: Row(
@@ -544,7 +580,8 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                                     controller: controller,
                                     keyboardType: TextInputType.number,
                                     textAlign: TextAlign.center,
-                                    decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true),
+                                    decoration: InputDecoration(border: OutlineInputBorder(), isDense: true, contentPadding: const EdgeInsets.symmetric(vertical: 4)),
+                                    style: TextStyle(color: colorScheme.onSurface),
                                     onChanged: (v) {
                                       final q = double.tryParse(v) ?? 0;
                                       setStateDialog(() {
@@ -579,7 +616,8 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                         child: ElevatedButton(
                           onPressed: () => setStateDialog(() => selectedAccountId = cashAccountId),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: selectedAccountId == cashAccountId ? Colors.blue.shade200 : Colors.grey.shade200,
+                            backgroundColor: selectedAccountId == cashAccountId ? colorScheme.primary.withOpacity(0.2) : colorScheme.surfaceContainerHighest,
+                            foregroundColor: colorScheme.onSurface,
                           ),
                           child: const Text('Наличные'),
                         ),
@@ -589,7 +627,8 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                         child: ElevatedButton(
                           onPressed: () => setStateDialog(() => selectedAccountId = bankAccountId),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: selectedAccountId == bankAccountId ? Colors.blue.shade200 : Colors.grey.shade200,
+                            backgroundColor: selectedAccountId == bankAccountId ? colorScheme.primary.withOpacity(0.2) : colorScheme.surfaceContainerHighest,
+                            foregroundColor: colorScheme.onSurface,
                           ),
                           child: const Text('Банк'),
                         ),
@@ -598,8 +637,8 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                   ),
                   const SizedBox(height: 8),
                   ListTile(
-                    title: const Text('Дата'),
-                    trailing: Text(DateFormat('dd.MM.yyyy').format(date)),
+                    title: Text('Дата', style: TextStyle(color: colorScheme.onSurface)),
+                    trailing: Text(DateFormat('dd.MM.yyyy').format(date), style: TextStyle(color: colorScheme.onSurfaceVariant)),
                     onTap: () async {
                       final picked = await showDatePicker(context: context, initialDate: date, firstDate: DateTime(2000), lastDate: DateTime.now());
                       if (picked != null) setStateDialog(() => date = picked);
@@ -608,13 +647,14 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                   const SizedBox(height: 8),
                   TextField(
                     onChanged: (v) => counterparty = v,
-                    decoration: const InputDecoration(labelText: 'Контрагент (необязательно)'),
+                    decoration: InputDecoration(labelText: 'Контрагент (необязательно)', labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+                    style: TextStyle(color: colorScheme.onSurface),
                   ),
                 ],
               ),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
+              TextButton(onPressed: () => Navigator.pop(context), child: Text('Отмена', style: TextStyle(color: colorScheme.onSurfaceVariant))),
               ElevatedButton(
                 onPressed: () async {
                   final selectedItems = _bulkSaleItems.where((i) => i['quantity'] > 0).toList();
@@ -655,6 +695,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                       'items': items,
                       'category_id': si['category_id'],
                       'showcase_item_id': si['id'],
+                      'quantity': qty.toInt(),
                     };
                     await _api.post('/transactions/', queryParameters: {'company_id': widget.companyId}, data: data);
                   }
@@ -673,6 +714,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
   }
 
   void _showMenu(ShowcaseItem item) {
+    final colorScheme = Theme.of(context).colorScheme;
     showGeneralDialog(
       context: context,
       barrierDismissible: true,
@@ -687,7 +729,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
               child: Container(
                 width: MediaQuery.of(context).size.width * 0.8,
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: colorScheme.surface,
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: const [BoxShadow(blurRadius: 10, color: Colors.black26)],
                 ),
@@ -724,8 +766,8 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                                 Navigator.pop(context);
                                 _editItem(item);
                               },
-                              icon: const Icon(Icons.edit, size: 18),
-                              label: const Text('Редактировать'),
+                              icon: Icon(Icons.edit, size: 18, color: colorScheme.primary),
+                              label: Text('Редактировать', style: TextStyle(color: colorScheme.primary)),
                             ),
                             TextButton.icon(
                               onPressed: () {
@@ -760,6 +802,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -779,8 +822,8 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                     icon: const Icon(Icons.add),
                     label: const Text('Создать товар/услугу витрины'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blueGrey.shade700,
-                      foregroundColor: Colors.white,
+                      backgroundColor: colorScheme.primary,
+                      foregroundColor: colorScheme.onPrimary,
                       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
@@ -793,7 +836,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                     icon: const Icon(Icons.shopping_cart),
                     label: const Text('Продажа списком'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green.shade700,
+                      backgroundColor: Colors.green,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -806,8 +849,8 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                   icon: const Icon(Icons.swap_vert),
                   label: const Text('Порядок'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.grey.shade300,
-                    foregroundColor: Colors.black87,
+                    backgroundColor: colorScheme.surfaceContainerHighest,
+                    foregroundColor: colorScheme.onSurface,
                     padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
@@ -833,6 +876,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                 child: Card(
                   elevation: 1,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  color: colorScheme.surface,
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                     child: Column(
@@ -844,7 +888,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                             Flexible(
                               child: Text(
                                 item.name,
-                                style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 12),
+                                style: TextStyle(fontWeight: FontWeight.w500, fontSize: 12, color: colorScheme.onSurface),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -852,7 +896,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                             const SizedBox(width: 6),
                             Text(
                               '${item.price.toStringAsFixed(2)} ₽',
-                              style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w600, fontSize: 11),
+                              style: TextStyle(color: Colors.green, fontWeight: FontWeight.w600, fontSize: 11),
                             ),
                           ],
                         ),
@@ -861,7 +905,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                             padding: const EdgeInsets.only(top: 2),
                             child: Text(
                               categoryName,
-                              style: TextStyle(fontSize: 9, color: Colors.grey.shade600),
+                              style: TextStyle(fontSize: 9, color: colorScheme.onSurfaceVariant),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),

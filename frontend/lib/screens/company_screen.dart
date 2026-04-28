@@ -19,6 +19,42 @@ import '../widgets/company/chat_and_tasks_tab.dart';
 import '../screens/archive_screen.dart';
 import '../widgets/company/stock_tab.dart';
 import '../widgets/company/showcase_tab.dart';
+import '../widgets/matrix_rain.dart';
+import '../providers/theme_provider.dart';
+
+// Вспомогательный класс для параметров дождя
+class RainTheme {
+  final Color color;
+  final double opacity;
+  final double speed;
+  const RainTheme({required this.color, required this.opacity, required this.speed});
+}
+
+RainTheme getRainTheme(AppTheme theme) {
+  switch (theme) {
+    case AppTheme.light:
+      return const RainTheme(color: Colors.grey, opacity: 0.25, speed: 0.25);
+    case AppTheme.dark:
+      return const RainTheme(color: Colors.grey, opacity: 0.35, speed: 0.3);
+    case AppTheme.blue:
+      return const RainTheme(color: Colors.blueGrey, opacity: 0.3, speed: 0.28);
+    case AppTheme.green:
+      return const RainTheme(color: Colors.teal, opacity: 0.35, speed: 0.3);
+  }
+}
+
+Color getGridColor(AppTheme theme, ColorScheme colorScheme) {
+  switch (theme) {
+    case AppTheme.light:
+      return colorScheme.onSurfaceVariant.withOpacity(0.15);
+    case AppTheme.dark:
+      return Colors.grey.shade700.withOpacity(0.25);
+    case AppTheme.blue:
+      return Colors.blueGrey.shade200.withOpacity(0.25);
+    case AppTheme.green:
+      return Colors.teal.shade800.withOpacity(0.4);
+  }
+}
 
 class CompanyScreen extends ConsumerStatefulWidget {
   final Company company;
@@ -40,6 +76,9 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
   int _pendingTasksCount = 0;
   int _unreadMessagesCount = 0;
   WebSocketChannel? _userChannel;
+
+  // Ключ для обновления отчётов
+  final GlobalKey<ReportsTabState> _reportsTabKey = GlobalKey<ReportsTabState>();
 
   @override
   void initState() {
@@ -159,6 +198,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
 
   Future<void> _refresh() async {
     await _loadData();
+    _reportsTabKey.currentState?.refreshData(); // обновляем отчёты
     setState(() => _hasChanges = true);
   }
 
@@ -183,6 +223,9 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
+    final currentTheme = ref.watch(themeProvider);
+    final colorScheme = Theme.of(context).colorScheme;
+
     final isFounder = authState.user?.role == UserRole.founder;
     final currentUserRole = widget.company.currentUserRole;
     final isManager = currentUserRole == 'manager';
@@ -196,28 +239,45 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
     final showDeleteCompany = isFounder;
     final showMenu = isFounder || isManager;
 
+    final gridColor = getGridColor(currentTheme, colorScheme);
+    final rain = getRainTheme(currentTheme);
+    final double rainHeight = 260;
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: colorScheme.background,
       body: Stack(
         children: [
-          // Фон: светло-серый + сетка (как было в оригинале)
+          // Фон: сетка
           Container(
-            color: const Color(0xFFF2F2F2),
+            color: colorScheme.background,
             child: CustomPaint(
-              painter: _LightGridPainter(),
+              painter: _LightGridPainter(color: gridColor),
               size: Size.infinite,
             ),
           ),
-          // Тело экрана (без дождя)
+          // Матричный дождь (ограничен по высоте)
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: rainHeight,
+            child: MatrixRain(
+              color: rain.color,
+              opacity: rain.opacity,
+              speedFactor: rain.speed,
+            ),
+          ),
+          // Контент
           SafeArea(
             child: Column(
               children: [
+                // Верхняя панель
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   child: Row(
                     children: [
                       IconButton(
-                        icon: Icon(Icons.arrow_back, color: Colors.grey.shade800),
+                        icon: Icon(Icons.arrow_back, color: colorScheme.onSurface),
                         onPressed: () => Navigator.pop(context, _hasChanges),
                       ),
                       const Spacer(),
@@ -244,8 +304,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                                       companyId: widget.company.id,
                                       onSuccess: _refresh,
                                       categories: _categories));
-                            if (value == 'manage_employees' &&
-                                showManageEmployees)
+                            if (value == 'manage_employees' && showManageEmployees)
                               await showDialog(
                                   context: context,
                                   builder: (_) => ManageEmployeesDialog(
@@ -283,70 +342,66 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                                   value: 'archive', child: Text('Архив')));
                             }
                             if (showDeleteCompany) {
-                              items.add(const PopupMenuItem(
+                              items.add(PopupMenuItem(
                                   value: 'delete',
                                   child: Text('Удалить компанию',
-                                      style: TextStyle(color: Colors.red))));
+                                      style: TextStyle(color: colorScheme.error))));
                             }
                             return items;
                           },
-                          icon: Icon(Icons.more_vert, color: Colors.grey.shade800),
+                          icon: Icon(Icons.more_vert, color: colorScheme.onSurface),
                         ),
                     ],
                   ),
                 ),
-                // Название компании и бейджи
-                Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                      child: Text(
-                        widget.company.name,
-                        style: GoogleFonts.orbitron(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.grey.shade800,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
+                // Название компании
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  child: Text(
+                    widget.company.name,
+                    style: GoogleFonts.orbitron(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w600,
+                      color: colorScheme.onSurface,
                     ),
-                    if (_unreadMessagesCount > 0 || _pendingTasksCount > 0)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            if (_unreadMessagesCount > 0)
-                              Container(
-                                margin: const EdgeInsets.only(right: 8),
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: Colors.red,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  'Сообщения: $_unreadMessagesCount',
-                                  style: const TextStyle(color: Colors.white, fontSize: 12),
-                                ),
-                              ),
-                            if (_pendingTasksCount > 0)
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: Colors.orange,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  'Задачи: $_pendingTasksCount',
-                                  style: const TextStyle(color: Colors.white, fontSize: 12),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                  ],
+                    textAlign: TextAlign.center,
+                  ),
                 ),
-                // Горизонтальный список счетов
+                if (_unreadMessagesCount > 0 || _pendingTasksCount > 0)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (_unreadMessagesCount > 0)
+                          Container(
+                            margin: const EdgeInsets.only(right: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.red,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              'Сообщения: $_unreadMessagesCount',
+                              style: const TextStyle(color: Colors.white, fontSize: 12),
+                            ),
+                          ),
+                        if (_pendingTasksCount > 0)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.orange,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              'Задачи: $_pendingTasksCount',
+                              style: const TextStyle(color: Colors.white, fontSize: 12),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                // Список счетов
                 SizedBox(
                   height: 100,
                   child: SingleChildScrollView(
@@ -391,9 +446,10 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                           Tab(text: 'Склад'),
                           Tab(text: 'Отчеты'),
                         ],
-                        labelColor: Colors.grey.shade800,
-                        unselectedLabelColor: Colors.grey.shade500,
-                        indicatorColor: Colors.grey.shade800,
+                        labelColor: colorScheme.primary,
+                        unselectedLabelColor: colorScheme.onSurfaceVariant,
+                        indicatorColor: colorScheme.primary,
+                        labelStyle: const TextStyle(fontWeight: FontWeight.normal),
                       ),
                       Expanded(
                         child: TabBarView(
@@ -417,7 +473,11 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                               onUnreadMessagesChanged: _onUnreadMessagesChanged,
                             ),
                             StockTab(companyId: widget.company.id),
-                            ReportsTab(companyId: widget.company.id),
+                            ReportsTab(
+                              key: _reportsTabKey,
+                              companyId: widget.company.id,
+                              categories: _categories,
+                            ),
                           ],
                         ),
                       ),
@@ -466,12 +526,14 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
   }
 }
 
-// Класс для рисования сетки (оставлен без изменений)
 class _LightGridPainter extends CustomPainter {
+  final Color color;
+  const _LightGridPainter({required this.color});
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.grey.shade300.withOpacity(0.5)
+      ..color = color
       ..strokeWidth = 0.5;
     const double spacing = 30.0;
     for (double x = 0; x < size.width; x += spacing) {

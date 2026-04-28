@@ -10,7 +10,7 @@ import '../../models/user.dart';
 
 class ChatAndTasksTab extends ConsumerStatefulWidget {
   final int companyId;
-  final bool isManager; // добавили флаг менеджера
+  final bool isManager;
   final Function(int unreadMessages)? onUnreadMessagesChanged;
   final Function(int pendingTasks)? onPendingTasksChanged;
 
@@ -52,7 +52,6 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
       await _loadChatMessages();
       await _loadTasks();
       _connectWebSockets();
-      // Если активна вкладка чата, помечаем прочитанным сразу
       if (_tabController.index == 0) {
         await _markChatRead();
         _lastVisit = DateTime.now();
@@ -160,8 +159,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
     int unread = 0;
     if (_lastVisit != null) {
       unread = _messages
-          .where(
-              (msg) => DateTime.parse(msg['created_at']).isAfter(_lastVisit!))
+          .where((msg) => DateTime.parse(msg['created_at']).isAfter(_lastVisit!))
           .length;
     }
     widget.onUnreadMessagesChanged?.call(unread);
@@ -205,7 +203,6 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
       });
       _updateUnreadCount();
       _scrollToBottom();
-      // Отмечаем прочитанным после загрузки, если вкладка активна
       if (_tabController.index == 0) {
         await _markChatRead();
         _lastVisit = DateTime.now();
@@ -231,8 +228,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
   Future<void> _loadTasks() async {
     final api = ApiClient();
     try {
-      final res = await api
-          .get('/tasks', queryParameters: {'company_id': widget.companyId});
+      final res = await api.get('/tasks', queryParameters: {'company_id': widget.companyId});
       setState(() {
         _tasks = List<Map<String, dynamic>>.from(res.data);
         _loadingTasks = false;
@@ -249,8 +245,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
     if (text.isEmpty) return;
     final api = ApiClient();
     try {
-      await api
-          .post('/chat/company/${widget.companyId}', data: {'message': text});
+      await api.post('/chat/company/${widget.companyId}', data: {'message': text});
       _messageController.clear();
     } catch (e) {
       ScaffoldMessenger.of(context)
@@ -270,8 +265,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
               child: const Text('Отмена')),
           TextButton(
               onPressed: () => Navigator.pop(context, true),
-              child:
-                  const Text('Очистить', style: TextStyle(color: Colors.red))),
+              child: const Text('Очистить', style: TextStyle(color: Colors.red))),
         ],
       ),
     );
@@ -287,18 +281,20 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
 
   Future<void> _editMessage(Map<String, dynamic> msg) async {
     final controller = TextEditingController(text: msg['message']);
+    final colorScheme = Theme.of(context).colorScheme;
     await showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Редактировать сообщение'),
+        title: Text('Редактировать сообщение', style: TextStyle(color: colorScheme.onSurface)),
         content: TextField(
             controller: controller,
-            decoration: const InputDecoration(hintText: 'Новый текст'),
+            decoration: InputDecoration(hintText: 'Новый текст', hintStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+            style: TextStyle(color: colorScheme.onSurface),
             maxLines: 3),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Отмена')),
+              child: Text('Отмена', style: TextStyle(color: colorScheme.onSurfaceVariant))),
           ElevatedButton(
             onPressed: () async {
               final newText = controller.text.trim();
@@ -313,6 +309,10 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
                     .showSnackBar(SnackBar(content: Text('Ошибка: $e')));
               }
             },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: colorScheme.primary,
+              foregroundColor: colorScheme.onPrimary,
+            ),
             child: const Text('Сохранить'),
           ),
         ],
@@ -331,13 +331,14 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
     int? assigneeId;
     DateTime? deadline;
     final formKey = GlobalKey<FormState>();
+    final colorScheme = Theme.of(context).colorScheme;
 
     await showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setStateDialog) {
           return AlertDialog(
-            title: const Text('Новая задача'),
+            title: Text('Новая задача', style: TextStyle(color: colorScheme.onSurface)),
             content: Form(
               key: formKey,
               child: Column(
@@ -345,18 +346,21 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
                 children: [
                   TextFormField(
                       controller: titleController,
-                      decoration: const InputDecoration(labelText: 'Название'),
+                      decoration: InputDecoration(labelText: 'Название', labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+                      style: TextStyle(color: colorScheme.onSurface),
                       validator: (v) => v!.isEmpty ? 'Введите название' : null),
                   const SizedBox(height: 8),
                   TextFormField(
                       controller: descController,
-                      decoration: const InputDecoration(labelText: 'Описание')),
+                      decoration: InputDecoration(labelText: 'Описание', labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+                      style: TextStyle(color: colorScheme.onSurface)),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<int>(
-                    decoration: const InputDecoration(labelText: 'Назначить'),
+                    decoration: InputDecoration(labelText: 'Назначить', labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+                    dropdownColor: colorScheme.surface,
+                    style: TextStyle(color: colorScheme.onSurface),
                     items: [
-                      const DropdownMenuItem(
-                          value: null, child: Text('Не назначено')),
+                      const DropdownMenuItem(value: null, child: Text('Не назначено')),
                       ..._employees.map((e) => DropdownMenuItem(
                           value: e['user_id'], child: Text(e['full_name']))),
                     ],
@@ -364,10 +368,9 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
                   ),
                   const SizedBox(height: 8),
                   ListTile(
-                    title: const Text('Дедлайн'),
-                    trailing: Text(deadline == null
-                        ? 'Не выбран'
-                        : DateFormat('dd.MM.yyyy').format(deadline!)),
+                    title: Text('Дедлайн', style: TextStyle(color: colorScheme.onSurface)),
+                    trailing: Text(deadline == null ? 'Не выбран' : DateFormat('dd.MM.yyyy').format(deadline!),
+                        style: TextStyle(color: colorScheme.onSurfaceVariant)),
                     onTap: () async {
                       final picked = await showDatePicker(
                         context: context,
@@ -385,7 +388,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
             actions: [
               TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('Отмена')),
+                  child: Text('Отмена', style: TextStyle(color: colorScheme.onSurfaceVariant))),
               ElevatedButton(
                 onPressed: () async {
                   if (!formKey.currentState!.validate()) return;
@@ -405,6 +408,10 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
                         .showSnackBar(SnackBar(content: Text('Ошибка: $e')));
                   }
                 },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: colorScheme.primary,
+                  foregroundColor: colorScheme.onPrimary,
+                ),
                 child: const Text('Создать'),
               ),
             ],
@@ -438,8 +445,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
               child: const Text('Отмена')),
           TextButton(
               onPressed: () => Navigator.pop(context, true),
-              child:
-                  const Text('Удалить', style: TextStyle(color: Colors.red))),
+              child: const Text('Удалить', style: TextStyle(color: Colors.red))),
         ],
       ),
     );
@@ -500,12 +506,16 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
     final currentUser = authState.user;
     final isFounder = currentUser?.role == UserRole.founder;
     final canCreateTask = true;
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Column(
       children: [
         TabBar(
           controller: _tabController,
           tabs: const [Tab(text: 'Чат'), Tab(text: 'Задачи')],
+          labelColor: colorScheme.primary,
+          unselectedLabelColor: colorScheme.onSurfaceVariant,
+          indicatorColor: colorScheme.primary,
         ),
         Expanded(
           child: TabBarView(
@@ -533,8 +543,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
                               final msg = _messages[index];
                               final isMe = msg['user_id'] == currentUser?.id;
                               final displayName = msg['user_full_name'];
-                              return _buildMessageBubble(
-                                  isMe, displayName, msg, isFounder);
+                              return _buildMessageBubble(isMe, displayName, msg, isFounder, colorScheme);
                             },
                           ),
                   ),
@@ -545,10 +554,12 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
                         Expanded(
                           child: TextField(
                             controller: _messageController,
+                            style: TextStyle(color: colorScheme.onSurface),
                             decoration: InputDecoration(
                               hintText: 'Введите сообщение...',
+                              hintStyle: TextStyle(color: colorScheme.onSurfaceVariant),
                               filled: true,
-                              fillColor: Colors.grey.shade100,
+                              fillColor: colorScheme.surfaceContainerHighest,
                               border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(30),
                                   borderSide: BorderSide.none),
@@ -559,9 +570,9 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
                         ),
                         const SizedBox(width: 8),
                         CircleAvatar(
-                          backgroundColor: Colors.green.shade100,
+                          backgroundColor: colorScheme.primaryContainer,
                           child: IconButton(
-                            icon: const Icon(Icons.send, color: Colors.green),
+                            icon: Icon(Icons.send, color: colorScheme.onPrimaryContainer),
                             onPressed: _sendMessage,
                           ),
                         ),
@@ -581,8 +592,8 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
                         icon: const Icon(Icons.add),
                         label: const Text('Новая задача'),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blueGrey.shade700,
-                          foregroundColor: Colors.white,
+                          backgroundColor: colorScheme.primary,
+                          foregroundColor: colorScheme.onPrimary,
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(20)),
                         ),
@@ -596,24 +607,25 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
                               children: [
                                 if (_pendingTasks.isNotEmpty)
                                   _buildTaskSection('Ожидают', _pendingTasks,
-                                      Colors.orange, currentUser, isFounder),
+                                      Colors.orange, currentUser, isFounder, colorScheme),
                                 if (_acceptedTasks.isNotEmpty)
                                   _buildTaskSection('Приняты', _acceptedTasks,
-                                      Colors.blue, currentUser, isFounder),
+                                      Colors.blue, currentUser, isFounder, colorScheme),
                                 if (_completedTasks.isNotEmpty)
                                   _buildTaskSection(
                                       'Выполнены',
                                       _completedTasks,
                                       Colors.green,
                                       currentUser,
-                                      isFounder),
+                                      isFounder,
+                                      colorScheme),
                                 if (_failedTasks.isNotEmpty)
                                   _buildTaskSection('Провалены', _failedTasks,
-                                      Colors.red, currentUser, isFounder),
+                                      Colors.red, currentUser, isFounder, colorScheme),
                                 if (_tasks.isEmpty)
-                                  const Padding(
-                                      padding: EdgeInsets.all(16.0),
-                                      child: Text('Нет задач')),
+                                  Padding(
+                                      padding: const EdgeInsets.all(16.0),
+                                      child: Text('Нет задач', style: TextStyle(color: colorScheme.onSurfaceVariant))),
                               ],
                             ),
                           ),
@@ -628,7 +640,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
   }
 
   Widget _buildMessageBubble(
-      bool isMe, String displayName, Map<String, dynamic> msg, bool isFounder) {
+      bool isMe, String displayName, Map<String, dynamic> msg, bool isFounder, ColorScheme colorScheme) {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 20),
       child: Column(
@@ -641,18 +653,17 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
                 style: GoogleFonts.roboto(
                     fontWeight: FontWeight.w700,
                     fontSize: 13,
-                    color: isMe ? Colors.green.shade800 : Colors.black87),
+                    color: isMe ? colorScheme.primary : colorScheme.onSurface),
               ),
               if (msg['edited'] == true) ...[
                 const SizedBox(width: 4),
                 Text('(изменено)',
-                    style:
-                        TextStyle(fontSize: 10, color: Colors.grey.shade500)),
+                    style: TextStyle(fontSize: 10, color: colorScheme.onSurfaceVariant)),
               ],
               const Spacer(),
               if (isMe || isFounder)
                 IconButton(
-                  icon: const Icon(Icons.edit, size: 16, color: Colors.grey),
+                  icon: Icon(Icons.edit, size: 16, color: colorScheme.onSurfaceVariant),
                   onPressed: () => _editMessage(msg),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
@@ -663,7 +674,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
           Container(
             padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
             decoration: BoxDecoration(
-              color: isMe ? Colors.green.shade50 : Colors.grey.shade200,
+              color: isMe ? colorScheme.primaryContainer : colorScheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(20),
               boxShadow: [
                 BoxShadow(
@@ -676,22 +687,24 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
                 style: GoogleFonts.roboto(
                     fontSize: 15,
                     fontWeight: FontWeight.w500,
-                    letterSpacing: 0.2)),
+                    letterSpacing: 0.2,
+                    color: isMe ? colorScheme.onPrimaryContainer : colorScheme.onSurface)),
           ),
           const SizedBox(height: 4),
           Text(DateFormat('HH:mm').format(DateTime.parse(msg['created_at'])),
-              style: TextStyle(fontSize: 10, color: Colors.grey.shade600)),
+              style: TextStyle(fontSize: 10, color: colorScheme.onSurfaceVariant)),
         ],
       ),
     );
   }
 
   Widget _buildTaskSection(String title, List<Map<String, dynamic>> tasks,
-      Color color, User? currentUser, bool isFounder) {
+      Color color, User? currentUser, bool isFounder, ColorScheme colorScheme) {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      color: colorScheme.surface,
       child: ExpansionTile(
         title: Row(
           children: [
@@ -702,22 +715,20 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
                     BoxDecoration(color: color, shape: BoxShape.circle)),
             const SizedBox(width: 10),
             Text('$title (${tasks.length})',
-                style:
-                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: colorScheme.onSurface)),
           ],
         ),
         children: tasks.map((task) {
           final isAssignee = task['assignee_id'] == currentUser?.id;
           final isAuthor = task['author_id'] == currentUser?.id;
-          final canDelete =
-              isFounder || isAuthor || widget.isManager; // добавили менеджера
+          final canDelete = isFounder || isAuthor || widget.isManager;
           final authorName = task['author_name'];
           final assigneeName = task['assignee_name'];
           return Card(
             margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             elevation: 1,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            color: colorScheme.surfaceContainerHighest,
             child: ExpansionTile(
               title: Row(
                 children: [
@@ -730,11 +741,11 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
                   const SizedBox(width: 8),
                   Expanded(
                       child: Text(task['title'],
-                          style: const TextStyle(fontWeight: FontWeight.w500))),
+                          style: TextStyle(fontWeight: FontWeight.w500, color: colorScheme.onSurface))),
                 ],
               ),
               subtitle: Text('Автор: $authorName',
-                  style: const TextStyle(fontSize: 12)),
+                  style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant)),
               children: [
                 Padding(
                   padding: const EdgeInsets.all(12.0),
@@ -743,41 +754,43 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
                     children: [
                       if (task['description'] != null)
                         Text('📄 ${task['description']}',
-                            style: const TextStyle(fontSize: 13)),
+                            style: TextStyle(fontSize: 13, color: colorScheme.onSurfaceVariant)),
                       const SizedBox(height: 4),
                       if (assigneeName != null)
                         Text('👤 Назначена: $assigneeName',
-                            style: const TextStyle(fontSize: 12)),
+                            style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant)),
                       if (task['deadline'] != null)
-                        Text(
-                            '⏰ Дедлайн: ${DateFormat('dd.MM.yyyy').format(DateTime.parse(task['deadline']))}',
-                            style: const TextStyle(fontSize: 12)),
+                        Text('⏰ Дедлайн: ${DateFormat('dd.MM.yyyy').format(DateTime.parse(task['deadline']))}',
+                            style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant)),
                       const SizedBox(height: 8),
                       Wrap(
                         spacing: 8,
                         children: [
                           if (task['status'] == 'pending' && isAssignee)
                             ElevatedButton(
-                              onPressed: () =>
-                                  _updateTaskStatus(task['id'], 'accepted'),
+                              onPressed: () => _updateTaskStatus(task['id'], 'accepted'),
                               style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.blue),
+                                backgroundColor: Colors.blue,
+                                foregroundColor: Colors.white,
+                              ),
                               child: const Text('Принять'),
                             ),
                           if (task['status'] == 'accepted' && isAssignee)
                             ElevatedButton(
-                              onPressed: () =>
-                                  _updateTaskStatus(task['id'], 'completed'),
+                              onPressed: () => _updateTaskStatus(task['id'], 'completed'),
                               style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.green),
+                                backgroundColor: Colors.green,
+                                foregroundColor: Colors.white,
+                              ),
                               child: const Text('Выполнить'),
                             ),
                           if (task['status'] == 'accepted' && isAssignee)
                             ElevatedButton(
-                              onPressed: () =>
-                                  _updateTaskStatus(task['id'], 'failed'),
+                              onPressed: () => _updateTaskStatus(task['id'], 'failed'),
                               style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.red),
+                                backgroundColor: Colors.red,
+                                foregroundColor: Colors.white,
+                              ),
                               child: const Text('Провалить'),
                             ),
                           if (canDelete)
