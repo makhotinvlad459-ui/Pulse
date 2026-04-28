@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../../../services/api_client.dart';
+import '../../../services/image_compression.dart';
 
 class EditTransactionDialog extends StatefulWidget {
   final Map<String, dynamic> transaction;
@@ -80,45 +81,43 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
     }
   }
 
-  double get _calculatedAmount {
-    double total = 0;
-    for (var p in _selectedProducts) {
-      total += (p['total'] as double);
-    }
-    return total;
-  }
-
   Future<void> _pickFile() async {
-    if (kIsWeb) {
-      final result = await FilePicker.platform.pickFiles();
-      if (result != null) {
-        setState(() {
-          _webFile = result.files.first;
-          _hasExistingAttachment = false;
-        });
-      }
-    } else {
-      final picker = ImagePicker();
-      final picked = await picker.pickImage(source: ImageSource.gallery);
-      if (picked != null) setState(() {
-        _photo = picked;
+  if (kIsWeb) {
+    final result = await FilePicker.platform.pickFiles();
+    if (result != null) {
+      setState(() {
+        _webFile = result.files.first;
+        _hasExistingAttachment = false;
+      });
+    }
+  } else {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: ImageSource.gallery);
+    if (picked != null) {
+      final compressed = await ImageCompression.compressImage(picked);
+      setState(() {
+        _photo = compressed;
         _hasExistingAttachment = false;
       });
     }
   }
+}
 
-  Future<void> _takePhoto() async {
-    if (kIsWeb) {
-      await _pickFile();
-    } else {
-      final picker = ImagePicker();
-      final picked = await picker.pickImage(source: ImageSource.camera);
-      if (picked != null) setState(() {
-        _photo = picked;
+Future<void> _takePhoto() async {
+  if (kIsWeb) {
+    await _pickFile();
+  } else {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: ImageSource.camera);
+    if (picked != null) {
+      final compressed = await ImageCompression.compressImage(picked);
+      setState(() {
+        _photo = compressed;
         _hasExistingAttachment = false;
       });
     }
   }
+}
 
   Future<void> _deleteAttachment() async {
     setState(() {
@@ -275,7 +274,7 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
     final api = ApiClient();
     Map<String, dynamic> data = {
       'type': _type,
-      'amount': _selectedProducts.isNotEmpty ? _calculatedAmount : _amount,
+      'amount': _amount, // всегда используем _amount, не пересчитываем из товаров
       'date': _date.toIso8601String(),
       'account_id': _accountId,
       'description': _description,
@@ -367,8 +366,9 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final showAmountField = _selectedProducts.isEmpty;
-    final effectiveAmount = showAmountField ? _amount : _calculatedAmount;
+    final isSmallScreen = MediaQuery.of(context).size.width < 500;
+    // Всегда показываем поле суммы, не зависим от _selectedProducts
+    final alwaysShowAmountField = true;
 
     if (widget.accounts.isEmpty) {
       return AlertDialog(
@@ -395,6 +395,13 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
                   Expanded(
                     child: SegmentedButton<String>(
                       style: ButtonStyle(
+                        visualDensity: VisualDensity.compact,
+                        textStyle: MaterialStateProperty.all(
+                          TextStyle(fontSize: isSmallScreen ? 11 : 13),
+                        ),
+                        padding: MaterialStateProperty.all(
+                          EdgeInsets.symmetric(horizontal: isSmallScreen ? 4 : 8),
+                        ),
                         foregroundColor: MaterialStateProperty.resolveWith((states) {
                           if (states.contains(MaterialState.selected)) return colorScheme.onSurface;
                           return colorScheme.onSurfaceVariant;
@@ -404,10 +411,22 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
                           return colorScheme.surfaceContainerHighest;
                         }),
                       ),
-                      segments: const [
-                        ButtonSegment(value: 'income', label: Text('Приход (Продажа)'), icon: Icon(Icons.arrow_upward)),
-                        ButtonSegment(value: 'expense', label: Text('Расход (Покупка)'), icon: Icon(Icons.arrow_downward)),
-                        ButtonSegment(value: 'transfer', label: Text('Перевод'), icon: Icon(Icons.swap_horiz)),
+                      segments: [
+                        ButtonSegment(
+                          value: 'income',
+                          label: Text(isSmallScreen ? 'Приход' : 'Приход (Продажа)'),
+                          icon: isSmallScreen ? null : const Icon(Icons.arrow_upward),
+                        ),
+                        ButtonSegment(
+                          value: 'expense',
+                          label: Text(isSmallScreen ? 'Расход' : 'Расход (Покупка)'),
+                          icon: isSmallScreen ? null : const Icon(Icons.arrow_downward),
+                        ),
+                        ButtonSegment(
+                          value: 'transfer',
+                          label: Text(isSmallScreen ? 'Перевод' : 'Перевод'),
+                          icon: isSmallScreen ? null : const Icon(Icons.swap_horiz),
+                        ),
                       ],
                       selected: {_type},
                       onSelectionChanged: (Set<String> newSelection) {
@@ -466,22 +485,20 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
                 style: TextStyle(color: colorScheme.onSurface),
               ),
               const SizedBox(height: 12),
-              if (showAmountField)
-                TextFormField(
-                  initialValue: _amount.toString(),
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: 'Сумма',
-                    labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
-                    border: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
-                    enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
-                    focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.primary)),
-                  ),
-                  style: TextStyle(color: colorScheme.onSurface),
-                  onChanged: (v) => _amount = double.tryParse(v) ?? 0,
+              // Поле суммы всегда показываем
+              TextFormField(
+                initialValue: _amount.toString(),
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: 'Сумма',
+                  labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+                  border: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
+                  enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
+                  focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.primary)),
                 ),
-              if (!showAmountField)
-                Text('Сумма: ${effectiveAmount.toStringAsFixed(2)} ₽', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
+                style: TextStyle(color: colorScheme.onSurface),
+                onChanged: (v) => _amount = double.tryParse(v) ?? 0,
+              ),
               const SizedBox(height: 12),
               ListTile(
                 title: Text('Дата', style: TextStyle(color: colorScheme.onSurface)),

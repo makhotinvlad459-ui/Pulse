@@ -1,10 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+import os
+import shutil
+from datetime import datetime
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 from sqlalchemy.orm import selectinload
-from typing import List
 from pydantic import BaseModel
-from datetime import datetime
 
 from app.database import get_db
 from app.models import User, Company, ChatMessage, TransactionComment, Transaction, CompanyMember, UserRole, UserChatVisit
@@ -13,8 +15,10 @@ from app.websocket_manager import manager
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
+# ========== Pydantic модели ==========
 class ChatMessageCreate(BaseModel):
     message: str
+    attachment_url: Optional[str] = None
 
 class EditMessageRequest(BaseModel):
     message: str
@@ -24,6 +28,7 @@ class ChatMessageResponse(BaseModel):
     user_id: int
     user_full_name: str
     message: str
+    attachment_url: Optional[str] = None
     created_at: datetime
     edited: bool = False
     updated_at: datetime | None = None
@@ -42,7 +47,43 @@ class CommentResponse(BaseModel):
     class Config:
         from_attributes = True
 
-# ---- Общий чат компании ----
+# ========== Вспомогательная функция проверки доступа ==========
+async def _check_company_access(company_id: int, current_user: User, db: AsyncSession) -> bool:
+    if current_user.role == UserRole.FOUNDER:
+        result = await db.execute(select(Company).where(Company.id == company_id, Company.founder_id == current_user.id))
+    else:
+        result = await db.execute(select(Company).join(CompanyMember).where(Company.id == company_id, CompanyMember.user_id == current_user.id))
+    return result.scalar_one_or_none() is not None
+
+# ========== Загрузка файлов ==========
+UPLOAD_DIR = "uploads/chat"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+@router.post("/upload")
+async def upload_chat_file(
+    company_id: int = Form(...),
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Проверка доступа к компании
+    if not await _check_company_access(company_id, current_user, db):
+        raise HTTPException(status_code=403, detail="Access denied to this company")
+
+    # Генерируем безопасное имя файла
+    timestamp = int(datetime.utcnow().timestamp())
+    safe_filename = f"{current_user.id}_{timestamp}_{file.filename}"
+    file_path = os.path.join(UPLOAD_DIR, safe_filename)
+
+    # Сохраняем файл
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    # Возвращаем URL для доступа к файлу
+    file_url = f"/uploads/chat/{safe_filename}"
+    return {"url": file_url}
+
+# ========== Чат компании ==========
 @router.post("/company/{company_id}", response_model=ChatMessageResponse)
 async def send_chat_message(
     company_id: int,
@@ -50,25 +91,21 @@ async def send_chat_message(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    if current_user.role == UserRole.FOUNDER:
-        result = await db.execute(select(Company).where(Company.id == company_id, Company.founder_id == current_user.id))
-    else:
-        result = await db.execute(select(Company).join(CompanyMember).where(Company.id == company_id, CompanyMember.user_id == current_user.id))
-    company = result.scalar_one_or_none()
-    if not company:
+    if not await _check_company_access(company_id, current_user, db):
         raise HTTPException(status_code=404, detail="Company not found or access denied")
     
     new_msg = ChatMessage(
         company_id=company_id,
         user_id=current_user.id,
         message=msg.message,
+        attachment_url=msg.attachment_url,   # СОХРАНЯЕМ ВЛОЖЕНИЕ
         edited=False
     )
     db.add(new_msg)
     await db.commit()
     await db.refresh(new_msg)
     
-    # 1. Отправляем в чат
+    # Отправляем через WebSocket
     await manager.broadcast_chat(company_id, {
         "type": "new_message",
         "message": {
@@ -76,30 +113,25 @@ async def send_chat_message(
             "user_id": current_user.id,
             "user_full_name": current_user.display_name,
             "message": new_msg.message,
+            "attachment_url": new_msg.attachment_url,  # ВЛОЖЕНИЕ В ВЕБСОКЕТ
             "created_at": new_msg.created_at.isoformat(),
             "edited": False,
             "updated_at": None,
         }
     })
     
-    # 2. Диагностика вызова notify_company_members
-    print("🔵 DEBUG: About to call notify_company_members")
-    try:
-        await manager.notify_company_members(company_id, {
-            "type": "update_counters",
-            "company_id": company_id
-        }, db)
-        print("🔵 DEBUG: notify_company_members succeeded")
-    except Exception as e:
-        print(f"🔴 ERROR in notify_company_members: {e}")
-        import traceback
-        traceback.print_exc()
+    # Уведомляем о непрочитанных
+    await manager.notify_company_members(company_id, {
+        "type": "update_counters",
+        "company_id": company_id
+    }, db)
     
     return ChatMessageResponse(
         id=new_msg.id,
         user_id=current_user.id,
         user_full_name=current_user.display_name,
         message=new_msg.message,
+        attachment_url=new_msg.attachment_url,  # ВЛОЖЕНИЕ В ОТВЕТЕ
         created_at=new_msg.created_at,
         edited=new_msg.edited,
         updated_at=new_msg.updated_at
@@ -113,12 +145,7 @@ async def get_chat_messages(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    if current_user.role == UserRole.FOUNDER:
-        result = await db.execute(select(Company).where(Company.id == company_id, Company.founder_id == current_user.id))
-    else:
-        result = await db.execute(select(Company).join(CompanyMember).where(Company.id == company_id, CompanyMember.user_id == current_user.id))
-    company = result.scalar_one_or_none()
-    if not company:
+    if not await _check_company_access(company_id, current_user, db):
         raise HTTPException(status_code=404, detail="Company not found or access denied")
     
     result = await db.execute(
@@ -137,6 +164,7 @@ async def get_chat_messages(
             user_id=m.user_id,
             user_full_name=m.user.display_name,
             message=m.message,
+            attachment_url=m.attachment_url,   # ВЛОЖЕНИЕ В СПИСКЕ
             created_at=m.created_at,
             edited=m.edited,
             updated_at=m.updated_at
@@ -150,11 +178,7 @@ async def mark_chat_read(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    if current_user.role == UserRole.FOUNDER:
-        result = await db.execute(select(Company).where(Company.id == company_id, Company.founder_id == current_user.id))
-    else:
-        result = await db.execute(select(Company).join(CompanyMember).where(Company.id == company_id, CompanyMember.user_id == current_user.id))
-    if not result.scalar_one_or_none():
+    if not await _check_company_access(company_id, current_user, db):
         raise HTTPException(status_code=404, detail="Company not found or access denied")
     
     stmt = select(UserChatVisit).where(
@@ -223,7 +247,7 @@ async def clear_chat(
     
     return {"detail": "Chat cleared"}
 
-# ---- Комментарии к операциям (без изменений) ----
+# ========== Комментарии к операциям (без изменений) ==========
 @router.post("/transaction/{transaction_id}", response_model=CommentResponse)
 async def add_transaction_comment(
     transaction_id: int,
@@ -237,12 +261,7 @@ async def add_transaction_comment(
         raise HTTPException(status_code=404, detail="Transaction not found")
     company_id = transaction.company_id
     
-    if current_user.role == UserRole.FOUNDER:
-        result = await db.execute(select(Company).where(Company.id == company_id, Company.founder_id == current_user.id))
-    else:
-        result = await db.execute(select(Company).join(CompanyMember).where(Company.id == company_id, CompanyMember.user_id == current_user.id))
-    company = result.scalar_one_or_none()
-    if not company:
+    if not await _check_company_access(company_id, current_user, db):
         raise HTTPException(status_code=404, detail="Company not found or access denied")
     
     new_comment = TransactionComment(
@@ -273,12 +292,7 @@ async def get_transaction_comments(
         raise HTTPException(status_code=404, detail="Transaction not found")
     company_id = transaction.company_id
     
-    if current_user.role == UserRole.FOUNDER:
-        result = await db.execute(select(Company).where(Company.id == company_id, Company.founder_id == current_user.id))
-    else:
-        result = await db.execute(select(Company).join(CompanyMember).where(Company.id == company_id, CompanyMember.user_id == current_user.id))
-    company = result.scalar_one_or_none()
-    if not company:
+    if not await _check_company_access(company_id, current_user, db):
         raise HTTPException(status_code=404, detail="Company not found or access denied")
     
     result = await db.execute(

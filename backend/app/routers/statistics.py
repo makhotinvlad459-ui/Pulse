@@ -362,6 +362,8 @@ async def get_transaction_photo(
 
 from sqlalchemy import text
 
+# ... (оставляем импорты и проверки доступа без изменений)
+
 @router.get("/dynamics")
 async def get_dynamics(
     company_id: int,
@@ -379,7 +381,6 @@ async def get_dynamics(
     if not result.scalar_one_or_none():
         raise HTTPException(status_code=403, detail="Access denied")
     
-    # Приводим даты к naive
     if start_date.tzinfo is not None:
         start_date = start_date.replace(tzinfo=None)
     if end_date.tzinfo is not None:
@@ -397,16 +398,19 @@ async def get_dynamics(
     else:
         format_sql = "to_char(date_trunc('day', date), 'YYYY-MM-DD')"
     
+    # ИСПРАВЛЕНИЕ: добавляем JOIN с accounts и фильтр по include_in_profit_loss
     query = text(f"""
         WITH periods AS (
             SELECT {format_sql} AS period,
-                   SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) AS income,
-                   SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) AS expense
-            FROM transactions
-            WHERE company_id = :company_id
-              AND is_deleted = false
-              AND date >= :start_date
-              AND date <= :end_date
+                   SUM(CASE WHEN t.type = 'income' THEN t.amount ELSE 0 END) AS income,
+                   SUM(CASE WHEN t.type = 'expense' THEN t.amount ELSE 0 END) AS expense
+            FROM transactions t
+            JOIN accounts a ON t.account_id = a.id
+            WHERE t.company_id = :company_id
+              AND t.is_deleted = false
+              AND t.date >= :start_date
+              AND t.date <= :end_date
+              AND a.include_in_profit_loss = true
             GROUP BY period
             ORDER BY period
         )
@@ -432,88 +436,6 @@ async def get_dynamics(
     ]
 
 
-@router.get("/income-by-category")
-async def get_income_by_category(
-    company_id: int,
-    start_date: datetime,
-    end_date: datetime,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    if start_date.tzinfo is not None:
-        start_date = start_date.replace(tzinfo=None)
-    if end_date.tzinfo is not None:
-        end_date = end_date.replace(tzinfo=None)
-    # Проверка доступа (аналогично)
-    if current_user.role == UserRole.FOUNDER:
-        result = await db.execute(select(Company).where(Company.id == company_id, Company.founder_id == current_user.id))
-    else:
-        result = await db.execute(select(Company).join(CompanyMember).where(Company.id == company_id, CompanyMember.user_id == current_user.id))
-    if not result.scalar_one_or_none():
-        raise HTTPException(status_code=403, detail="Access denied")
-    
-    query = select(
-        Category.id.label("category_id"),
-        Category.name.label("category_name"),
-        func.coalesce(func.sum(Transaction.amount), 0).label("total")
-    ).outerjoin(
-        Transaction, and_(
-            Transaction.category_id == Category.id,
-            Transaction.company_id == company_id,
-            Transaction.type == 'income',
-            Transaction.is_deleted == False,
-            Transaction.date >= start_date,
-            Transaction.date <= end_date
-        )
-    ).where(
-        Category.company_id == company_id,
-        Category.type == 'income'
-    ).group_by(Category.id, Category.name).order_by(func.sum(Transaction.amount).desc())
-    
-    result = await db.execute(query)
-    rows = result.all()
-    return [{"category_id": r.category_id, "category_name": r.category_name, "total": float(r.total)} for r in rows]
-
-
-@router.get("/expense-by-category")
-async def get_expense_by_category(
-    company_id: int,
-    start_date: datetime,
-    end_date: datetime,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    # Аналогично, но для расходов
-    if current_user.role == UserRole.FOUNDER:
-        result = await db.execute(select(Company).where(Company.id == company_id, Company.founder_id == current_user.id))
-    else:
-        result = await db.execute(select(Company).join(CompanyMember).where(Company.id == company_id, CompanyMember.user_id == current_user.id))
-    if not result.scalar_one_or_none():
-        raise HTTPException(status_code=403, detail="Access denied")
-    
-    query = select(
-        Category.id.label("category_id"),
-        Category.name.label("category_name"),
-        func.coalesce(func.sum(Transaction.amount), 0).label("total")
-    ).outerjoin(
-        Transaction, and_(
-            Transaction.category_id == Category.id,
-            Transaction.company_id == company_id,
-            Transaction.type == 'expense',
-            Transaction.is_deleted == False,
-            Transaction.date >= start_date,
-            Transaction.date <= end_date
-        )
-    ).where(
-        Category.company_id == company_id,
-        Category.type == 'expense'
-    ).group_by(Category.id, Category.name).order_by(func.sum(Transaction.amount).desc())
-    
-    result = await db.execute(query)
-    rows = result.all()
-    return [{"category_id": r.category_id, "category_name": r.category_name, "total": float(r.total)} for r in rows]
-
-
 @router.get("/cash-vs-noncash")
 async def get_cash_vs_noncash(
     company_id: int,
@@ -522,7 +444,6 @@ async def get_cash_vs_noncash(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # Приводим даты к naive (без часового пояса)
     if start_date.tzinfo is not None:
         start_date = start_date.replace(tzinfo=None)
     if end_date.tzinfo is not None:
@@ -536,20 +457,23 @@ async def get_cash_vs_noncash(
     if not result.scalar_one_or_none():
         raise HTTPException(status_code=403, detail="Access denied")
     
-    # Получаем ID счетов "Наличные" и "Банк" (или по типу)
+    # ИСПРАВЛЕНИЕ: учитываем только доходные операции по счетам с include_in_profit_loss = true
+    # Также ограничиваем типом 'income' (нас интересуют только поступления)
     cash_query = select(func.sum(Transaction.amount)).where(
         Transaction.company_id == company_id,
         Transaction.is_deleted == False,
         Transaction.date >= start_date,
         Transaction.date <= end_date,
-        Transaction.account.has(type='cash')
+        Transaction.account.has(type='cash', include_in_profit_loss=True),
+        Transaction.type == 'income'
     )
     bank_query = select(func.sum(Transaction.amount)).where(
         Transaction.company_id == company_id,
         Transaction.is_deleted == False,
         Transaction.date >= start_date,
         Transaction.date <= end_date,
-        Transaction.account.has(type='bank')
+        Transaction.account.has(type='bank', include_in_profit_loss=True),
+        Transaction.type == 'income'
     )
     cash_total = (await db.execute(cash_query)).scalar() or 0
     bank_total = (await db.execute(bank_query)).scalar() or 0
@@ -569,7 +493,7 @@ async def get_product_sales(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # Проверка доступа (как было)
+    # Проверка доступа
     if current_user.role == UserRole.FOUNDER:
         result = await db.execute(select(Company).where(Company.id == company_id, Company.founder_id == current_user.id))
     else:
@@ -581,7 +505,8 @@ async def get_product_sales(
         start_date = start_date.replace(tzinfo=None)
     if end_date.tzinfo is not None:
         end_date = end_date.replace(tzinfo=None)
-
+    
+    # ИСПРАВЛЕНИЕ: добавляем JOIN с accounts и фильтр по include_in_profit_loss
     query = select(
         Product.id.label("product_id"),
         Product.name.label("product_name"),
@@ -593,13 +518,16 @@ async def get_product_sales(
         Transaction, TransactionItem.transaction_id == Transaction.id
     ).join(
         Product, TransactionItem.product_id == Product.id
+    ).join(
+        Account, Transaction.account_id == Account.id
     ).where(
         Transaction.company_id == company_id,
         Transaction.type == 'income',
         Transaction.is_deleted == False,
         Transaction.date >= start_date,
         Transaction.date <= end_date,
-        Transaction.showcase_item_id.is_(None)   # ИСКЛЮЧАЕМ ВИТРИНУ
+        Transaction.showcase_item_id.is_(None),
+        Account.include_in_profit_loss == True
     ).group_by(Product.id, Product.name)
     
     if sort_by == 'quantity':
@@ -641,6 +569,7 @@ async def get_showcase_sales(
     if not result.scalar_one_or_none():
         raise HTTPException(status_code=403, detail="Access denied")
     
+    # ИСПРАВЛЕНИЕ: добавляем JOIN с accounts и фильтр по include_in_profit_loss
     query = select(
         ShowcaseItem.id.label("showcase_item_id"),
         ShowcaseItem.name.label("name"),
@@ -650,13 +579,16 @@ async def get_showcase_sales(
         Transaction
     ).join(
         ShowcaseItem, Transaction.showcase_item_id == ShowcaseItem.id
+    ).join(
+        Account, Transaction.account_id == Account.id
     ).where(
         Transaction.company_id == company_id,
         Transaction.type == 'income',
         Transaction.is_deleted == False,
         Transaction.date >= start_date,
         Transaction.date <= end_date,
-        Transaction.showcase_item_id.isnot(None)
+        Transaction.showcase_item_id.isnot(None),
+        Account.include_in_profit_loss == True
     ).group_by(ShowcaseItem.id, ShowcaseItem.name)
     
     if sort_by == 'quantity':
@@ -675,6 +607,7 @@ async def get_showcase_sales(
         }
         for r in rows
     ]
+
 
 @router.get("/product-income")
 async def get_product_income(
@@ -698,6 +631,7 @@ async def get_product_income(
     if end_date.tzinfo is not None:
         end_date = end_date.replace(tzinfo=None)
     
+    # ИСПРАВЛЕНИЕ: учитываем только счета с include_in_profit_loss == True
     query = select(
         Product.id.label("product_id"),
         Product.name.label("product_name"),
@@ -709,12 +643,15 @@ async def get_product_income(
         Transaction, TransactionItem.transaction_id == Transaction.id
     ).join(
         Product, TransactionItem.product_id == Product.id
+    ).join(
+        Account, Transaction.account_id == Account.id
     ).where(
         Transaction.company_id == company_id,
         Transaction.type == 'expense',
         Transaction.is_deleted == False,
         Transaction.date >= start_date,
-        Transaction.date <= end_date
+        Transaction.date <= end_date,
+        Account.include_in_profit_loss == True
     ).group_by(Product.id, Product.name)
     
     if sort_by == 'quantity':
@@ -733,6 +670,7 @@ async def get_product_income(
         }
         for r in rows
     ]
+
 
 @router.get("/product-consumption")
 async def get_product_consumption(
@@ -756,6 +694,7 @@ async def get_product_consumption(
     if end_date.tzinfo is not None:
         end_date = end_date.replace(tzinfo=None)
     
+    # ИСПРАВЛЕНИЕ: учитываем только счета с include_in_profit_loss == True
     query = select(
         Product.id.label("product_id"),
         Product.name.label("product_name"),
@@ -767,12 +706,15 @@ async def get_product_consumption(
         Transaction, TransactionItem.transaction_id == Transaction.id
     ).join(
         Product, TransactionItem.product_id == Product.id
+    ).join(
+        Account, Transaction.account_id == Account.id
     ).where(
         Transaction.company_id == company_id,
         Transaction.type == 'income',
         Transaction.is_deleted == False,
         Transaction.date >= start_date,
-        Transaction.date <= end_date
+        Transaction.date <= end_date,
+        Account.include_in_profit_loss == True
     ).group_by(Product.id, Product.name)
     
     if sort_by == 'quantity':

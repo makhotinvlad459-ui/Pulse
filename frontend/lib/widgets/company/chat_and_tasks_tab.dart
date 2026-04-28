@@ -1,10 +1,18 @@
 import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:path_provider/path_provider.dart';
+import 'package:photo_view/photo_view.dart';
 import '../../services/api_client.dart';
+import '../../services/image_compression.dart';
 import '../../providers/auth_provider.dart';
 import '../../models/user.dart';
 
@@ -41,6 +49,10 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
   WebSocketChannel? _chatChannel;
   WebSocketChannel? _tasksChannel;
 
+  // Переменные для вложений
+  XFile? _attachmentFile;
+  PlatformFile? _webFile;
+
   @override
   bool get wantKeepAlive => true;
 
@@ -76,6 +88,138 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
     super.dispose();
   }
 
+  // ======================= ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ ВЛОЖЕНИЙ =======================
+  Future<void> _showAttachmentPicker(BuildContext context) async {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Выбрать из галереи'),
+              onTap: () async {
+                Navigator.pop(context);
+                await _pickFile(ImageSource.gallery);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('Сделать фото'),
+              onTap: () async {
+                Navigator.pop(context);
+                await _pickFile(ImageSource.camera);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.insert_drive_file),
+              title: const Text('Выбрать файл'),
+              onTap: () async {
+                Navigator.pop(context);
+                await _pickFile();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickFile([ImageSource? source]) async {
+    if (source != null && !kIsWeb) {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(source: source);
+      if (picked != null) {
+        final compressed = await ImageCompression.compressImage(picked);
+        setState(() => _attachmentFile = compressed);
+      }
+    } else {
+      final result = await FilePicker.platform.pickFiles();
+      if (result != null) {
+        setState(() => _webFile = result.files.first);
+      }
+    }
+  }
+
+  Future<void> _showAttachmentDialog(String url) async {
+    final api = ApiClient();
+    try {
+      final response = await api.getFile(url);
+      final bytes = response.data as List<int>;
+      final uint8list = Uint8List.fromList(bytes);
+      final ext = url.split('.').last.toLowerCase();
+
+      if (ext == 'jpg' || ext == 'jpeg' || ext == 'png') {
+        showDialog(
+          context: context,
+          builder: (context) => Dialog(
+            insetPadding: const EdgeInsets.all(16),
+            child: Container(
+              width: MediaQuery.of(context).size.width * 0.9,
+              height: MediaQuery.of(context).size.height * 0.7,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.all(8.0),
+                    child: Text('Фото', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                  Expanded(
+                    child: PhotoView(
+                      imageProvider: MemoryImage(uint8list),
+                      minScale: PhotoViewComputedScale.contained * 0.8,
+                      maxScale: PhotoViewComputedScale.covered * 3,
+                      backgroundDecoration: const BoxDecoration(color: Colors.transparent),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Закрыть'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      } else {
+        final confirm = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Файл'),
+            content: const Text('Скачать вложение?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Отмена'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Скачать'),
+              ),
+            ],
+          ),
+        );
+        if (confirm == true) {
+          final directory = await getApplicationDocumentsDirectory();
+          final filename = url.split('/').last;
+          final file = File('${directory.path}/$filename');
+          await file.writeAsBytes(bytes);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Сохранено: ${file.path}'))
+          );
+        }
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка загрузки вложения: $e'))
+      );
+    }
+  }
+
+  // ======================= ОСНОВНЫЕ МЕТОДЫ =======================
   Future<void> _connectWebSockets() async {
     final api = ApiClient();
     final token = await api.getToken();
@@ -242,14 +386,40 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
 
   Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty && _attachmentFile == null && _webFile == null) return;
+
+    setState(() => _loadingMessages = true);
     final api = ApiClient();
     try {
-      await api.post('/chat/company/${widget.companyId}', data: {'message': text});
+      String? attachmentUrl;
+
+      if (_attachmentFile != null || _webFile != null) {
+        final uploadRes = await api.uploadChatFile(
+          _attachmentFile,
+          _webFile,
+          widget.companyId,
+        );
+        attachmentUrl = uploadRes['url'];
+      }
+
+      await api.post('/chat/company/${widget.companyId}', data: {
+        'message': text,
+        'attachment_url': attachmentUrl,
+      });
+
       _messageController.clear();
+      setState(() {
+        _attachmentFile = null;
+        _webFile = null;
+      });
+
+      await _loadChatMessages();
+      _scrollToBottom();
     } catch (e) {
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+          .showSnackBar(SnackBar(content: Text('Ошибка отправки: $e')));
+    } finally {
+      if (mounted) setState(() => _loadingMessages = false);
     }
   }
 
@@ -273,6 +443,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
     final api = ApiClient();
     try {
       await api.delete('/chat/company/${widget.companyId}/clear');
+      await _loadChatMessages();
     } catch (e) {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text('Ошибка: $e')));
@@ -521,7 +692,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
           child: TabBarView(
             controller: _tabController,
             children: [
-              // Чат
+              // ===================== ЧАТ =====================
               Column(
                 children: [
                   if (isFounder)
@@ -551,6 +722,12 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
                     padding: const EdgeInsets.all(12.0),
                     child: Row(
                       children: [
+                        IconButton(
+                          icon: const Icon(Icons.attach_file),
+                          onPressed: () => _showAttachmentPicker(context),
+                          tooltip: 'Прикрепить файл',
+                        ),
+                        const SizedBox(width: 8),
                         Expanded(
                           child: TextField(
                             controller: _messageController,
@@ -579,9 +756,40 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
                       ],
                     ),
                   ),
+                  if (_attachmentFile != null || _webFile != null)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade50,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.attachment, size: 16, color: Colors.blue),
+                            const SizedBox(width: 8),
+                            Text(
+                              _attachmentFile != null ? _attachmentFile!.name : _webFile!.name,
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.clear, size: 16),
+                              onPressed: () => setState(() {
+                                _attachmentFile = null;
+                                _webFile = null;
+                              }),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                 ],
               ),
-              // Задачи
+              // ===================== ЗАДАЧИ =====================
               Column(
                 children: [
                   if (canCreateTask)
@@ -641,6 +849,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
 
   Widget _buildMessageBubble(
       bool isMe, String displayName, Map<String, dynamic> msg, bool isFounder, ColorScheme colorScheme) {
+    final hasAttachment = msg['attachment_url'] != null && msg['attachment_url'].toString().isNotEmpty;
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 20),
       child: Column(
@@ -683,12 +892,45 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
                     offset: const Offset(0, 1))
               ],
             ),
-            child: Text(msg['message'],
-                style: GoogleFonts.roboto(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500,
-                    letterSpacing: 0.2,
-                    color: isMe ? colorScheme.onPrimaryContainer : colorScheme.onSurface)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(msg['message'],
+                    style: GoogleFonts.roboto(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 0.2,
+                        color: isMe ? colorScheme.onPrimaryContainer : colorScheme.onSurface)),
+                if (hasAttachment)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8.0),
+                    child: GestureDetector(
+                      onTap: () => _showAttachmentDialog(msg['attachment_url']),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.attach_file, size: 14),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Вложение',
+                              style: TextStyle(
+                                fontSize: 12,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
           const SizedBox(height: 4),
           Text(DateFormat('HH:mm').format(DateTime.parse(msg['created_at'])),

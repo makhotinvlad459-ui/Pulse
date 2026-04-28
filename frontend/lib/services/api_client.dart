@@ -5,6 +5,11 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:image_picker/image_picker.dart';
 import '../models/company.dart';
 import '../models/statistics.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
+
 
 class ApiClient {
   static String get baseUrl {
@@ -167,5 +172,37 @@ Future<dynamic> getShowcaseSales(int companyId, DateTime startDate, DateTime end
     'end_date': endDate.toIso8601String(),
     'sort_by': sortBy,
   });
+}
+
+Future<Map<String, dynamic>> uploadChatFile(
+  XFile? photo,
+  PlatformFile? webFile,
+  int companyId,
+) async {
+  final uri = Uri.parse('$baseUrl/chat/upload');
+  final request = http.MultipartRequest('POST', uri)
+    ..headers['Authorization'] = 'Bearer ${await getToken()}';
+  
+  if (photo != null) {
+    request.files.add(await http.MultipartFile.fromPath('file', photo.path));
+  } else if (webFile != null && webFile.bytes != null) {
+    request.files.add(http.MultipartFile.fromBytes(
+      'file',
+      webFile.bytes!,
+      filename: webFile.name,
+    ));
+  } else {
+    throw Exception('No file provided');
+  }
+  
+  request.fields['company_id'] = companyId.toString();
+  final streamedResponse = await request.send();
+  final response = await http.Response.fromStream(streamedResponse);
+  
+  if (response.statusCode != 200) {
+    throw Exception('Failed to upload chat file: ${response.body}');
+  }
+  
+  return jsonDecode(response.body);
 }
 }

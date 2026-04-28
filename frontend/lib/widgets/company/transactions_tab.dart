@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:universal_html/html.dart' as html;
+import 'package:photo_view/photo_view.dart';
 import '../../services/api_client.dart';
 import '../../models/transaction.dart';
 import 'edit_transaction_dialog.dart';
@@ -229,6 +230,7 @@ class _TransactionsTabState extends State<TransactionsTab> {
     }
   }
 
+  // ИСПРАВЛЕННЫЙ МЕТОД: просмотр вложения с зумом через PhotoView
   Future<void> _showAttachment(String? url, int transactionId) async {
     if (url == null) return;
     final api = ApiClient();
@@ -242,19 +244,31 @@ class _TransactionsTabState extends State<TransactionsTab> {
         showDialog(
           context: context,
           builder: (context) => Dialog(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Padding(
-                  padding: EdgeInsets.all(8.0),
-                  child: Text('Фото',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
-                ),
-                Image.memory(uint8list),
-                TextButton(
+            insetPadding: const EdgeInsets.all(16),
+            child: Container(
+              width: MediaQuery.of(context).size.width * 0.9,
+              height: MediaQuery.of(context).size.height * 0.7,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.all(8.0),
+                    child: Text('Фото', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                  Expanded(
+                    child: PhotoView(
+                      imageProvider: MemoryImage(uint8list),
+                      minScale: PhotoViewComputedScale.contained * 0.8,
+                      maxScale: PhotoViewComputedScale.covered * 3,
+                      backgroundDecoration: const BoxDecoration(color: Colors.transparent),
+                    ),
+                  ),
+                  TextButton(
                     onPressed: () => Navigator.pop(context),
-                    child: const Text('Закрыть')),
-              ],
+                    child: const Text('Закрыть'),
+                  ),
+                ],
+              ),
             ),
           ),
         );

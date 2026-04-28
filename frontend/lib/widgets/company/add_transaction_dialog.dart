@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../../../services/api_client.dart';
+import '../../../services/image_compression.dart';
 
 class AddTransactionDialog extends StatefulWidget {
   final int companyId;
@@ -86,25 +87,31 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
   }
 
   Future<void> _pickFile() async {
-    if (kIsWeb) {
-      final result = await FilePicker.platform.pickFiles();
-      if (result != null) setState(() => _webFile = result.files.first);
-    } else {
-      final picker = ImagePicker();
-      final picked = await picker.pickImage(source: ImageSource.gallery);
-      if (picked != null) setState(() => _photo = picked);
+  if (kIsWeb) {
+    final result = await FilePicker.platform.pickFiles();
+    if (result != null) setState(() => _webFile = result.files.first);
+  } else {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: ImageSource.gallery);
+    if (picked != null) {
+      final compressed = await ImageCompression.compressImage(picked);
+      setState(() => _photo = compressed);
     }
   }
+}
 
-  Future<void> _takePhoto() async {
-    if (kIsWeb) {
-      await _pickFile();
-    } else {
-      final picker = ImagePicker();
-      final picked = await picker.pickImage(source: ImageSource.camera);
-      if (picked != null) setState(() => _photo = picked);
+ Future<void> _takePhoto() async {
+  if (kIsWeb) {
+    await _pickFile();
+  } else {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: ImageSource.camera);
+    if (picked != null) {
+      final compressed = await ImageCompression.compressImage(picked);
+      setState(() => _photo = compressed);
     }
   }
+}
 
   Future<void> _addProduct() async {
     final api = ApiClient();
@@ -275,6 +282,7 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final isSmallScreen = MediaQuery.of(context).size.width < 500;
     final showAmountField = _selectedProducts.isEmpty;
     final effectiveAmount = showAmountField ? _amount : _calculatedAmount;
 
@@ -297,6 +305,13 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
                     Expanded(
                       child: SegmentedButton<String>(
                         style: ButtonStyle(
+                          visualDensity: VisualDensity.compact,
+                          textStyle: MaterialStateProperty.all(
+                            TextStyle(fontSize: isSmallScreen ? 11 : 13),
+                          ),
+                          padding: MaterialStateProperty.all(
+                            EdgeInsets.symmetric(horizontal: isSmallScreen ? 4 : 8),
+                          ),
                           foregroundColor: MaterialStateProperty.resolveWith((states) {
                             if (states.contains(MaterialState.selected)) return Colors.black;
                             return Colors.grey.shade700;
@@ -306,10 +321,22 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
                             return Colors.grey.shade200;
                           }),
                         ),
-                        segments: const [
-                          ButtonSegment(value: 'income', label: Text('Приход (Продажа)'), icon: Icon(Icons.arrow_upward)),
-                          ButtonSegment(value: 'expense', label: Text('Расход (Покупка)'), icon: Icon(Icons.arrow_downward)),
-                          ButtonSegment(value: 'transfer', label: Text('Перевод'), icon: Icon(Icons.swap_horiz)),
+                        segments: [
+                          ButtonSegment(
+                            value: 'income',
+                            label: Text(isSmallScreen ? 'Приход' : 'Приход (Продажа)'),
+                            icon: isSmallScreen ? null : const Icon(Icons.arrow_upward),
+                          ),
+                          ButtonSegment(
+                            value: 'expense',
+                            label: Text(isSmallScreen ? 'Расход' : 'Расход (Покупка)'),
+                            icon: isSmallScreen ? null : const Icon(Icons.arrow_downward),
+                          ),
+                          ButtonSegment(
+                            value: 'transfer',
+                            label: Text(isSmallScreen ? 'Перевод' : 'Перевод'),
+                            icon: isSmallScreen ? null : const Icon(Icons.swap_horiz),
+                          ),
                         ],
                         selected: {_type},
                         onSelectionChanged: (Set<String> newSelection) {
