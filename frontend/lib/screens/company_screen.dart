@@ -22,7 +22,7 @@ import '../widgets/company/showcase_tab.dart';
 import '../widgets/matrix_rain.dart';
 import '../providers/theme_provider.dart';
 
-// Вспомогательный класс для параметров дождя
+// Вспомогательный класс для параметров дождя (без изменений)
 class RainTheme {
   final Color color;
   final double opacity;
@@ -77,14 +77,14 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
   int _unreadMessagesCount = 0;
   WebSocketChannel? _userChannel;
 
-  // Ключ для обновления отчётов
   final GlobalKey<ReportsTabState> _reportsTabKey = GlobalKey<ReportsTabState>();
 
   @override
   void initState() {
     super.initState();
     initializeDateFormatting('ru_RU', null);
-    _tabController = TabController(length: 5, vsync: this);
+    // Длина контроллера = 7 (операции, витрина, чат/задачи, склад, отчеты, заявки, документы)
+    _tabController = TabController(length: 7, vsync: this);
     _loadData();
     _connectUserWebSocket();
   }
@@ -198,7 +198,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
 
   Future<void> _refresh() async {
     await _loadData();
-    _reportsTabKey.currentState?.refreshData(); // обновляем отчёты
+    _reportsTabKey.currentState?.refreshData();
     setState(() => _hasChanges = true);
   }
 
@@ -433,23 +433,27 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                     ),
                   ),
                 ),
-                // Вкладки
+                // Вкладки с каруселью
                 Expanded(
                   child: Column(
                     children: [
                       TabBar(
                         controller: _tabController,
-                        tabs: const [
-                          Tab(text: 'Операции'),
-                          Tab(text: 'Витрина'),
-                          Tab(text: 'Чат/Задачи'),
-                          Tab(text: 'Склад'),
-                          Tab(text: 'Отчеты'),
-                        ],
+                        isScrollable: true,
+                        indicatorColor: colorScheme.primary,
                         labelColor: colorScheme.primary,
                         unselectedLabelColor: colorScheme.onSurfaceVariant,
-                        indicatorColor: colorScheme.primary,
-                        labelStyle: const TextStyle(fontWeight: FontWeight.normal),
+                        labelStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                        unselectedLabelStyle: const TextStyle(fontSize: 14),
+                        tabs: const [
+                          Tab(icon: Icon(Icons.receipt), text: 'Операции'),
+                          Tab(icon: Icon(Icons.storefront), text: 'Витрина'),
+                          Tab(icon: Icon(Icons.chat_bubble), text: 'Чат/Задачи'),
+                          Tab(icon: Icon(Icons.inventory), text: 'Склад'),
+                          Tab(icon: Icon(Icons.bar_chart), text: 'Отчеты'),
+                          Tab(icon: Icon(Icons.assignment), text: 'Заявки'),
+                          Tab(icon: Icon(Icons.folder), text: 'Документы'),
+                        ],
                       ),
                       Expanded(
                         child: TabBarView(
@@ -477,6 +481,28 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                               key: _reportsTabKey,
                               companyId: widget.company.id,
                               categories: _categories,
+                            ),
+                            // Заглушка "Заявки"
+                            const Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.assignment, size: 64),
+                                  SizedBox(height: 16),
+                                  Text('Заявки — в разработке'),
+                                ],
+                              ),
+                            ),
+                            // Заглушка "Документы"
+                            const Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.folder, size: 64),
+                                  SizedBox(height: 16),
+                                  Text('Документы — в разработке'),
+                                ],
+                              ),
                             ),
                           ],
                         ),

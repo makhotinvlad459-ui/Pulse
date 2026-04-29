@@ -344,25 +344,26 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
   }
 
   Future<void> _loadChatMessages() async {
-    final api = ApiClient();
-    try {
-      final res = await api.get('/chat/company/${widget.companyId}');
-      final newMessages = List<Map<String, dynamic>>.from(res.data);
-      setState(() {
-        _messages = newMessages;
-        _loadingMessages = false;
-      });
-      _updateUnreadCount();
-      _scrollToBottom();
-      if (_tabController.index == 0) {
-        await _markChatRead();
-        _lastVisit = DateTime.now();
-      }
-    } catch (e) {
-      setState(() => _loadingMessages = false);
-      print('Error loading chat: $e');
+  final api = ApiClient();
+  try {
+    final res = await api.get('/chat/company/${widget.companyId}');
+    final newMessages = List<Map<String, dynamic>>.from(res.data);
+    setState(() {
+      _messages = newMessages;
+      _loadingMessages = false;
+    });
+    // Всегда обновляем last_visit и помечаем прочитанным, если мы на вкладке чата
+    if (_tabController.index == 0) {
+      await _markChatRead();
+      _lastVisit = DateTime.now();
     }
+    _updateUnreadCount();
+    _scrollToBottom();
+  } catch (e) {
+    setState(() => _loadingMessages = false);
+    print('Error loading chat: $e');
   }
+}
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -392,43 +393,47 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
   }
 
   Future<void> _sendMessage() async {
-    final text = _messageController.text.trim();
-    if (text.isEmpty && _attachmentFile == null && _webFile == null) return;
+  final text = _messageController.text.trim();
+  if (text.isEmpty && _attachmentFile == null && _webFile == null) return;
 
-    setState(() => _loadingMessages = true);
-    final api = ApiClient();
-    try {
-      String? attachmentUrl;
-
-      if (_attachmentFile != null || _webFile != null) {
-        final uploadRes = await api.uploadChatFile(
-          _attachmentFile,
-          _webFile,
-          widget.companyId,
-        );
-        attachmentUrl = uploadRes['url'];
-      }
-
-      await api.post('/chat/company/${widget.companyId}', data: {
-        'message': text,
-        'attachment_url': attachmentUrl,
-      });
-
-      _messageController.clear();
-      setState(() {
-        _attachmentFile = null;
-        _webFile = null;
-      });
-
-      await _loadChatMessages();
-      _scrollToBottom();
-    } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Ошибка отправки: $e')));
-    } finally {
-      if (mounted) setState(() => _loadingMessages = false);
+  setState(() => _loadingMessages = true);
+  final api = ApiClient();
+  try {
+    String? attachmentUrl;
+    if (_attachmentFile != null || _webFile != null) {
+      final uploadRes = await api.uploadChatFile(
+        _attachmentFile,
+        _webFile,
+        widget.companyId,
+      );
+      attachmentUrl = uploadRes['url'];
     }
+
+    await api.post('/chat/company/${widget.companyId}', data: {
+      'message': text,
+      'attachment_url': attachmentUrl,
+    });
+
+    _messageController.clear();
+    setState(() {
+      _attachmentFile = null;
+      _webFile = null;
+    });
+
+    // Перезагружаем сообщения
+    await _loadChatMessages();
+    // Принудительно сбрасываем счётчик для родителя, потому что мы только что прочитали все сообщения
+    widget.onUnreadMessagesChanged?.call(0);
+    // Дополнительно пометим чат прочитанным (на сервере и локально)
+    await _markChatRead();
+    _lastVisit = DateTime.now();
+  } catch (e) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('Ошибка отправки: $e')));
+  } finally {
+    if (mounted) setState(() => _loadingMessages = false);
   }
+}
 
   Future<void> _clearChat() async {
     final confirm = await showDialog<bool>(
