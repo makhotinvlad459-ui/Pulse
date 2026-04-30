@@ -85,6 +85,7 @@ class CompanyMember(Base):
     company: Mapped["Company"] = relationship("Company", back_populates="members")
     user: Mapped["User"] = relationship("User", foreign_keys=[user_id], back_populates="memberships")
     inviter: Mapped["User"] = relationship("User", foreign_keys=[invited_by], back_populates="invited_members")
+    permissions: Mapped[list["CompanyMemberPermission"]] = relationship(back_populates="member", cascade="all, delete-orphan")
 
 class Account(Base):
     __tablename__ = "accounts"
@@ -302,3 +303,27 @@ class TransactionItem(Base):
     # relationships
     transaction: Mapped["Transaction"] = relationship(back_populates="items")
     product: Mapped["Product"] = relationship()
+
+class Permission(Base):
+    __tablename__ = "permissions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), unique=True)  # код права, например "view_operations"
+    description: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # отношения
+    company_members: Mapped[list["CompanyMemberPermission"]] = relationship(back_populates="permission")
+
+class CompanyMemberPermission(Base):
+    __tablename__ = "company_member_permissions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    member_id: Mapped[int] = mapped_column(ForeignKey("company_members.id", ondelete="CASCADE"))
+    permission_id: Mapped[int] = mapped_column(ForeignKey("permissions.id", ondelete="CASCADE"))
+    granted_by: Mapped[int] = mapped_column(ForeignKey("users.id"))  # кто выдал право
+    granted_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    # отношения
+    member: Mapped["CompanyMember"] = relationship(back_populates="permissions")
+    permission: Mapped["Permission"] = relationship(back_populates="company_members")
+    granter: Mapped["User"] = relationship()    

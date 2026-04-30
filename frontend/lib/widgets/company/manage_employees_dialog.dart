@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../services/api_client.dart';
+import '../../providers/auth_provider.dart';
+import '../../models/user.dart';
+import 'member_permissions_dialog.dart';
 
 class ManageEmployeesDialog extends StatefulWidget {
   final int companyId;
@@ -32,8 +36,14 @@ class _ManageEmployeesDialogState extends State<ManageEmployeesDialog> {
     final api = ApiClient();
     try {
       final response = await api.get('/companies/${widget.companyId}/members');
+      List<Map<String, dynamic>> members = List<Map<String, dynamic>>.from(response.data);
+      final container = ProviderScope.containerOf(context);
+      final authState = container.read(authProvider);
+      final currentUserId = authState.user?.id;
+      // Исключаем учредителя (is_founder == true) и текущего пользователя
+      members.removeWhere((m) => m['is_founder'] == true || m['user_id'] == currentUserId);
       setState(() {
-        _members = List<Map<String, dynamic>>.from(response.data);
+        _members = members;
         _loading = false;
       });
     } catch (e) {
@@ -158,39 +168,34 @@ class _ManageEmployeesDialogState extends State<ManageEmployeesDialog> {
     }
   }
 
-  Future<void> _setAsManager(int userId, String fullName) async {
+  Future<bool> _canManageEmployees() async {
     final api = ApiClient();
     try {
-      await api.put('/companies/${widget.companyId}/manager',
-          data: {'user_id': userId});
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$fullName назначен управляющим')));
-      await _loadMembers();
-      widget.onSuccess();
+      final myPerms = await api.getMyPermissions(widget.companyId);
+      final permsList = List<String>.from(myPerms['permissions']);
+      return permsList.contains('manage_employees');
     } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+      return false;
     }
   }
 
-  Future<void> _demoteToEmployee(int userId) async {
+  Future<bool> _canManagePermissions() async {
     final api = ApiClient();
     try {
-      await api.patch('/companies/${widget.companyId}/members/$userId/role',
-          data: {'role_in_company': 'employee'});
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Роль изменена на сотрудника')));
-      await _loadMembers();
-      widget.onSuccess();
+      final myPerms = await api.getMyPermissions(widget.companyId);
+      final permsList = List<String>.from(myPerms['permissions']);
+      return permsList.contains('manage_permissions');
     } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+      return false;
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final container = ProviderScope.containerOf(context);
+    final authState = container.read(authProvider);
+    final isFounder = authState.user?.role == UserRole.founder;
 
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
@@ -301,46 +306,71 @@ class _ManageEmployeesDialogState extends State<ManageEmployeesDialog> {
             Expanded(
               child: _loading
                   ? const Center(child: CircularProgressIndicator())
-                  : ListView.builder(
-                      itemCount: _members.length,
-                      itemBuilder: (context, index) {
-                        final m = _members[index];
-                        final isManager = m['role_in_company'] == 'manager';
-                        return ListTile(
-                          title: Text(m['full_name'], style: TextStyle(color: colorScheme.onSurface)),
-                          subtitle: Text(
-                              '${m['phone']} • Роль: ${isManager ? 'Управляющий' : 'Сотрудник'}',
-                              style: TextStyle(color: colorScheme.onSurfaceVariant)),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (!isManager)
-                                IconButton(
-                                  icon: Icon(Icons.star, color: Colors.orange),
-                                  onPressed: () => _setAsManager(
-                                      m['user_id'], m['full_name']),
-                                  tooltip: 'Назначить управляющим',
-                                ),
-                              if (isManager)
-                                IconButton(
-                                  icon: Icon(Icons.star_border, color: colorScheme.onSurfaceVariant),
-                                  onPressed: () =>
-                                      _demoteToEmployee(m['user_id']),
-                                  tooltip: 'Понизить до сотрудника',
-                                ),
-                              IconButton(
-                                icon: Icon(Icons.refresh, color: colorScheme.onSurfaceVariant),
-                                onPressed: () => _resetPassword(
-                                    m['user_id'], m['full_name']),
-                                tooltip: 'Сбросить пароль',
+                  : FutureBuilder<(bool, bool)>(
+                      future: Future.wait([_canManageEmployees(), _canManagePermissions()])
+                          .then((results) => (results[0], results[1])),
+                      builder: (context, snapshot) {
+                        final canManageEmployees = isFounder || (snapshot.data?.$1 ?? false);
+                        final canManagePermissions = isFounder || (snapshot.data?.$2 ?? false);
+                        return ListView.builder(
+                          itemCount: _members.length,
+                          itemBuilder: (context, index) {
+                            final m = _members[index];
+                            return ListTile(
+                              title: Text(m['full_name'], style: TextStyle(color: colorScheme.onSurface)),
+                              subtitle: Text(m['phone'], style: TextStyle(color: colorScheme.onSurfaceVariant)),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (canManagePermissions)
+                                    IconButton(
+                                      icon: Icon(Icons.security, color: Colors.blue),
+                                      onPressed: () async {
+                                        final api = ApiClient();
+                                        final res = await api.getCompanyPermissions(widget.companyId);
+                                        final membersList = res as List;
+                                        final thisMember = membersList.firstWhere(
+                                          (member) => member['member_id'] == m['id'],
+                                          orElse: () => null,
+                                        );
+                                        if (thisMember == null) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(content: Text('Не удалось загрузить права сотрудника')));
+                                          return;
+                                        }
+                                        final currentPermissions = List<String>.from(thisMember['permissions'] ?? []);
+                                        await showDialog(
+                                          context: context,
+                                          builder: (_) => MemberPermissionsDialog(
+                                            companyId: widget.companyId,
+                                            memberId: m['id'],
+                                            memberName: m['full_name'],
+                                            currentPermissions: currentPermissions,
+                                            onSuccess: () {
+                                              widget.onSuccess();
+                                            },
+                                            isFounder: false,
+                                          ),
+                                        );
+                                      },
+                                      tooltip: 'Управление правами',
+                                    ),
+                                  if (canManageEmployees)
+                                    IconButton(
+                                      icon: Icon(Icons.refresh, color: Colors.blueGrey),
+                                      onPressed: () => _resetPassword(m['user_id'], m['full_name']),
+                                      tooltip: 'Сбросить пароль',
+                                    ),
+                                  if (canManageEmployees)
+                                    IconButton(
+                                      icon: const Icon(Icons.delete, color: Colors.red),
+                                      onPressed: () => _removeMember(m['user_id'], m['full_name']),
+                                      tooltip: 'Удалить сотрудника',
+                                    ),
+                                ],
                               ),
-                              IconButton(
-                                icon: const Icon(Icons.delete, color: Colors.red),
-                                onPressed: () =>
-                                    _removeMember(m['user_id'], m['full_name']),
-                              ),
-                            ],
-                          ),
+                            );
+                          },
                         );
                       },
                     ),

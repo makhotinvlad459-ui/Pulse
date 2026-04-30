@@ -22,7 +22,6 @@ import '../widgets/company/showcase_tab.dart';
 import '../widgets/matrix_rain.dart';
 import '../providers/theme_provider.dart';
 
-// Вспомогательный класс для параметров дождя (без изменений)
 class RainTheme {
   final Color color;
   final double opacity;
@@ -65,7 +64,7 @@ class CompanyScreen extends ConsumerStatefulWidget {
 }
 
 class _CompanyScreenState extends ConsumerState<CompanyScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late TabController _tabController;
   List<dynamic> _accounts = [];
   List<dynamic> _transactions = [];
@@ -79,11 +78,20 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
 
   final GlobalKey<ReportsTabState> _reportsTabKey = GlobalKey<ReportsTabState>();
 
+  Set<String> _myPermissions = {};
+  bool _permissionsLoaded = false;
+
+  void _initTabController(int length) {
+    if (_tabController.length != length) {
+      _tabController.dispose();
+      _tabController = TabController(length: length, vsync: this);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     initializeDateFormatting('ru_RU', null);
-    // Длина контроллера = 7 (операции, витрина, чат/задачи, склад, отчеты, заявки, документы)
     _tabController = TabController(length: 7, vsync: this);
     _loadData();
     _connectUserWebSocket();
@@ -188,11 +196,30 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
         _loading = false;
       });
       await _refreshCounters();
+      await _loadMyPermissions();
     } catch (e) {
       setState(() => _loading = false);
       if (mounted)
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('Ошибка загрузки: $e')));
+    }
+  }
+
+  Future<void> _loadMyPermissions() async {
+    final api = ApiClient();
+    try {
+      final res = await api.getMyPermissions(widget.company.id);
+      final perms = res['permissions'] as List?;
+      setState(() {
+        _myPermissions = (perms ?? []).cast<String>().toSet();
+        _permissionsLoaded = true;
+      });
+    } catch (e) {
+      print('Error loading permissions: $e');
+      setState(() {
+        _myPermissions = {};
+        _permissionsLoaded = true;
+      });
     }
   }
 
@@ -230,24 +257,104 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
     final currentUserRole = widget.company.currentUserRole;
     final isManager = currentUserRole == 'manager';
 
-    final showEditCompany = isFounder;
-    final showAddAccount = isFounder || isManager;
-    final showManageCategories = isFounder || isManager;
-    final showManageEmployees = isFounder || isManager;
-    final showArchive =
-        (isFounder || isManager) && _archiveAccountId != null;
-    final showDeleteCompany = isFounder;
-    final showMenu = isFounder || isManager;
-
     final gridColor = getGridColor(currentTheme, colorScheme);
     final rain = getRainTheme(currentTheme);
     final double rainHeight = 260;
+
+    if (!_permissionsLoaded) {
+      return Scaffold(
+        backgroundColor: colorScheme.background,
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    Set<String> effectivePermissions = _myPermissions;
+    if (isFounder || effectivePermissions.isEmpty) {
+      effectivePermissions = {
+        'view_operations', 'view_showcase', 'view_chat', 'view_tasks',
+        'view_products', 'view_reports', 'view_documents', 'view_requests'
+      };
+    }
+
+    // Меню показываем, если есть права на управление
+    final showMenu = isFounder || effectivePermissions.contains('manage_employees') || effectivePermissions.contains('manage_permissions');
+    final showEditCompany = isFounder || effectivePermissions.contains('edit_company');
+    final showAddAccount = isFounder || effectivePermissions.contains('create_account');
+    final showManageCategories = isFounder || effectivePermissions.contains('manage_categories');
+    final showManageEmployees = isFounder || effectivePermissions.contains('manage_employees');
+    final showArchive = (isFounder || effectivePermissions.contains('view_archive')) && _archiveAccountId != null;
+    final showDeleteCompany = isFounder;
+
+    final List<Tab> tabs = [];
+    final List<Widget> tabWidgets = [];
+
+    if (effectivePermissions.contains('view_operations')) {
+      tabs.add(const Tab(icon: Icon(Icons.receipt), text: 'Операции'));
+      tabWidgets.add(TransactionsTab(
+        companyId: widget.company.id,
+        onRefresh: _refresh,
+        accounts: _accounts,
+        categories: _categories,
+        isFounder: isFounder,
+      ));
+    }
+    if (effectivePermissions.contains('view_showcase')) {
+      tabs.add(const Tab(icon: Icon(Icons.storefront), text: 'Витрина'));
+      tabWidgets.add(ShowcaseTab(
+        companyId: widget.company.id,
+        onRefresh: _refresh,
+      ));
+    }
+    if (effectivePermissions.contains('view_chat') || effectivePermissions.contains('view_tasks')) {
+      tabs.add(const Tab(icon: Icon(Icons.chat_bubble), text: 'Чат/Задачи'));
+      tabWidgets.add(ChatAndTasksTab(
+        companyId: widget.company.id,
+        isManager: isManager,
+        onPendingTasksChanged: _onPendingTasksChanged,
+        onUnreadMessagesChanged: _onUnreadMessagesChanged,
+      ));
+    }
+    if (effectivePermissions.contains('view_products')) {
+      tabs.add(const Tab(icon: Icon(Icons.inventory), text: 'Склад'));
+      tabWidgets.add(StockTab(companyId: widget.company.id));
+    }
+    if (effectivePermissions.contains('view_reports')) {
+      tabs.add(const Tab(icon: Icon(Icons.bar_chart), text: 'Отчеты'));
+      tabWidgets.add(ReportsTab(
+        key: _reportsTabKey,
+        companyId: widget.company.id,
+        categories: _categories,
+      ));
+    }
+    tabs.add(const Tab(icon: Icon(Icons.assignment), text: 'Заявки'));
+    tabWidgets.add(const Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.assignment, size: 64),
+          SizedBox(height: 16),
+          Text('Заявки — в разработке'),
+        ],
+      ),
+    ));
+    tabs.add(const Tab(icon: Icon(Icons.folder), text: 'Документы'));
+    tabWidgets.add(const Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.folder, size: 64),
+          SizedBox(height: 16),
+          Text('Документы — в разработке'),
+        ],
+      ),
+    ));
+
+    _initTabController(tabs.length);
 
     return Scaffold(
       backgroundColor: colorScheme.background,
       body: Stack(
         children: [
-          // Фон: сетка
           Container(
             color: colorScheme.background,
             child: CustomPaint(
@@ -255,7 +362,6 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
               size: Size.infinite,
             ),
           ),
-          // Матричный дождь (ограничен по высоте)
           Positioned(
             top: 0,
             left: 0,
@@ -267,11 +373,9 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
               speedFactor: rain.speed,
             ),
           ),
-          // Контент
           SafeArea(
             child: Column(
               children: [
-                // Верхняя панель
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   child: Row(
@@ -354,7 +458,6 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                     ],
                   ),
                 ),
-                // Название компании
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   child: Text(
@@ -401,7 +504,6 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                       ],
                     ),
                   ),
-                // Список счетов
                 SizedBox(
                   height: 100,
                   child: SingleChildScrollView(
@@ -433,7 +535,6 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                     ),
                   ),
                 ),
-                // Вкладки с каруселью
                 Expanded(
                   child: Column(
                     children: [
@@ -445,66 +546,12 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                         unselectedLabelColor: colorScheme.onSurfaceVariant,
                         labelStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                         unselectedLabelStyle: const TextStyle(fontSize: 14),
-                        tabs: const [
-                          Tab(icon: Icon(Icons.receipt), text: 'Операции'),
-                          Tab(icon: Icon(Icons.storefront), text: 'Витрина'),
-                          Tab(icon: Icon(Icons.chat_bubble), text: 'Чат/Задачи'),
-                          Tab(icon: Icon(Icons.inventory), text: 'Склад'),
-                          Tab(icon: Icon(Icons.bar_chart), text: 'Отчеты'),
-                          Tab(icon: Icon(Icons.assignment), text: 'Заявки'),
-                          Tab(icon: Icon(Icons.folder), text: 'Документы'),
-                        ],
+                        tabs: tabs,
                       ),
                       Expanded(
                         child: TabBarView(
                           controller: _tabController,
-                          children: [
-                            TransactionsTab(
-                              companyId: widget.company.id,
-                              onRefresh: _refresh,
-                              accounts: _accounts,
-                              categories: _categories,
-                              isFounder: isFounder,
-                            ),
-                            ShowcaseTab(
-                              companyId: widget.company.id,
-                              onRefresh: _refresh,
-                            ),
-                            ChatAndTasksTab(
-                              companyId: widget.company.id,
-                              isManager: isManager,
-                              onPendingTasksChanged: _onPendingTasksChanged,
-                              onUnreadMessagesChanged: _onUnreadMessagesChanged,
-                            ),
-                            StockTab(companyId: widget.company.id),
-                            ReportsTab(
-                              key: _reportsTabKey,
-                              companyId: widget.company.id,
-                              categories: _categories,
-                            ),
-                            // Заглушка "Заявки"
-                            const Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.assignment, size: 64),
-                                  SizedBox(height: 16),
-                                  Text('Заявки — в разработке'),
-                                ],
-                              ),
-                            ),
-                            // Заглушка "Документы"
-                            const Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.folder, size: 64),
-                                  SizedBox(height: 16),
-                                  Text('Документы — в разработке'),
-                                ],
-                              ),
-                            ),
-                          ],
+                          children: tabWidgets,
                         ),
                       ),
                     ],

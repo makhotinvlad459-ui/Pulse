@@ -205,4 +205,24 @@ Future<Map<String, dynamic>> uploadChatFile(
   
   return jsonDecode(response.body);
 }
+
+// ========== Методы для работы с правами (permissions) ==========
+  Future<List<dynamic>> getAllPermissions() async {
+    final response = await get('/permissions/list');
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> getMyPermissions(int companyId) async {
+    final response = await get('/permissions/company/$companyId/my');
+    return response.data;
+  }
+
+  Future<List<dynamic>> getCompanyPermissions(int companyId) async {
+    final response = await get('/permissions/company/$companyId');
+    return response.data;
+  }
+
+  Future<void> updateMemberPermissions(int companyId, int memberId, List<String> permissionNames) async {
+    await put('/permissions/company/$companyId/member/$memberId', data: {'permission_names': permissionNames});
+  }
 }
