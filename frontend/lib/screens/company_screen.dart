@@ -317,11 +317,12 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
       ));
     }
     if (effectivePermissions.contains('view_products')) {
-      tabs.add(const Tab(icon: Icon(Icons.inventory), text: 'Склад'));
-      tabWidgets.add(StockTab(
-        companyId: widget.company.id,
-      ));
-    }
+  tabs.add(const Tab(icon: Icon(Icons.inventory), text: 'Склад'));
+  tabWidgets.add(StockTab(
+    companyId: widget.company.id,
+    permissions: effectivePermissions,
+  ));
+}
     if (effectivePermissions.contains('view_reports')) {
       tabs.add(const Tab(icon: Icon(Icons.bar_chart), text: 'Отчеты'));
       tabWidgets.add(ReportsTab(

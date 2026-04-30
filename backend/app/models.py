@@ -123,6 +123,10 @@ class Category(Base):
     transactions: Mapped[list["Transaction"]] = relationship("Transaction", back_populates="category")
     category: Mapped["Category"] = relationship()
 
+class ProductType(str, PyEnum):
+    PRODUCT = "product"
+    MATERIAL = "material"
+
 class Product(Base):
     __tablename__ = "products"
 
@@ -132,6 +136,12 @@ class Product(Base):
     unit: Mapped[str] = mapped_column(String(20))
     current_quantity: Mapped[float] = mapped_column(Numeric(15, 3), default=0.0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    # НОВЫЕ ПОЛЯ
+    type: Mapped[ProductType] = mapped_column(Enum(ProductType), default=ProductType.PRODUCT)
+    label: Mapped[str | None] = mapped_column(String(100), nullable=True)      # артикул / метка
+    size: Mapped[str | None] = mapped_column(String(50), nullable=True)        # размер
+    barcode: Mapped[str | None] = mapped_column(String(100), nullable=True)    # штрихкод
+    supplier: Mapped[str | None] = mapped_column(String(200), nullable=True)   # поставщик
 
     # relationships
     company: Mapped["Company"] = relationship(back_populates="products")
