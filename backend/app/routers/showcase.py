@@ -5,7 +5,7 @@ from typing import List, Optional
 from datetime import datetime
 
 from app.database import get_db
-from app.models import User, Company, ShowcaseItem, CompanyMember, UserRole
+from app.models import User, Company, ShowcaseItem, CompanyMember, UserRole, Permission, CompanyMemberPermission
 from app.schemas import ShowcaseItemCreate, ShowcaseItemUpdate, ShowcaseItemResponse
 from app.deps import get_current_user
 
@@ -20,13 +20,25 @@ async def _check_company_access(company_id: int, current_user: User, db: AsyncSe
     return result.scalar_one_or_none() is not None
 
 async def _can_edit(company_id: int, current_user: User, db: AsyncSession) -> bool:
-    # Учредитель или управляющий могут редактировать витрину
+    # Учредитель может редактировать
     if current_user.role == UserRole.FOUNDER:
         result = await db.execute(select(Company).where(Company.id == company_id, Company.founder_id == current_user.id))
         if result.scalar_one_or_none():
             return True
-    result = await db.execute(select(CompanyMember).where(CompanyMember.company_id == company_id, CompanyMember.user_id == current_user.id, CompanyMember.role_in_company == 'manager'))
-    return result.scalar_one_or_none() is not None
+    # Проверяем, есть ли у пользователя право edit_showcase
+    member = await db.execute(
+        select(CompanyMember).where(CompanyMember.company_id == company_id, CompanyMember.user_id == current_user.id)
+    )
+    member = member.scalar_one_or_none()
+    if not member:
+        return False
+    perm = await db.execute(
+        select(CompanyMemberPermission).join(Permission).where(
+            CompanyMemberPermission.member_id == member.id,
+            Permission.name == 'edit_showcase'
+        )
+    )
+    return perm.scalar_one_or_none() is not None
 
 @router.get("/", response_model=List[ShowcaseItemResponse])
 async def get_showcase_items(
@@ -47,7 +59,7 @@ async def create_showcase_item(
     current_user: User = Depends(get_current_user)
 ):
     if not await _can_edit(company_id, current_user, db):
-        raise HTTPException(status_code=403, detail="Only founder or manager can edit showcase")
+        raise HTTPException(status_code=403, detail="You don't have edit_showcase permission")
     new_item = ShowcaseItem(
         company_id=company_id,
         name=item_data.name,
@@ -71,7 +83,7 @@ async def update_showcase_item(
     current_user: User = Depends(get_current_user)
 ):
     if not await _can_edit(company_id, current_user, db):
-        raise HTTPException(status_code=403, detail="Only founder or manager can edit showcase")
+        raise HTTPException(status_code=403, detail="You don't have edit_showcase permission")
     result = await db.execute(select(ShowcaseItem).where(ShowcaseItem.id == item_id, ShowcaseItem.company_id == company_id))
     item = result.scalar_one_or_none()
     if not item:
@@ -86,7 +98,7 @@ async def update_showcase_item(
         item.image_url = item_data.image_url
     if item_data.recipe is not None:
         item.recipe = item_data.recipe
-    if item_data.category_id is not None:   # добавлено
+    if item_data.category_id is not None:
         item.category_id = item_data.category_id
     item.updated_at = datetime.utcnow()
     await db.commit()
@@ -101,7 +113,7 @@ async def delete_showcase_item(
     current_user: User = Depends(get_current_user)
 ):
     if not await _can_edit(company_id, current_user, db):
-        raise HTTPException(status_code=403, detail="Only founder or manager can delete showcase items")
+        raise HTTPException(status_code=403, detail="You don't have edit_showcase permission")
     result = await db.execute(select(ShowcaseItem).where(ShowcaseItem.id == item_id, ShowcaseItem.company_id == company_id))
     item = result.scalar_one_or_none()
     if not item:
@@ -118,7 +130,7 @@ async def reorder_showcase_items(
     current_user: User = Depends(get_current_user)
 ):
     if not await _can_edit(company_id, current_user, db):
-        raise HTTPException(status_code=403, detail="Only founder or manager can reorder showcase")
+        raise HTTPException(status_code=403, detail="You don't have edit_showcase permission")
     for idx, item_id in enumerate(ids):
         await db.execute(update(ShowcaseItem).where(ShowcaseItem.id == item_id, ShowcaseItem.company_id == company_id).values(sort_order=idx))
     await db.commit()

@@ -24,6 +24,7 @@ class _ManageEmployeesDialogState extends State<ManageEmployeesDialog> {
   final _fullNameController = TextEditingController();
   String _selectedRole = 'employee';
   bool _adding = false;
+  Set<String> _currentUserPermissions = {};
 
   @override
   void initState() {
@@ -35,12 +36,16 @@ class _ManageEmployeesDialogState extends State<ManageEmployeesDialog> {
     setState(() => _loading = true);
     final api = ApiClient();
     try {
+      // Загружаем права текущего пользователя
+      final myPerms = await api.getMyPermissions(widget.companyId);
+      _currentUserPermissions = Set<String>.from(myPerms['permissions']);
+
       final response = await api.get('/companies/${widget.companyId}/members');
       List<Map<String, dynamic>> members = List<Map<String, dynamic>>.from(response.data);
       final container = ProviderScope.containerOf(context);
       final authState = container.read(authProvider);
       final currentUserId = authState.user?.id;
-      // Исключаем учредителя (is_founder == true) и текущего пользователя
+      // Исключаем учредителя и текущего пользователя
       members.removeWhere((m) => m['is_founder'] == true || m['user_id'] == currentUserId);
       setState(() {
         _members = members;
@@ -169,25 +174,12 @@ class _ManageEmployeesDialogState extends State<ManageEmployeesDialog> {
   }
 
   Future<bool> _canManageEmployees() async {
-    final api = ApiClient();
-    try {
-      final myPerms = await api.getMyPermissions(widget.companyId);
-      final permsList = List<String>.from(myPerms['permissions']);
-      return permsList.contains('manage_employees');
-    } catch (e) {
-      return false;
-    }
+    // уже есть права в _currentUserPermissions
+    return _currentUserPermissions.contains('manage_employees');
   }
 
   Future<bool> _canManagePermissions() async {
-    final api = ApiClient();
-    try {
-      final myPerms = await api.getMyPermissions(widget.companyId);
-      final permsList = List<String>.from(myPerms['permissions']);
-      return permsList.contains('manage_permissions');
-    } catch (e) {
-      return false;
-    }
+    return _currentUserPermissions.contains('manage_permissions');
   }
 
   @override
@@ -316,9 +308,11 @@ class _ManageEmployeesDialogState extends State<ManageEmployeesDialog> {
                           itemCount: _members.length,
                           itemBuilder: (context, index) {
                             final m = _members[index];
+                            final isManager = m['role_in_company'] == 'manager';
+                            final roleText = isManager ? 'Управляющий' : 'Сотрудник';
                             return ListTile(
                               title: Text(m['full_name'], style: TextStyle(color: colorScheme.onSurface)),
-                              subtitle: Text(m['phone'], style: TextStyle(color: colorScheme.onSurfaceVariant)),
+                              subtitle: Text('${m['phone']} • $roleText', style: TextStyle(color: colorScheme.onSurfaceVariant)),
                               trailing: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
@@ -350,6 +344,7 @@ class _ManageEmployeesDialogState extends State<ManageEmployeesDialog> {
                                               widget.onSuccess();
                                             },
                                             isFounder: false,
+                                            currentUserPermissions: _currentUserPermissions,
                                           ),
                                         );
                                       },

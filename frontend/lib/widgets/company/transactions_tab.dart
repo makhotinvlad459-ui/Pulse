@@ -17,6 +17,8 @@ class TransactionsTab extends StatefulWidget {
   final List<dynamic> accounts;
   final List<dynamic> categories;
   final bool isFounder;
+  final Set<String> permissions;
+
   const TransactionsTab({
     super.key,
     required this.companyId,
@@ -24,6 +26,7 @@ class TransactionsTab extends StatefulWidget {
     required this.accounts,
     required this.categories,
     required this.isFounder,
+    required this.permissions,
   });
 
   @override
@@ -170,6 +173,8 @@ class _TransactionsTabState extends State<TransactionsTab> {
   }
 
   Future<void> _editTransaction(Transaction transaction) async {
+    // Учредитель может редактировать всегда, остальные – только с правом edit_transaction
+    if (!widget.isFounder && !widget.permissions.contains('edit_transaction')) return;
     final Map<String, dynamic> map = {
       'id': transaction.id,
       'type': transaction.type,
@@ -230,7 +235,6 @@ class _TransactionsTabState extends State<TransactionsTab> {
     }
   }
 
-  // ИСПРАВЛЕННЫЙ МЕТОД: просмотр вложения с зумом через PhotoView
   Future<void> _showAttachment(String? url, int transactionId) async {
     if (url == null) return;
     final api = ApiClient();
@@ -574,29 +578,31 @@ class _TransactionsTabState extends State<TransactionsTab> {
             ),
           ],
         ),
-        Positioned(
-          bottom: 16,
-          right: 16,
-          child: FloatingActionButton(
-            onPressed: () async {
-              await showDialog(
-                context: context,
-                builder: (_) => AddTransactionDialog(
-                  companyId: widget.companyId,
-                  onSuccess: () async {
-                    await _loadTransactions();
-                    await widget.onRefresh();
-                  },
-                  accounts: widget.accounts,
-                  categories: widget.categories,
-                ),
-              );
-            },
-            backgroundColor: colorScheme.primary,
-            foregroundColor: colorScheme.onPrimary,
-            child: const Icon(Icons.add),
+        // Кнопка добавления операции – для учредителя всегда, для других – по праву create_transaction
+        if (widget.isFounder || widget.permissions.contains('create_transaction'))
+          Positioned(
+            bottom: 16,
+            right: 16,
+            child: FloatingActionButton(
+              onPressed: () async {
+                await showDialog(
+                  context: context,
+                  builder: (_) => AddTransactionDialog(
+                    companyId: widget.companyId,
+                    onSuccess: () async {
+                      await _loadTransactions();
+                      await widget.onRefresh();
+                    },
+                    accounts: widget.accounts,
+                    categories: widget.categories,
+                  ),
+                );
+              },
+              backgroundColor: colorScheme.primary,
+              foregroundColor: colorScheme.onPrimary,
+              child: const Icon(Icons.add),
+            ),
           ),
-        ),
       ],
     );
   }

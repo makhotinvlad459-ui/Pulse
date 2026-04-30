@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dio/dio.dart'; // добавьте импорт Dio
 import '../services/api_client.dart';
 import '../models/user.dart';
 
@@ -33,7 +34,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await _loadUserProfile();
       return true;
     } catch (e) {
-      state = AuthState(error: e.toString());
+      String errorMessage;
+      if (e is DioError && e.response?.statusCode == 400) {
+        errorMessage = 'Пользователь с таким телефоном или email уже существует';
+      } else {
+        errorMessage = e.toString();
+      }
+      state = AuthState(error: errorMessage);
       return false;
     }
   }
@@ -49,7 +56,19 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await _api.setToken(token);
       await _loadUserProfile();
     } catch (e) {
-      state = AuthState(error: e.toString());
+      String errorMessage;
+      if (e is DioError) {
+        if (e.response?.statusCode == 401) {
+          errorMessage = 'Неверный логин или пароль';
+        } else if (e.response?.statusCode == 403) {
+          errorMessage = 'Учётная запись деактивирована';
+        } else {
+          errorMessage = 'Ошибка подключения к серверу';
+        }
+      } else {
+        errorMessage = e.toString();
+      }
+      state = AuthState(error: errorMessage);
     }
   }
 

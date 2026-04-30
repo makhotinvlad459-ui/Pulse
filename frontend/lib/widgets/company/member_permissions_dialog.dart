@@ -8,6 +8,7 @@ class MemberPermissionsDialog extends StatefulWidget {
   final List<String> currentPermissions;
   final VoidCallback onSuccess;
   final bool isFounder;
+  final Set<String> currentUserPermissions; // права текущего пользователя
 
   const MemberPermissionsDialog({
     super.key,
@@ -17,6 +18,7 @@ class MemberPermissionsDialog extends StatefulWidget {
     required this.currentPermissions,
     required this.onSuccess,
     required this.isFounder,
+    required this.currentUserPermissions,
   });
 
   @override
@@ -28,6 +30,7 @@ class _MemberPermissionsDialogState extends State<MemberPermissionsDialog> {
   List<dynamic> _allPermissions = [];
   bool _loading = true;
 
+  // Группировка прав по категориям
   final Map<String, List<String>> _groupMap = {
     'Операции': ['view_operations', 'create_transaction', 'edit_transaction'],
     'Витрина': ['view_showcase', 'edit_showcase', 'sell_from_showcase'],
@@ -115,6 +118,17 @@ class _MemberPermissionsDialogState extends State<MemberPermissionsDialog> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    // Определяем, какие права доступны для назначения
+    final isFounderOrHasFull = widget.isFounder || widget.currentUserPermissions.isEmpty;
+    final Set<String> allowedPermissions = isFounderOrHasFull
+        ? _groupMap.values.expand((list) => list).toSet()
+        : widget.currentUserPermissions;
+
+    // Фильтруем группы: оставляем только те, где есть хотя бы один разрешённый пермишен
+    final filteredGroups = _groupMap.entries.where((entry) {
+      return entry.value.any((perm) => allowedPermissions.contains(perm));
+    }).toList();
+
     return AlertDialog(
       title: Text('Права сотрудника: ${widget.memberName}', style: TextStyle(color: colorScheme.onSurface)),
       content: _loading
@@ -123,10 +137,11 @@ class _MemberPermissionsDialogState extends State<MemberPermissionsDialog> {
               width: double.maxFinite,
               height: 500,
               child: ListView(
-                children: _groupMap.entries.map((entry) {
+                children: filteredGroups.map((entry) {
                   final groupName = entry.key;
                   final permNames = entry.value;
-                  final groupPerms = _allPermissions.where((p) => permNames.contains(p['name'])).toList();
+                  // Отбираем только разрешённые права внутри группы
+                  final groupPerms = _allPermissions.where((p) => permNames.contains(p['name']) && allowedPermissions.contains(p['name'])).toList();
                   if (groupPerms.isEmpty) return const SizedBox.shrink();
                   return Card(
                     margin: const EdgeInsets.only(bottom: 8),
@@ -136,8 +151,8 @@ class _MemberPermissionsDialogState extends State<MemberPermissionsDialog> {
                       children: groupPerms.map((p) {
                         final name = p['name'] as String;
                         final description = p['description'] as String?;
-                        // Разрешаем изменение любых прав, кроме случая, когда сотрудник – учредитель
-                        final enabled = !(widget.isFounder && name == 'manage_permissions');
+                        // Запрещаем снимать manage_permissions у учредителя (но учредитель не в списке, так что не актуально)
+                        final enabled = true;
                         return CheckboxListTile(
                           title: Text(_translatePermissionName(name), style: TextStyle(color: colorScheme.onSurface)),
                           subtitle: description != null ? Text(description, style: TextStyle(color: colorScheme.onSurfaceVariant)) : null,

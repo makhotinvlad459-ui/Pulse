@@ -269,7 +269,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
     }
 
     Set<String> effectivePermissions = _myPermissions;
-    if (isFounder || effectivePermissions.isEmpty) {
+    if (isFounder) {
       effectivePermissions = {
         'view_operations', 'view_showcase', 'view_chat', 'view_tasks',
         'view_products', 'view_reports', 'view_documents', 'view_requests'
@@ -296,6 +296,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
         accounts: _accounts,
         categories: _categories,
         isFounder: isFounder,
+        permissions: effectivePermissions,
       ));
     }
     if (effectivePermissions.contains('view_showcase')) {
@@ -303,6 +304,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
       tabWidgets.add(ShowcaseTab(
         companyId: widget.company.id,
         onRefresh: _refresh,
+        permissions: effectivePermissions,
       ));
     }
     if (effectivePermissions.contains('view_chat') || effectivePermissions.contains('view_tasks')) {
@@ -316,7 +318,9 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
     }
     if (effectivePermissions.contains('view_products')) {
       tabs.add(const Tab(icon: Icon(Icons.inventory), text: 'Склад'));
-      tabWidgets.add(StockTab(companyId: widget.company.id));
+      tabWidgets.add(StockTab(
+        companyId: widget.company.id,
+      ));
     }
     if (effectivePermissions.contains('view_reports')) {
       tabs.add(const Tab(icon: Icon(Icons.bar_chart), text: 'Отчеты'));

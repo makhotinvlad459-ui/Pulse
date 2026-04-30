@@ -12,8 +12,15 @@ import 'recipe_editor.dart';
 class ShowcaseTab extends ConsumerStatefulWidget {
   final int companyId;
   final VoidCallback? onRefresh;
-  const ShowcaseTab({super.key, required this.companyId, this.onRefresh});
+  final Set<String> permissions;   // права текущего пользователя
 
+  const ShowcaseTab({
+    super.key,
+    required this.companyId,
+    this.onRefresh,
+    required this.permissions,
+  });
+  
   @override
   ConsumerState<ShowcaseTab> createState() => _ShowcaseTabState();
 }
@@ -23,7 +30,6 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
   List<dynamic> _categories = [];
   bool _loading = true;
   final ApiClient _api = ApiClient();
-  bool _canEdit = false;
   List<Map<String, dynamic>> _bulkSaleItems = [];
 
   @override
@@ -34,7 +40,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
 
   Future<void> _loadData() async {
     setState(() => _loading = true);
-    await Future.wait([_loadItems(), _loadCategories(), _checkPermissions()]);
+    await Future.wait([_loadItems(), _loadCategories()]);
     setState(() => _loading = false);
   }
 
@@ -56,15 +62,18 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
     }
   }
 
-  Future<void> _checkPermissions() async {
+  // Проверка прав на редактирование витрины (добавление/удаление/изменение/порядок)
+  bool get _canEdit {
     final authState = ref.read(authProvider);
-    final user = authState.user;
-    if (user == null) return;
-    if (user.role == UserRole.founder) {
-      _canEdit = true;
-      return;
-    }
-    _canEdit = false;
+    final isFounder = authState.user?.role == UserRole.founder;
+    return isFounder || widget.permissions.contains('edit_showcase');
+  }
+
+  // Проверка права на продажу
+  bool get _canSell {
+    final authState = ref.read(authProvider);
+    final isFounder = authState.user?.role == UserRole.founder;
+    return isFounder || widget.permissions.contains('sell_from_showcase');
   }
 
   Future<void> _saveOrder(List<ShowcaseItem> newItems) async {
@@ -77,6 +86,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
   }
 
   Future<void> _openReorderDialog() async {
+    if (!_canEdit) return;
     List<ShowcaseItem> tempItems = List.from(_items);
     await showDialog(
       context: context,
@@ -338,8 +348,9 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
     }
   }
 
-  // ИСПРАВЛЕННЫЙ МЕТОД ПРОДАЖИ
+  // Продажа одного товара (из меню)
   Future<void> _sellItem(ShowcaseItem item) async {
+    if (!_canSell) return;
     double quantity = 1.0;
     double salePrice = item.price;
     final quantityController = TextEditingController(text: quantity.toString());
@@ -510,6 +521,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
   }
 
   Future<void> _openBulkSaleDialog() async {
+    if (!_canSell) return;
     _bulkSaleItems = _items.map((item) => {
       'id': item.id,
       'name': item.name,
@@ -741,10 +753,10 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                       child: SizedBox(
                         width: double.infinity,
                         child: ElevatedButton.icon(
-                          onPressed: () {
+                          onPressed: _canSell ? () {
                             Navigator.pop(context);
                             _sellItem(item);
-                          },
+                          } : null,
                           icon: const Icon(Icons.sell),
                           label: const Text('Продать'),
                           style: ElevatedButton.styleFrom(
@@ -809,52 +821,60 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
 
     int crossAxisCount = MediaQuery.of(context).size.width > 900 ? 4 : (MediaQuery.of(context).size.width > 600 ? 3 : 2);
 
+    // Определяем, показывать ли панель управления (создание, продажа списком, порядок)
+    final showManagementPanel = _canEdit || _canSell;
+
     return Column(
       children: [
-        if (_canEdit)
+        if (showManagementPanel)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Row(
               children: [
-                Flexible(
-                  child: ElevatedButton.icon(
-                    onPressed: _addItem,
-                    icon: const Icon(Icons.add),
-                    label: const Text('Создать товар/услугу витрины'),
+                if (_canEdit)
+                  Flexible(
+                    child: ElevatedButton.icon(
+                      onPressed: _addItem,
+                      icon: const Icon(Icons.add),
+                      label: const Text('Создать товар/услугу витрины'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: colorScheme.primary,
+                        foregroundColor: colorScheme.onPrimary,
+                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ),
+                if (_canSell) ...[
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: _openBulkSaleDialog,
+                      icon: const Icon(Icons.shopping_cart),
+                      label: const Text('Продажа списком'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ),
+                ],
+                if (_canEdit) ...[
+                  const SizedBox(width: 8),
+                  ElevatedButton.icon(
+                    onPressed: _openReorderDialog,
+                    icon: const Icon(Icons.swap_vert),
+                    label: const Text('Порядок'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: colorScheme.primary,
-                      foregroundColor: colorScheme.onPrimary,
+                      backgroundColor: colorScheme.surfaceContainerHighest,
+                      foregroundColor: colorScheme.onSurface,
                       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: _openBulkSaleDialog,
-                    icon: const Icon(Icons.shopping_cart),
-                    label: const Text('Продажа списком'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton.icon(
-                  onPressed: _openReorderDialog,
-                  icon: const Icon(Icons.swap_vert),
-                  label: const Text('Порядок'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: colorScheme.surfaceContainerHighest,
-                    foregroundColor: colorScheme.onSurface,
-                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                ),
+                ],
               ],
             ),
           ),

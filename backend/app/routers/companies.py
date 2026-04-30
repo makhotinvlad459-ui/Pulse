@@ -389,6 +389,7 @@ async def get_company_members(
     ]
 
 # --- Удаление члена компании ---
+# --- Удаление члена компании ---
 @router.delete("/{company_id}/members/{user_id}")
 async def remove_member(
     company_id: int,
@@ -405,6 +406,15 @@ async def remove_member(
         raise HTTPException(status_code=404, detail="Member not found in this company")
     
     await db.delete(member)
+    
+    # Проверяем, есть ли у пользователя другие членства в других компаниях
+    other_memberships = await db.execute(
+        select(CompanyMember).where(CompanyMember.user_id == user_id)
+    )
+    if not other_memberships.scalar_one_or_none():
+        # Нет других компаний – деактивируем пользователя
+        await db.execute(update(User).where(User.id == user_id).values(is_active=False))
+    
     await db.commit()
     return {"detail": "Member removed from company"}
 

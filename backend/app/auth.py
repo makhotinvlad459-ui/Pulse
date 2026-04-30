@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from app.database import get_db
 from app.models import User, UserRole
 from app.config import settings
-from app.deps import get_current_user  # добавлен импорт
+from app.deps import get_current_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -56,6 +56,7 @@ async def register(
         role=UserRole.FOUNDER,
         subscription_until=subscription_until,
         soft_delete_retention_days=15,
+        is_active=True,
     )
     db.add(new_user)
     await db.commit()
@@ -75,6 +76,10 @@ async def login(
     user = result.scalar_one_or_none()
     if not user or not verify_password(form_data.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    # Проверка активности
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Account is deactivated")
 
     if user.role == UserRole.FOUNDER and user.subscription_until and user.subscription_until < datetime.utcnow():
         raise HTTPException(status_code=403, detail="Subscription expired")
@@ -96,6 +101,7 @@ async def get_current_user_info(
         "full_name": current_user.full_name,
         "role": current_user.role.value,
         "subscription_until": current_user.subscription_until.isoformat() if current_user.subscription_until else None,
+        "is_active": current_user.is_active,
     }
 
 @router.post("/admin/register-founder")
@@ -131,6 +137,7 @@ async def admin_register_founder(
         role=UserRole.FOUNDER,
         subscription_until=subscription_until,
         soft_delete_retention_days=15,
+        is_active=True,
     )
     db.add(new_user)
     await db.commit()

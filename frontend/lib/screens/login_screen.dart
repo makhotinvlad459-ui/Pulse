@@ -160,18 +160,30 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         else
                           ElevatedButton(
                             onPressed: () async {
-                              await ref.read(authProvider.notifier).login(
-                                    _loginController.text.trim(),
-                                    _passwordController.text.trim(),
-                                  );
-                              if (ref.read(authProvider).user != null && mounted) {
-                                Navigator.pushReplacementNamed(context, '/home');
-                              } else if (authState.error != null && mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Ошибка: ${authState.error}')),
-                                );
-                              }
-                            },
+  try {
+    await ref.read(authProvider.notifier).login(
+      _loginController.text.trim(),
+      _passwordController.text.trim(),
+    );
+    if (ref.read(authProvider).user != null && mounted) {
+      Navigator.pushReplacementNamed(context, '/home');
+    }
+  } catch (e) {
+    String message;
+    if (e.toString().contains('401') || e.toString().contains('Invalid credentials')) {
+      message = 'Неверный логин или пароль';
+    } else if (e.toString().contains('403')) {
+      message = 'Учётная запись деактивирована';
+    } else {
+      message = 'Ошибка подключения к серверу';
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    }
+  }
+},
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.grey.shade800.withOpacity(0.8),
                               foregroundColor: Colors.white,
