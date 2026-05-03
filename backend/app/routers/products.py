@@ -4,13 +4,15 @@ from sqlalchemy import select, update
 from typing import List, Optional
 from enum import Enum
 from datetime import datetime
-from pydantic import BaseModel  # <-- добавить эту строку
+from pydantic import BaseModel
 
 from app.database import get_db
-from app.models import User, Company, Product, CompanyMember, UserRole, ProductType
+from app.models import User, Company, Product, CompanyMember, UserRole, ProductType, OrderItem, TransactionItem
 from app.deps import get_current_user
+from app.routers.orders import _has_permission  
 
 router = APIRouter(prefix="/products", tags=["products"])
+
 
 # Enum для типа продукта
 class ProductTypeEnum(str, Enum):
@@ -65,12 +67,15 @@ async def _check_company_access(company_id: int, current_user: User, db: AsyncSe
 async def get_products(
     company_id: int,
     type: Optional[ProductTypeEnum] = None,
+    include_deleted: bool = False,   # опционально: явно запрашивать удалённые
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     if not await _check_company_access(company_id, current_user, db):
-        raise HTTPException(status_code=403, detail="Access denied")
+        raise HTTPException(403, "Access denied")
     query = select(Product).where(Product.company_id == company_id)
+    if not include_deleted:
+        query = query.where(Product.is_deleted == False)
     if type:
         query = query.where(Product.type == type.value)
     query = query.order_by(Product.name)
@@ -158,11 +163,29 @@ async def delete_product(
     current_user: User = Depends(get_current_user)
 ):
     if not await _check_company_access(company_id, current_user, db):
-        raise HTTPException(status_code=403, detail="Access denied")
-    result = await db.execute(select(Product).where(Product.id == product_id, Product.company_id == company_id))
-    product = result.scalar_one_or_none()
-    if not product:
-        raise HTTPException(status_code=404, detail="Product not found")
-    await db.delete(product)
-    await db.commit()
-    return {"detail": "Product deleted"}
+        raise HTTPException(403, "Access denied")
+    
+    product = await db.get(Product, product_id)
+    if not product or product.company_id != company_id:
+        raise HTTPException(404, "Product not found")
+    
+    perm_name = "edit_product" if product.type == ProductType.PRODUCT else "edit_material"
+    if not await _has_permission(company_id, current_user, db, perm_name):
+        raise HTTPException(403, f"No permission to delete {product.type}")
+    
+    # Проверяем, используется ли товар в заказах или транзакциях
+    used_in_orders = await db.execute(
+        select(OrderItem).where(OrderItem.product_id == product_id).limit(1)
+    )
+    used_in_transactions = await db.execute(
+        select(TransactionItem).where(TransactionItem.product_id == product_id).limit(1)
+    )
+    if used_in_orders.first() or used_in_transactions.first():
+        # Мягкое удаление – помечаем как удалённый
+        product.is_deleted = True
+        await db.commit()
+        return {"detail": "Product marked as deleted (used in orders/transactions)"}
+    else:
+        await db.delete(product)
+        await db.commit()
+        return {"detail": "Product permanently deleted"}

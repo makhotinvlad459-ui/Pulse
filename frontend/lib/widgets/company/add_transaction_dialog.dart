@@ -450,7 +450,7 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
                   },
                 ),
                 const SizedBox(height: 12),
-                if ((_type == 'income' || _type == 'expense') && _selectedProducts.isEmpty)
+                if (_type == 'income' || _type == 'expense')
                   DropdownButtonFormField<int>(
                     value: _categoryId,
                     items: widget.categories.map<DropdownMenuItem<int>>((c) => DropdownMenuItem<int>(

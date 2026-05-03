@@ -66,6 +66,8 @@ class _StockTabState extends ConsumerState<StockTab> {
 
   bool get _canCreate => _activeType == 'product' ? _canCreateProduct : _canCreateMaterial;
   bool get _canEdit => _activeType == 'product' ? _canEditProduct : _canEditMaterial;
+  // Право на удаление (используем edit, либо отдельное)
+  bool get _canDelete => _canEdit; // или отдельное право delete_product, но для простоты используем edit
 
   // Доступные для просмотра типы
   List<String> get _availableTypes {
@@ -78,7 +80,6 @@ class _StockTabState extends ConsumerState<StockTab> {
   @override
   void initState() {
     super.initState();
-    // Если пользователь может видеть только один тип, устанавливаем его
     final available = _availableTypes;
     if (available.isNotEmpty && !available.contains(_activeType)) {
       _activeType = available.first;
@@ -112,6 +113,44 @@ class _StockTabState extends ConsumerState<StockTab> {
         p['name'].toLowerCase().contains(_searchQuery.toLowerCase()) ||
         (p['label']?.toLowerCase().contains(_searchQuery.toLowerCase()) ?? false)
     ).toList();
+  }
+
+  // Удаление товара (мягкое)
+  Future<void> _deleteProduct(Map<String, dynamic> product) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Удалить товар/материал?'),
+        content: Text(
+          'Вы уверены, что хотите удалить "${product['name']}"?\n\n'
+          'Товар будет помечен как удалённый и перестанет отображаться в списках, '
+          'но останется в истории заказов.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Удалить', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    final api = ApiClient();
+    try {
+      await api.delete('/products/${product['id']}', queryParameters: {'company_id': widget.companyId});
+      _loadProducts();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Товар удалён')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка удаления: $e')),
+      );
+    }
   }
 
   Future<void> _addOrEditProduct([Map<String, dynamic>? existing]) async {
@@ -237,7 +276,6 @@ class _StockTabState extends ConsumerState<StockTab> {
       return const Center(child: Text('Нет прав для просмотра склада'));
     }
 
-    // Если доступен только один тип, показываем список без переключателя
     final showTypeSelector = availableTypes.length > 1;
 
     return Column(
@@ -319,6 +357,7 @@ class _StockTabState extends ConsumerState<StockTab> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       CircleAvatar(
                                         backgroundColor: colorScheme.primaryContainer,
@@ -339,6 +378,12 @@ class _StockTabState extends ConsumerState<StockTab> {
                                       ),
                                       Text('${p['current_quantity']} ${p['unit']}',
                                           style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+                                      if (_canDelete)
+                                        IconButton(
+                                          icon: const Icon(Icons.delete, color: Colors.red),
+                                          onPressed: () => _deleteProduct(p),
+                                          tooltip: 'Удалить',
+                                        ),
                                     ],
                                   ),
                                   const SizedBox(height: 8),

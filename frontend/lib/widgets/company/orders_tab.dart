@@ -11,12 +11,14 @@ class OrdersTab extends ConsumerStatefulWidget {
   final int companyId;
   final Set<String> permissions;
   final bool isFounder;
+  final VoidCallback? onDataChanged; // добавили
 
   const OrdersTab({
     super.key,
     required this.companyId,
     required this.permissions,
     required this.isFounder,
+    this.onDataChanged, // добавили
   });
 
   @override
@@ -56,6 +58,7 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
         _orders = res.data;
         _loading = false;
       });
+      widget.onDataChanged?.call(); // уведомляем родителя
     } catch (e) {
       setState(() => _loading = false);
       String errorMsg = e.toString();

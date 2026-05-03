@@ -23,7 +23,6 @@ import '../widgets/matrix_rain.dart';
 import '../providers/theme_provider.dart';
 import '../widgets/company/orders_tab.dart';
 
-
 class RainTheme {
   final Color color;
   final double opacity;
@@ -249,6 +248,14 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
     );
   }
 
+  // Общая функция обновления: перезагружает и заказы (через OrdersTab) и счета
+  Future<void> _updateAll() async {
+    await _loadData();                // обновляет счета, транзакции
+    await _refreshCounters();         // обновляет непрочитанное
+    // Принудительно обновляем вкладку заказов (если она активна)
+    setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
@@ -272,14 +279,13 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
 
     Set<String> effectivePermissions = _myPermissions;
     if (isFounder) {
-   effectivePermissions = {
-  'view_operations', 'view_showcase', 'view_chat', 'view_tasks',
-  'view_products', 'view_reports', 'view_documents', 'view_requests',
-  'view_orders', 'edit_orders'
-};
+      effectivePermissions = {
+        'view_operations', 'view_showcase', 'view_chat', 'view_tasks',
+        'view_products', 'view_reports', 'view_documents', 'view_requests',
+        'view_orders', 'edit_orders'
+      };
     }
 
-    // Меню показываем, если есть права на управление
     final showMenu = isFounder || effectivePermissions.contains('manage_employees') || effectivePermissions.contains('manage_permissions');
     final showEditCompany = isFounder || effectivePermissions.contains('edit_company');
     final showAddAccount = isFounder || effectivePermissions.contains('create_account');
@@ -320,12 +326,12 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
       ));
     }
     if (effectivePermissions.contains('view_products')) {
-  tabs.add(const Tab(icon: Icon(Icons.inventory), text: 'Склад'));
-  tabWidgets.add(StockTab(
-    companyId: widget.company.id,
-    permissions: effectivePermissions,
-  ));
-}
+      tabs.add(const Tab(icon: Icon(Icons.inventory), text: 'Склад'));
+      tabWidgets.add(StockTab(
+        companyId: widget.company.id,
+        permissions: effectivePermissions,
+      ));
+    }
     if (effectivePermissions.contains('view_reports')) {
       tabs.add(const Tab(icon: Icon(Icons.bar_chart), text: 'Отчеты'));
       tabWidgets.add(ReportsTab(
@@ -336,10 +342,11 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
     }
     tabs.add(const Tab(icon: Icon(Icons.assignment), text: 'Заказы'));
     tabWidgets.add(OrdersTab(
-  companyId: widget.company.id,
-  permissions: effectivePermissions,
-  isFounder: isFounder,
-),);
+      companyId: widget.company.id,
+      permissions: effectivePermissions,
+      isFounder: isFounder,
+      onDataChanged: _updateAll,   // передаём функцию, которая обновит счета и заказы
+    ));
     tabs.add(const Tab(icon: Icon(Icons.folder), text: 'Документы'));
     tabWidgets.add(const Center(
       child: Column(

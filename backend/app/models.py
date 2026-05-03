@@ -142,6 +142,7 @@ class Product(Base):
     size: Mapped[str | None] = mapped_column(String(50), nullable=True)        # размер
     barcode: Mapped[str | None] = mapped_column(String(100), nullable=True)    # штрихкод
     supplier: Mapped[str | None] = mapped_column(String(200), nullable=True)   # поставщик
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     # relationships
     company: Mapped["Company"] = relationship(back_populates="products")
@@ -202,6 +203,7 @@ class Transaction(Base):
     deleter: Mapped["User"] = relationship(foreign_keys=[deleted_by], back_populates="deleted_transactions")
     items: Mapped[list["TransactionItem"]] = relationship(back_populates="transaction", cascade="all, delete-orphan")
     showcase_item: Mapped["ShowcaseItem"] = relationship()
+    order_payment: Mapped["OrderPayment"] = relationship(back_populates="transaction", uselist=False)
 
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
@@ -394,6 +396,8 @@ class OrderPayment(Base):
     payment_date: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     comment: Mapped[str | None] = mapped_column(String(500), nullable=True)
     attachment_urls: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON array
+    transaction_id: Mapped[int | None] = mapped_column(ForeignKey("transactions.id"), nullable=True, unique=True)
+    transaction: Mapped["Transaction"] = relationship(foreign_keys=[transaction_id], back_populates="order_payment")
 
     # relationships
     order: Mapped["Order"] = relationship(back_populates="payments")

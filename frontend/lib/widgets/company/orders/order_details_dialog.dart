@@ -95,6 +95,7 @@ class _OrderDetailsDialogState extends State<OrderDetailsDialog> {
     }
   }
 
+  // Диалог выбора камеры или галереи для прикрепления файла
   Future<void> _addAttachment() async {
     if (!_canEdit) return;
 
@@ -107,8 +108,26 @@ class _OrderDetailsDialogState extends State<OrderDetailsDialog> {
       return;
     }
 
+    final source = await showDialog<ImageSource>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Выберите источник'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, ImageSource.camera),
+            child: const Text('Камера'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, ImageSource.gallery),
+            child: const Text('Галерея'),
+          ),
+        ],
+      ),
+    );
+    if (source == null) return;
+
     final ImagePicker picker = ImagePicker();
-    final XFile? pickedFile = await picker.pickImage(source: ImageSource.gallery);
+    final XFile? pickedFile = await picker.pickImage(source: source);
     if (pickedFile == null) return;
     final compressed = await ImageCompression.compressImage(pickedFile);
     final api = ApiClient();
@@ -322,17 +341,32 @@ class _OrderDetailsDialogState extends State<OrderDetailsDialog> {
                       dense: true,
                       title: Text(productName,
                           style: TextStyle(color: colorScheme.onSurface)),
-                      subtitle:
-                          Text('$quantity × ${item['unit_price']} ₽ = $total ₽'),
+                      subtitle: Text(
+                        '$quantity × ${item['unit_price']} ₽ = $total ₽',
+                        softWrap: true,               // чтобы не разрывало по буквам
+                        overflow: TextOverflow.ellipsis,
+                      ),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           if (_isEditable && _canEdit)
-                            Checkbox(
-                              value: isPaid,
-                              onChanged: (value) {
-                                _updateItemPaid(itemId, value ?? false);
-                              },
+                            Row(
+                              children: [
+                                Checkbox(
+                                  value: isPaid,
+                                  onChanged: (value) {
+                                    _updateItemPaid(itemId, value ?? false);
+                                  },
+                                ),
+                                const Text('Оплачено'),
+                                const SizedBox(width: 4),
+                                Tooltip(
+                                  message:
+                                      'Отметка оплаты материала не создаёт финансовую операцию.\nДля реального движения денег используйте кнопку "Добавить оплату".',
+                                  child: const Icon(Icons.help_outline,
+                                      size: 16, color: Colors.grey),
+                                ),
+                              ],
                             ),
                           if (_isEditable && _canEdit)
                             IconButton(
@@ -475,8 +509,8 @@ class _OrderDetailsDialogState extends State<OrderDetailsDialog> {
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   child: ElevatedButton.icon(
                     onPressed: _addAttachment,
-                    icon: const Icon(Icons.attach_file),
-                    label: const Text('Прикрепить файл к заказу'),
+                    icon: const Icon(Icons.camera_alt),
+                    label: const Text('Сделать фото / прикрепить файл'),
                     style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blueGrey),
                   ),
@@ -571,83 +605,115 @@ class _OrderDetailsDialogState extends State<OrderDetailsDialog> {
     );
   }
 
-  void _showAddPaymentDialog() {
+  void _showAddPaymentDialog() async {
     final colorScheme = Theme.of(context).colorScheme;
     double amount = 0;
     DateTime paymentDate = DateTime.now();
     String comment = '';
+    int? selectedAccountId;
+    String counterparty = '';
 
-    showDialog(
+    final api = ApiClient();
+    List<dynamic> accounts = [];
+    try {
+      final res = await api.get('/accounts', queryParameters: {'company_id': widget.companyId});
+      accounts = res.data;
+      if (accounts.isNotEmpty) selectedAccountId = accounts[0]['id'];
+    } catch (e) {
+      print('Error loading accounts: $e');
+    }
+
+    await showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setStatePayment) {
           return AlertDialog(
-            title: Text('Добавить оплату',
-                style: TextStyle(color: colorScheme.onSurface)),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  decoration: const InputDecoration(labelText: 'Сумма*'),
-                  keyboardType: TextInputType.number,
-                  style: TextStyle(color: colorScheme.onSurface),
-                  onChanged: (v) => amount = double.tryParse(v) ?? 0,
-                ),
-                const SizedBox(height: 8),
-                ListTile(
-                  title: Text('Дата оплаты',
-                      style: TextStyle(color: colorScheme.onSurface)),
-                  trailing: Text(
-                      DateFormat('dd.MM.yyyy').format(paymentDate),
-                      style: TextStyle(color: colorScheme.onSurfaceVariant)),
-                  onTap: () async {
-                    final picked = await showDatePicker(
-                      context: context,
-                      initialDate: paymentDate,
-                      firstDate: DateTime(2000),
-                      lastDate: DateTime.now(),
-                    );
-                    if (picked != null)
-                      setStatePayment(() => paymentDate = picked);
-                  },
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  decoration: const InputDecoration(
-                      labelText: 'Комментарий (необязательно)'),
-                  style: TextStyle(color: colorScheme.onSurface),
-                  onChanged: (v) => comment = v,
-                ),
-              ],
+            title: Text('Добавить оплату', style: TextStyle(color: colorScheme.onSurface)),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    decoration: const InputDecoration(labelText: 'Сумма*'),
+                    keyboardType: TextInputType.number,
+                    style: TextStyle(color: colorScheme.onSurface),
+                    onChanged: (v) => amount = double.tryParse(v) ?? 0,
+                  ),
+                  const SizedBox(height: 8),
+                  ListTile(
+                    title: Text('Дата оплаты', style: TextStyle(color: colorScheme.onSurface)),
+                    trailing: Text(DateFormat('dd.MM.yyyy').format(paymentDate),
+                        style: TextStyle(color: colorScheme.onSurfaceVariant)),
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: paymentDate,
+                        firstDate: DateTime(2000),
+                        lastDate: DateTime.now(),
+                      );
+                      if (picked != null) setStatePayment(() => paymentDate = picked);
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<int>(
+                    value: selectedAccountId,
+                    items: accounts.map((acc) => DropdownMenuItem<int>(
+                      value: acc['id'],
+                      child: Text('${acc['name']} (${acc['balance']} ₽)'),
+                    )).toList(),
+                    onChanged: (v) => selectedAccountId = v,
+                    decoration: const InputDecoration(labelText: 'Счёт получения оплаты*'),
+                    style: TextStyle(color: colorScheme.onSurface),
+                    dropdownColor: colorScheme.surface,
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    decoration: const InputDecoration(labelText: 'Комментарий (необязательно)'),
+                    style: TextStyle(color: colorScheme.onSurface),
+                    onChanged: (v) => comment = v,
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    decoration: const InputDecoration(labelText: 'Контрагент (необязательно)'),
+                    style: TextStyle(color: colorScheme.onSurface),
+                    onChanged: (v) => counterparty = v,
+                  ),
+                ],
+              ),
             ),
             actions: [
               TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: Text('Отмена',
-                      style: TextStyle(color: colorScheme.onSurfaceVariant))),
+                onPressed: () => Navigator.pop(context),
+                child: Text('Отмена', style: TextStyle(color: colorScheme.onSurfaceVariant)),
+              ),
               ElevatedButton(
                 onPressed: () async {
-                  if (amount <= 0) {
+                  if (amount <= 0 || selectedAccountId == null) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Введите сумму')));
+                      const SnackBar(content: Text('Введите сумму и выберите счёт')),
+                    );
                     return;
                   }
                   final api = ApiClient();
                   try {
                     await api.post(
-                        '/orders/${widget.order['id']}/payments',
-                        queryParameters: {'company_id': widget.companyId},
-                        data: {
-                          'amount': amount,
-                          'payment_date': paymentDate.toIso8601String(),
-                          'comment': comment,
-                        });
+                      '/orders/${widget.order['id']}/payments',
+                      queryParameters: {'company_id': widget.companyId},
+                      data: {
+                        'amount': amount,
+                        'payment_date': paymentDate.toIso8601String(),
+                        'comment': comment,
+                        'account_id': selectedAccountId,
+                        'counterparty': counterparty,
+                      },
+                    );
                     if (context.mounted) Navigator.pop(context);
                     await _refreshOrder();
                     widget.onOrderUpdated();
                   } catch (e) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Ошибка: $e')));
+                      SnackBar(content: Text('Ошибка: $e')),
+                    );
                   }
                 },
                 child: const Text('Добавить'),

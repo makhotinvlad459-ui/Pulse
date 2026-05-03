@@ -8,6 +8,7 @@ import os
 import shutil
 from fastapi.responses import FileResponse
 from decimal import Decimal
+from app.models import OrderPayment 
 
 from app.database import get_db
 from app.models import User, Company, Account, Category, Transaction, TransactionType, CompanyMember, UserRole, Product, TransactionItem
@@ -42,6 +43,23 @@ async def recalc_account_balance(account_id: int, db: AsyncSession):
     total_transfer_in = float(transfer_in.scalar())
     balance = total_income - total_expense - total_transfer_out + total_transfer_in
     await db.execute(update(Account).where(Account.id == account_id).values(balance=balance))
+
+async def _recalc_paid_amount(order_id: int, db: AsyncSession):
+    from app.models import Order, OrderItem
+    order = await db.get(Order, order_id)
+    if not order:
+        return
+    payments_sum = await db.execute(
+        select(func.sum(OrderPayment.amount)).where(OrderPayment.order_id == order_id)
+    )
+    payments_sum = float(payments_sum.scalar() or 0.0)
+    items_paid = await db.execute(
+        select(func.sum(OrderItem.total)).where(OrderItem.order_id == order_id, OrderItem.is_paid == True)
+    )
+    items_paid_sum = float(items_paid.scalar() or 0.0)
+    total_paid = payments_sum + items_paid_sum
+    order.paid_amount = total_paid
+    await db.flush()    
 
 @router.post("/", response_model=TransactionResponse)
 async def create_transaction(
@@ -482,6 +500,7 @@ async def delete_transaction(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    # Проверка доступа к компании
     if current_user.role == UserRole.FOUNDER:
         result = await db.execute(select(Company).where(Company.id == company_id, Company.founder_id == current_user.id))
     else:
@@ -490,20 +509,35 @@ async def delete_transaction(
     if not company:
         raise HTTPException(status_code=404, detail="Company not found or access denied")
     
+    # Находим транзакцию
     result = await db.execute(select(Transaction).where(Transaction.id == transaction_id, Transaction.company_id == company_id))
     transaction = result.scalar_one_or_none()
     if not transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
     
-    # Загружаем товары транзакции
+    # Загружаем товары транзакции (нужны для отката остатков при жёстком удалении)
     items_result = await db.execute(
         select(TransactionItem).where(TransactionItem.transaction_id == transaction_id)
         .options(selectinload(TransactionItem.product))
     )
     items = items_result.scalars().all()
     
+    # Проверяем, связана ли транзакция с оплатой заказа
+    order_payment = await db.execute(
+        select(OrderPayment).where(OrderPayment.transaction_id == transaction_id)
+    )
+    order_payment = order_payment.scalar_one_or_none()
+    if order_payment:
+        order_id = order_payment.order_id
+    
     if current_user.role == UserRole.FOUNDER:
-        # Полное удаление – откатываем остатки
+        # Полное удаление (жёсткое)
+        # Если транзакция связана с оплатой заказа, удаляем оплату и пересчитываем сумму оплат заказа
+        if order_payment:
+            await db.delete(order_payment)
+            await _recalc_paid_amount(order_id, db)
+        
+        # Откатываем остатки товаров
         for item in items:
             product = item.product
             if transaction.type == 'income':
@@ -511,19 +545,24 @@ async def delete_transaction(
             else:  # expense
                 product.current_quantity -= Decimal(str(item.quantity))
         
+        # Удаляем файл вложения, если есть
         if transaction.attachment_url and os.path.exists(transaction.attachment_url):
             try:
                 os.remove(transaction.attachment_url)
             except Exception as e:
                 print(f"Error deleting file: {e}")
+        
         await db.delete(transaction)
         await db.commit()
+        # Пересчитываем балансы счетов
         await recalc_account_balance(transaction.account_id, db)
         if transaction.transfer_to_account_id:
             await recalc_account_balance(transaction.transfer_to_account_id, db)
         await db.commit()
         return {"detail": "Transaction permanently deleted"}
+    
     else:
+        # Мягкое удаление (не трогаем оплаты заказов)
         if transaction.is_deleted:
             raise HTTPException(status_code=400, detail="Transaction already deleted")
         transaction.is_deleted = True

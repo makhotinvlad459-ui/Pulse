@@ -4,6 +4,7 @@ from sqlalchemy import select, update, func, delete
 from sqlalchemy.orm import selectinload
 from typing import List, Optional
 from datetime import datetime
+from decimal import Decimal
 import json
 import os
 import shutil
@@ -629,26 +630,60 @@ async def add_payment(
         raise HTTPException(404, "Order not found")
     if not await _has_permission(company_id, current_user, db, "edit_orders"):
         raise HTTPException(403, "No permission")
+
     amount = payment_data.get("amount")
     date_str = payment_data.get("payment_date")
     comment = payment_data.get("comment", "")
-    if not amount or not date_str:
-        raise HTTPException(400, "Missing amount or payment_date")
+    account_id = payment_data.get("account_id")
+    counterparty = payment_data.get("counterparty", "")
+    if not amount or not date_str or not account_id:
+        raise HTTPException(400, "Missing amount, payment_date or account_id")
     try:
         payment_date = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
     except:
         raise HTTPException(400, "Invalid date format")
+
+    account = await db.get(Account, account_id)
+    if not account or account.company_id != company_id:
+        raise HTTPException(404, "Account not found")
+
+    # номер транзакции
+    last_num = await db.execute(select(func.max(Transaction.number)).where(Transaction.company_id == company_id))
+    last_num = last_num.scalar() or 0
+    new_number = last_num + 1
+
+    # транзакция (доход)
+    transaction = Transaction(
+        company_id=company_id,
+        account_id=account_id,
+        type="income",
+        amount=float(amount),
+        date=payment_date,
+        description=f"Оплата по заказу #{order.id} – {order.title}",
+        created_by=current_user.id,
+        number=new_number,
+        counterparty=counterparty
+    )
+    db.add(transaction)
+    await db.flush()
+
+    # оплата в заказе
     payment = OrderPayment(
         order_id=order_id,
         amount=float(amount),
         payment_date=payment_date,
         comment=comment,
+        transaction_id=transaction.id
     )
     db.add(payment)
-    await db.commit()
+    await db.flush()
+
+    # обновляем баланс счёта
+    account.balance += Decimal(str(amount))
     await _recalc_paid_amount(order_id, db)
     await db.commit()
-    return {"detail": "Payment added", "payment_id": payment.id}
+
+    return {"detail": "Payment added", "payment_id": payment.id, "transaction_id": transaction.id}
 
 # ---------- DELETE /{order_id}/payments/{payment_id} ----------
 @router.delete("/{order_id}/payments/{payment_id}")
@@ -666,6 +701,15 @@ async def delete_payment(
     payment = await db.get(OrderPayment, payment_id)
     if not payment or payment.order_id != order_id:
         raise HTTPException(404, "Payment not found")
+    # удаляем связанную транзакцию
+    if payment.transaction_id:
+        transaction = await db.get(Transaction, payment.transaction_id)
+        if transaction:
+            # уменьшаем баланс счёта
+            acc = await db.get(Account, transaction.account_id)
+            if acc:
+                acc.balance -= transaction.amount
+            await db.delete(transaction)
     await db.delete(payment)
     await db.flush()
     await _recalc_paid_amount(order_id, db)
