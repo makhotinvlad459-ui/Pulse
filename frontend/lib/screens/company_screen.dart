@@ -21,6 +21,8 @@ import '../widgets/company/stock_tab.dart';
 import '../widgets/company/showcase_tab.dart';
 import '../widgets/matrix_rain.dart';
 import '../providers/theme_provider.dart';
+import '../widgets/company/orders_tab.dart';
+
 
 class RainTheme {
   final Color color;
@@ -270,10 +272,11 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
 
     Set<String> effectivePermissions = _myPermissions;
     if (isFounder) {
-      effectivePermissions = {
-        'view_operations', 'view_showcase', 'view_chat', 'view_tasks',
-        'view_products', 'view_reports', 'view_documents', 'view_requests'
-      };
+   effectivePermissions = {
+  'view_operations', 'view_showcase', 'view_chat', 'view_tasks',
+  'view_products', 'view_reports', 'view_documents', 'view_requests',
+  'view_orders', 'edit_orders'
+};
     }
 
     // Меню показываем, если есть права на управление
@@ -331,17 +334,12 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
         categories: _categories,
       ));
     }
-    tabs.add(const Tab(icon: Icon(Icons.assignment), text: 'Заявки'));
-    tabWidgets.add(const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.assignment, size: 64),
-          SizedBox(height: 16),
-          Text('Заявки — в разработке'),
-        ],
-      ),
-    ));
+    tabs.add(const Tab(icon: Icon(Icons.assignment), text: 'Заказы'));
+    tabWidgets.add(OrdersTab(
+  companyId: widget.company.id,
+  permissions: effectivePermissions,
+  isFounder: isFounder,
+),);
     tabs.add(const Tab(icon: Icon(Icons.folder), text: 'Документы'));
     tabWidgets.add(const Center(
       child: Column(

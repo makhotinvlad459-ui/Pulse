@@ -8,7 +8,7 @@ class MemberPermissionsDialog extends StatefulWidget {
   final List<String> currentPermissions;
   final VoidCallback onSuccess;
   final bool isFounder;
-  final Set<String> currentUserPermissions; // права текущего пользователя
+  final Set<String> currentUserPermissions;
 
   const MemberPermissionsDialog({
     super.key,
@@ -30,7 +30,6 @@ class _MemberPermissionsDialogState extends State<MemberPermissionsDialog> {
   List<dynamic> _allPermissions = [];
   bool _loading = true;
 
-  // Группировка прав по категориям
   final Map<String, List<String>> _groupMap = {
     'Операции': ['view_operations', 'create_transaction', 'edit_transaction'],
     'Витрина': ['view_showcase', 'edit_showcase', 'sell_from_showcase'],
@@ -39,7 +38,7 @@ class _MemberPermissionsDialogState extends State<MemberPermissionsDialog> {
     'Отчеты': ['view_reports'],
     'Управление': ['manage_employees', 'manage_permissions', 'view_accounts', 'create_account', 'manage_categories', 'edit_company', 'view_archive'],
     'Документы': ['view_documents', 'create_documents', 'edit_documents'],
-    'Заявки': ['view_requests', 'create_requests', 'edit_requests'],
+    'Заказы': ['view_orders', 'edit_orders'],  // ← изменено: заявки → заказы
   };
 
   @override
@@ -80,37 +79,45 @@ class _MemberPermissionsDialogState extends State<MemberPermissionsDialog> {
 
   String _translatePermissionName(String name) {
     switch (name) {
+      // Операции
       case 'view_operations': return 'Просмотр операций';
       case 'create_transaction': return 'Создание операций';
       case 'edit_transaction': return 'Редактирование операций';
+      // Витрина
       case 'view_showcase': return 'Просмотр витрины';
       case 'edit_showcase': return 'Редактирование витрины';
       case 'sell_from_showcase': return 'Продажа с витрины';
+      // Чат и Задачи
       case 'view_chat': return 'Просмотр чата';
       case 'send_messages': return 'Отправка сообщений';
       case 'view_tasks': return 'Просмотр задач';
       case 'create_task': return 'Создание задач';
       case 'edit_task': return 'Редактирование задач';
-      case 'manage_employees': return 'Управление сотрудниками';
-      case 'manage_permissions': return 'Управление правами';
-      case 'view_accounts': return 'Просмотр счетов';
-      case 'create_account': return 'Создание счетов';
-      case 'manage_categories': return 'Управление категориями';
-      case 'view_reports': return 'Просмотр отчётов';
-      case 'edit_company': return 'Редактирование компании';
-      case 'view_archive': return 'Просмотр архива';
-      case 'view_documents': return 'Просмотр документов';
-      case 'create_documents': return 'Создание документов';
-      case 'edit_documents': return 'Редактирование документов';
-      case 'view_requests': return 'Просмотр заявок';
-      case 'create_requests': return 'Создание заявок';
-      case 'edit_requests': return 'Редактирование заявок';
+      // Склад
       case 'view_products': return 'Просмотр товаров';
       case 'create_product': return 'Создание товаров';
       case 'edit_product': return 'Редактирование товаров';
       case 'view_materials': return 'Просмотр материалов';
       case 'create_material': return 'Создание материалов';
       case 'edit_material': return 'Редактирование материалов';
+      // Отчеты
+      case 'view_reports': return 'Просмотр отчётов';
+      // Управление
+      case 'manage_employees': return 'Управление сотрудниками';
+      case 'manage_permissions': return 'Управление правами';
+      case 'view_accounts': return 'Просмотр счетов';
+      case 'create_account': return 'Создание счетов';
+      case 'manage_categories': return 'Управление категориями';
+      case 'edit_company': return 'Редактирование компании';
+      case 'view_archive': return 'Просмотр архива';
+      // Документы
+      case 'view_documents': return 'Просмотр документов';
+      case 'create_documents': return 'Создание документов';
+      case 'edit_documents': return 'Редактирование документов';
+      // Заказы (новое)
+      case 'view_orders': return 'Просмотр заказов';
+      case 'edit_orders': return 'Редактирование заказов';
+      // Старые права заявок (удалены, но оставлены для обратной совместимости – не используются)
       default: return name;
     }
   }
@@ -118,13 +125,11 @@ class _MemberPermissionsDialogState extends State<MemberPermissionsDialog> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    // Определяем, какие права доступны для назначения
     final isFounderOrHasFull = widget.isFounder || widget.currentUserPermissions.isEmpty;
     final Set<String> allowedPermissions = isFounderOrHasFull
         ? _groupMap.values.expand((list) => list).toSet()
         : widget.currentUserPermissions;
 
-    // Фильтруем группы: оставляем только те, где есть хотя бы один разрешённый пермишен
     final filteredGroups = _groupMap.entries.where((entry) {
       return entry.value.any((perm) => allowedPermissions.contains(perm));
     }).toList();
@@ -140,7 +145,6 @@ class _MemberPermissionsDialogState extends State<MemberPermissionsDialog> {
                 children: filteredGroups.map((entry) {
                   final groupName = entry.key;
                   final permNames = entry.value;
-                  // Отбираем только разрешённые права внутри группы
                   final groupPerms = _allPermissions.where((p) => permNames.contains(p['name']) && allowedPermissions.contains(p['name'])).toList();
                   if (groupPerms.isEmpty) return const SizedBox.shrink();
                   return Card(
@@ -151,7 +155,6 @@ class _MemberPermissionsDialogState extends State<MemberPermissionsDialog> {
                       children: groupPerms.map((p) {
                         final name = p['name'] as String;
                         final description = p['description'] as String?;
-                        // Запрещаем снимать manage_permissions у учредителя (но учредитель не в списке, так что не актуально)
                         final enabled = true;
                         return CheckboxListTile(
                           title: Text(_translatePermissionName(name), style: TextStyle(color: colorScheme.onSurface)),

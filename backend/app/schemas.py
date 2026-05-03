@@ -153,3 +153,92 @@ class ShowcaseItemResponse(BaseModel):
     category_id: Optional[int] = None
     class Config:
         from_attributes = True    
+
+from typing import List, Optional
+from datetime import datetime
+
+# ... внутри файла добавить:
+
+class OrderItemCreate(BaseModel):
+    product_id: int
+    quantity: float
+    unit_price: float
+    use_from_stock: bool = False
+    is_paid: bool = False
+
+class OrderItemResponse(BaseModel):
+    id: int
+    product_id: int
+    product_name: str
+    quantity: float
+    unit_price: float
+    use_from_stock: bool
+    total: float
+    is_paid: bool = False
+
+    class Config:
+        from_attributes = True
+
+class OrderPaymentCreate(BaseModel):
+    amount: float
+    payment_date: datetime
+    comment: Optional[str] = None
+    attachment_urls: Optional[List[str]] = None
+
+class OrderPaymentResponse(BaseModel):
+    id: int
+    amount: float
+    payment_date: datetime
+    comment: Optional[str]
+    attachment_urls: Optional[List[str]]
+
+    class Config:
+        from_attributes = True
+
+class OrderAttachmentResponse(BaseModel):
+    id: int
+    file_url: str
+    uploaded_by: int
+    uploaded_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class OrderCreate(BaseModel):
+    title: str
+    description: Optional[str] = None
+    assignee_id: Optional[int] = None
+    deadline: Optional[datetime] = None
+    work_price: Optional[float] = 0.0
+    items: List[OrderItemCreate] = []
+
+class OrderUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    assignee_id: Optional[int] = None
+    deadline: Optional[datetime] = None
+    work_price: Optional[float] = 0.0
+    items: Optional[List[OrderItemCreate]] = None  # полная замена
+
+class OrderResponse(BaseModel):
+    id: int
+    company_id: int
+    title: str
+    description: Optional[str]
+    status: str
+    total_amount: float
+    paid_amount: float
+    assignee_id: Optional[int]
+    assignee_name: Optional[str]
+    created_by: int
+    creator_name: str
+    created_at: datetime
+    updated_at: datetime
+    deadline: Optional[datetime]
+    items: List[OrderItemResponse] = []
+    payments: List[OrderPaymentResponse] = []
+    attachments: List[OrderAttachmentResponse] = []
+    work_price: float
+
+    class Config:
+        from_attributes = True        

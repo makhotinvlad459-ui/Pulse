@@ -54,9 +54,13 @@ async def init_permissions():
         {"name": "view_documents", "description": "Просмотр документов"},
         {"name": "create_documents", "description": "Создание документов"},
         {"name": "edit_documents", "description": "Редактирование документов"},
-        {"name": "view_requests", "description": "Просмотр заявок"},
-        {"name": "create_requests", "description": "Создание заявок"},
-        {"name": "edit_requests", "description": "Редактирование заявок"},
+        # ========== Заменяем старые права на новые ==========
+        # {"name": "view_requests", "description": "Просмотр заявок"},   <-- удалить
+        # {"name": "create_requests", "description": "Создание заявок"}, <-- удалить
+        # {"name": "edit_requests", "description": "Редактирование заявок"}, <-- удалить
+        {"name": "view_orders", "description": "Просмотр заказов"},
+        {"name": "edit_orders", "description": "Редактирование заказов"},
+        # ==================================================
         {"name": "view_products", "description": "Просмотр товаров на складе"},
         {"name": "create_product", "description": "Создание новых товаров"},
         {"name": "edit_product", "description": "Редактирование товаров"},

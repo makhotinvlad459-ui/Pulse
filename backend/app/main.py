@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from app.auth import router as auth_router
-from app.routers import companies, accounts, categories, transactions, statistics, admin, showcase, chat, tasks, websocket, notifications, products, permissions
+from app.routers import companies, accounts, categories, transactions, statistics, admin, showcase, chat, tasks, websocket, notifications, products, permissions, orders
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
@@ -21,7 +21,8 @@ app.include_router(websocket.router)
 app.include_router(notifications.router)
 app.include_router(products.router)
 app.include_router(showcase.router)
-app.include_router(permissions.router)   # Новый роутер для прав
+app.include_router(permissions.router)
+app.include_router(orders.router)
 
 # Статика
 UPLOAD_DIR = "uploads"
@@ -37,14 +38,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ========== Инициализация базы данных и прав ==========
-@app.on_event("startup")
-async def startup_event():
-    from app.database import init_db, init_permissions
-    await init_db()
-    await init_permissions()
 
-# ========== Корневые эндпоинты ==========
 @app.get("/")
 def root():
     return {"message": "Pulse API is running"}

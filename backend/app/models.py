@@ -337,3 +337,76 @@ class CompanyMemberPermission(Base):
     member: Mapped["CompanyMember"] = relationship(back_populates="permissions")
     permission: Mapped["Permission"] = relationship(back_populates="company_members")
     granter: Mapped["User"] = relationship()    
+
+class OrderStatus(str, PyEnum):
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+class Order(Base):
+    __tablename__ = "orders"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    company_id: Mapped[int] = mapped_column(ForeignKey("companies.id", ondelete="CASCADE"))
+    title: Mapped[str] = mapped_column(String(255))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[OrderStatus] = mapped_column(Enum(OrderStatus), default=OrderStatus.PENDING)
+    total_amount: Mapped[float] = mapped_column(Numeric(15, 2), default=0.0)
+    paid_amount: Mapped[float] = mapped_column(Numeric(15, 2), default=0.0)
+    assignee_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    deadline: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    work_price: Mapped[float] = mapped_column(Numeric(15, 2), default=0.0)
+
+    # relationships
+    company: Mapped["Company"] = relationship()
+    assignee: Mapped["User"] = relationship(foreign_keys=[assignee_id])
+    creator: Mapped["User"] = relationship(foreign_keys=[created_by])
+    items: Mapped[list["OrderItem"]] = relationship(back_populates="order", cascade="all, delete-orphan")
+    payments: Mapped[list["OrderPayment"]] = relationship(back_populates="order", cascade="all, delete-orphan")
+    attachments: Mapped[list["OrderAttachment"]] = relationship(back_populates="order", cascade="all, delete-orphan")
+
+class OrderItem(Base):
+    __tablename__ = "order_items"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    order_id: Mapped[int] = mapped_column(ForeignKey("orders.id", ondelete="CASCADE"))
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id"))
+    quantity: Mapped[float] = mapped_column(Numeric(15, 3))
+    unit_price: Mapped[float] = mapped_column(Numeric(15, 2))
+    use_from_stock: Mapped[bool] = mapped_column(Boolean, default=False)
+    total: Mapped[float] = mapped_column(Numeric(15, 2))  # quantity * unit_price
+    is_paid: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # relationships
+    order: Mapped["Order"] = relationship(back_populates="items")
+    product: Mapped["Product"] = relationship()
+
+class OrderPayment(Base):
+    __tablename__ = "order_payments"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    order_id: Mapped[int] = mapped_column(ForeignKey("orders.id", ondelete="CASCADE"))
+    amount: Mapped[float] = mapped_column(Numeric(15, 2))
+    payment_date: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    comment: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    attachment_urls: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON array
+
+    # relationships
+    order: Mapped["Order"] = relationship(back_populates="payments")
+
+class OrderAttachment(Base):
+    __tablename__ = "order_attachments"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    order_id: Mapped[int] = mapped_column(ForeignKey("orders.id", ondelete="CASCADE"))
+    file_url: Mapped[str] = mapped_column(String(500))
+    uploaded_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    # relationships
+    order: Mapped["Order"] = relationship(back_populates="attachments")
+    uploader: Mapped["User"] = relationship()    
