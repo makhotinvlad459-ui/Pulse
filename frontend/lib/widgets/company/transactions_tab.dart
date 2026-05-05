@@ -1,17 +1,20 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:universal_html/html.dart' as html;
 import 'package:photo_view/photo_view.dart';
 import '../../services/api_client.dart';
+import '../../providers/locale_provider.dart';
 import '../../models/transaction.dart';
 import 'edit_transaction_dialog.dart';
 import 'add_transaction_dialog.dart';
+import 'package:frontend/l10n/app_localizations.dart';
 
-class TransactionsTab extends StatefulWidget {
+class TransactionsTab extends ConsumerStatefulWidget {
   final int companyId;
   final Future<void> Function() onRefresh;
   final List<dynamic> accounts;
@@ -30,10 +33,10 @@ class TransactionsTab extends StatefulWidget {
   });
 
   @override
-  State<TransactionsTab> createState() => _TransactionsTabState();
+  ConsumerState<TransactionsTab> createState() => _TransactionsTabState();
 }
 
-class _TransactionsTabState extends State<TransactionsTab> {
+class _TransactionsTabState extends ConsumerState<TransactionsTab> {
   List<Transaction> _transactions = [];
   bool _loading = true;
   DateTime _startDate = DateTime(DateTime.now().year, DateTime.now().month, 1);
@@ -64,13 +67,16 @@ class _TransactionsTabState extends State<TransactionsTab> {
       });
     } catch (e) {
       setState(() => _loading = false);
-      if (mounted)
+      if (mounted) {
+        final t = AppLocalizations.of(context)!;
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Ошибка загрузки: $e')));
+            .showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+      }
     }
   }
 
   Future<void> _selectPeriod() async {
+    final t = AppLocalizations.of(context)!;
     final now = DateTime.now();
     DateTime endDate = _endDate.isAfter(now) ? now : _endDate;
     final picked = await showDateRangePicker(
@@ -78,7 +84,7 @@ class _TransactionsTabState extends State<TransactionsTab> {
       firstDate: DateTime(2000),
       lastDate: now,
       initialDateRange: DateTimeRange(start: _startDate, end: endDate),
-      locale: const Locale('ru', 'RU'),
+      locale: Locale('ru'), // можно заменить на текущую локаль, но оставим для удобства
     );
     if (picked != null) {
       setState(() {
@@ -91,10 +97,10 @@ class _TransactionsTabState extends State<TransactionsTab> {
     }
   }
 
-  String _typeName(String type) {
-    if (type == 'income') return 'Приход (Продажа)';
-    if (type == 'expense') return 'Расход (Покупка)';
-    if (type == 'transfer') return 'Перевод';
+  String _typeName(String type, AppLocalizations t) {
+    if (type == 'income') return t.incomeSale;
+    if (type == 'expense') return t.expensePurchase;
+    if (type == 'transfer') return t.transfer;
     return type;
   }
 
@@ -112,19 +118,20 @@ class _TransactionsTabState extends State<TransactionsTab> {
     }
   }
 
-  String getCategoryName(int? id) {
-    if (id == null) return 'Без категории';
+  String getCategoryName(int? id, AppLocalizations t) {
+    if (id == null) return t.withoutCategory;
     try {
       final cat = widget.categories
           .cast<Map<String, dynamic>>()
           .firstWhere((c) => c['id'] == id);
       return '${cat['icon'] ?? '📁'} ${cat['name']}';
     } catch (e) {
-      return 'Без категории';
+      return t.withoutCategory;
     }
   }
 
   Future<void> _restoreTransaction(int id) async {
+    final t = AppLocalizations.of(context)!;
     final api = ApiClient();
     try {
       await api.post('/transactions/$id/restore',
@@ -132,28 +139,27 @@ class _TransactionsTabState extends State<TransactionsTab> {
       await _loadTransactions();
       await widget.onRefresh();
       ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Операция восстановлена')));
+          SnackBar(content: Text(t.transactionRestored)));
     } catch (e) {
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Ошибка восстановления: $e')));
+          .showSnackBar(SnackBar(content: Text('${t.error}: $e')));
     }
   }
 
   Future<void> _permanentDeleteTransaction(int id) async {
+    final t = AppLocalizations.of(context)!;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Удалить операцию навсегда?'),
-        content: const Text(
-            'Операция будет удалена без возможности восстановления.'),
+        title: Text(t.permanentDeleteTitle),
+        content: Text(t.permanentDeleteContent),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Отмена')),
+              child: Text(t.cancel)),
           TextButton(
               onPressed: () => Navigator.pop(context, true),
-              child:
-                  const Text('Удалить', style: TextStyle(color: Colors.red))),
+              child: Text(t.delete, style: const TextStyle(color: Colors.red))),
         ],
       ),
     );
@@ -165,15 +171,15 @@ class _TransactionsTabState extends State<TransactionsTab> {
       await widget.onRefresh();
       await _loadTransactions();
       ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Операция удалена')));
+          .showSnackBar(SnackBar(content: Text(t.transactionDeleted)));
     } catch (e) {
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Ошибка удаления: $e')));
+          .showSnackBar(SnackBar(content: Text('${t.error}: $e')));
     }
   }
 
   Future<void> _editTransaction(Transaction transaction) async {
-    // Учредитель может редактировать всегда, остальные – только с правом edit_transaction
+    final t = AppLocalizations.of(context)!;
     if (!widget.isFounder && !widget.permissions.contains('edit_transaction')) return;
     final Map<String, dynamic> map = {
       'id': transaction.id,
@@ -210,6 +216,7 @@ class _TransactionsTabState extends State<TransactionsTab> {
   }
 
   Future<void> _downloadFile(String url, String filename) async {
+    final t = AppLocalizations.of(context)!;
     final api = ApiClient();
     try {
       final response = await api
@@ -227,15 +234,16 @@ class _TransactionsTabState extends State<TransactionsTab> {
         final file = File('${directory.path}/$filename');
         await file.writeAsBytes(bytes);
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Сохранено: ${file.path}')));
+            .showSnackBar(SnackBar(content: Text('${t.savedTo}: ${file.path}')));
       }
     } catch (e) {
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Ошибка скачивания: $e')));
+          .showSnackBar(SnackBar(content: Text('${t.error}: $e')));
     }
   }
 
   Future<void> _showAttachment(String? url, int transactionId) async {
+    final t = AppLocalizations.of(context)!;
     if (url == null) return;
     final api = ApiClient();
     try {
@@ -255,9 +263,9 @@ class _TransactionsTabState extends State<TransactionsTab> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Padding(
-                    padding: EdgeInsets.all(8.0),
-                    child: Text('Фото', style: TextStyle(fontWeight: FontWeight.bold)),
+                  Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Text(t.photo, style: const TextStyle(fontWeight: FontWeight.bold)),
                   ),
                   Expanded(
                     child: PhotoView(
@@ -269,7 +277,7 @@ class _TransactionsTabState extends State<TransactionsTab> {
                   ),
                   TextButton(
                     onPressed: () => Navigator.pop(context),
-                    child: const Text('Закрыть'),
+                    child: Text(t.close),
                   ),
                 ],
               ),
@@ -280,15 +288,15 @@ class _TransactionsTabState extends State<TransactionsTab> {
         final confirm = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('PDF файл'),
-            content: const Text('Файл в формате PDF. Скачать?'),
+            title: Text(t.pdfFile),
+            content: Text(t.downloadPdf),
             actions: [
               TextButton(
                   onPressed: () => Navigator.pop(context, false),
-                  child: const Text('Отмена')),
+                  child: Text(t.cancel)),
               TextButton(
                   onPressed: () => Navigator.pop(context, true),
-                  child: const Text('Скачать')),
+                  child: Text(t.download)),
             ],
           ),
         );
@@ -298,11 +306,11 @@ class _TransactionsTabState extends State<TransactionsTab> {
         }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Невозможно отобразить файл')));
+            SnackBar(content: Text(t.cannotDisplayFile)));
       }
     } catch (e) {
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Ошибка загрузки файла: $e')));
+          .showSnackBar(SnackBar(content: Text('${t.error}: $e')));
     }
   }
 
@@ -320,12 +328,14 @@ class _TransactionsTabState extends State<TransactionsTab> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(localeProvider);
     final colorScheme = Theme.of(context).colorScheme;
+    final t = AppLocalizations.of(context)!;
     Map<DateTime, List<Transaction>> grouped = {};
-    for (var t in _transactions) {
-      DateTime date = t.date.toLocal();
+    for (var trans in _transactions) {
+      DateTime date = trans.date.toLocal();
       DateTime key = DateTime(date.year, date.month, date.day);
-      grouped.putIfAbsent(key, () => []).add(t);
+      grouped.putIfAbsent(key, () => []).add(trans);
     }
     var sortedDates = grouped.keys.toList()..sort((a, b) => b.compareTo(a));
 
@@ -342,7 +352,7 @@ class _TransactionsTabState extends State<TransactionsTab> {
                     onPressed: _selectPeriod,
                     icon: Icon(Icons.calendar_today, color: colorScheme.onSurfaceVariant),
                     label: Text(
-                        '${DateFormat('dd.MM.yyyy', 'ru').format(_startDate)} - ${DateFormat('dd.MM.yyyy', 'ru').format(_endDate)}',
+                        '${DateFormat('dd.MM.yyyy').format(_startDate)} - ${DateFormat('dd.MM.yyyy').format(_endDate)}',
                         style: TextStyle(color: colorScheme.onSurfaceVariant)),
                   ),
                   IconButton(
@@ -357,7 +367,7 @@ class _TransactionsTabState extends State<TransactionsTab> {
                   ? const Center(child: CircularProgressIndicator())
                   : _transactions.isEmpty
                       ? Center(
-                          child: Text('Нет операций за выбранный период',
+                          child: Text(t.noTransactionsForPeriod,
                               style: TextStyle(color: colorScheme.onSurfaceVariant)))
                       : RefreshIndicator(
                           onRefresh: _loadTransactions,
@@ -369,14 +379,14 @@ class _TransactionsTabState extends State<TransactionsTab> {
                               double turnover = 0;
                               double cashIncome = 0;
                               double nonCashIncome = 0;
-                              for (var t in dayTransactions) {
-                                if (t.type == 'income' && !t.isDeleted) {
-                                  turnover += t.amount;
-                                  String accType = _getAccountType(t.accountId);
+                              for (var trans in dayTransactions) {
+                                if (trans.type == 'income' && !trans.isDeleted) {
+                                  turnover += trans.amount;
+                                  String accType = _getAccountType(trans.accountId);
                                   if (accType == 'cash') {
-                                    cashIncome += t.amount;
+                                    cashIncome += trans.amount;
                                   } else if (accType == 'bank') {
-                                    nonCashIncome += t.amount;
+                                    nonCashIncome += trans.amount;
                                   }
                                 }
                               }
@@ -402,18 +412,15 @@ class _TransactionsTabState extends State<TransactionsTab> {
                                         Wrap(
                                           spacing: 12,
                                           children: [
-                                            Text(
-                                                '💹 Оборот: ${turnover.toStringAsFixed(2)} ₽',
+                                            Text('💹 ${t.turnover}: ${turnover.toStringAsFixed(2)} ₽',
                                                 style: TextStyle(
                                                     fontSize: 12,
                                                     color: colorScheme.onSurfaceVariant)),
-                                            Text(
-                                                '💵 Нал: ${cashIncome.toStringAsFixed(2)} ₽',
+                                            Text('💵 ${t.cash}: ${cashIncome.toStringAsFixed(2)} ₽',
                                                 style: TextStyle(
                                                     fontSize: 12,
                                                     color: colorScheme.onSurfaceVariant)),
-                                            Text(
-                                                '💳 Безнал: ${nonCashIncome.toStringAsFixed(2)} ₽',
+                                            Text('💳 ${t.nonCash}: ${nonCashIncome.toStringAsFixed(2)} ₽',
                                                 style: TextStyle(
                                                     fontSize: 12,
                                                     color: colorScheme.onSurfaceVariant)),
@@ -422,8 +429,8 @@ class _TransactionsTabState extends State<TransactionsTab> {
                                       ],
                                     ),
                                   ),
-                                  ...dayTransactions.map((t) {
-                                    final isDeleted = t.isDeleted;
+                                  ...dayTransactions.map((trans) {
+                                    final isDeleted = trans.isDeleted;
                                     return Card(
                                       margin: const EdgeInsets.symmetric(
                                           vertical: 4, horizontal: 8),
@@ -434,9 +441,9 @@ class _TransactionsTabState extends State<TransactionsTab> {
                                         title: Row(
                                           children: [
                                             Text(
-                                              '${t.amount.toStringAsFixed(2)} ₽',
+                                              '${trans.amount.toStringAsFixed(2)} ₽',
                                               style: TextStyle(
-                                                color: t.type == 'income'
+                                                color: trans.type == 'income'
                                                     ? (isDeleted
                                                         ? colorScheme.onSurfaceVariant
                                                         : Colors.green)
@@ -451,7 +458,7 @@ class _TransactionsTabState extends State<TransactionsTab> {
                                             ),
                                             const SizedBox(width: 8),
                                             Text(
-                                              'Операция №${t.number}',
+                                              '${t.transactionNumber} №${trans.number}',
                                               style: TextStyle(
                                                 color: isDeleted ? colorScheme.onSurfaceVariant : colorScheme.onSurface,
                                                 fontSize: 12,
@@ -464,25 +471,25 @@ class _TransactionsTabState extends State<TransactionsTab> {
                                               CrossAxisAlignment.start,
                                           children: [
                                             Text(
-                                              '${_typeName(t.type)} • ${getCategoryName(t.categoryId)} • ${getAccountName(t.accountId)} • ${t.description ?? ''}',
+                                              '${_typeName(trans.type, t)} • ${getCategoryName(trans.categoryId, t)} • ${getAccountName(trans.accountId)} • ${trans.description ?? ''}',
                                               style: TextStyle(
                                                   color: isDeleted
                                                       ? colorScheme.onSurfaceVariant
                                                       : colorScheme.onSurface,
                                                   fontSize: 12),
                                             ),
-                                            if (t.counterparty != null && t.counterparty!.isNotEmpty)
+                                            if (trans.counterparty != null && trans.counterparty!.isNotEmpty)
                                               Padding(
                                                 padding: const EdgeInsets.only(top: 2),
                                                 child: Text(
-                                                  'Контрагент: ${t.counterparty}',
+                                                  '${t.counterpartyLabel}: ${trans.counterparty}',
                                                   style: TextStyle(
                                                     fontSize: 11,
                                                     color: isDeleted ? colorScheme.onSurfaceVariant : colorScheme.onSurfaceVariant,
                                                   ),
                                                 ),
                                               ),
-                                            if (t.items.isNotEmpty)
+                                            if (trans.items.isNotEmpty)
                                               Padding(
                                                 padding: const EdgeInsets.only(top: 4),
                                                 child: Row(
@@ -491,7 +498,7 @@ class _TransactionsTabState extends State<TransactionsTab> {
                                                     const SizedBox(width: 4),
                                                     Expanded(
                                                       child: Text(
-                                                        'Товары: ${t.items.map((i) => '${i.productName} (${i.quantity} шт)').join(', ')}',
+                                                        '${t.productsLabel}: ${trans.items.map((i) => '${i.productName} (${i.quantity} ${t.pcs})').join(', ')}',
                                                         style: TextStyle(
                                                           fontSize: 11,
                                                           color: colorScheme.onSurfaceVariant,
@@ -501,19 +508,19 @@ class _TransactionsTabState extends State<TransactionsTab> {
                                                   ],
                                                 ),
                                               ),
-                                            if (t.creatorName != null)
+                                            if (trans.creatorName != null)
                                               Text(
-                                                'Создал: ${t.creatorName}',
+                                                '${t.createdByLabel}: ${trans.creatorName}',
                                                 style: TextStyle(
                                                     fontSize: 10,
                                                     color: isDeleted
                                                         ? colorScheme.onSurfaceVariant
                                                         : colorScheme.onSurfaceVariant),
                                               ),
-                                            if (t.updaterName != null &&
-                                                t.updaterName != t.creatorName)
+                                            if (trans.updaterName != null &&
+                                                trans.updaterName != trans.creatorName)
                                               Text(
-                                                'Изменил: ${t.updaterName}',
+                                                '${t.changedByLabel}: ${trans.updaterName}',
                                                 style: TextStyle(
                                                     fontSize: 10,
                                                     color: isDeleted
@@ -525,7 +532,7 @@ class _TransactionsTabState extends State<TransactionsTab> {
                                         trailing: Row(
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
-                                            if (t.attachmentUrl != null)
+                                            if (trans.attachmentUrl != null)
                                               IconButton(
                                                 icon: const Icon(
                                                     Icons.attach_file,
@@ -533,16 +540,16 @@ class _TransactionsTabState extends State<TransactionsTab> {
                                                     color: Colors.blue),
                                                 onPressed: () =>
                                                     _showAttachment(
-                                                        t.attachmentUrl, t.id),
-                                                tooltip: 'Просмотреть вложение',
+                                                        trans.attachmentUrl, trans.id),
+                                                tooltip: t.viewAttachment,
                                               ),
                                             if (isDeleted)
                                               IconButton(
                                                 icon: const Icon(Icons.restore,
                                                     color: Colors.orange),
                                                 onPressed: () =>
-                                                    _restoreTransaction(t.id),
-                                                tooltip: 'Восстановить',
+                                                    _restoreTransaction(trans.id),
+                                                tooltip: t.restore,
                                               ),
                                             if (widget.isFounder && isDeleted)
                                               IconButton(
@@ -551,12 +558,12 @@ class _TransactionsTabState extends State<TransactionsTab> {
                                                     color: Colors.red),
                                                 onPressed: () =>
                                                     _permanentDeleteTransaction(
-                                                        t.id),
-                                                tooltip: 'Удалить навсегда',
+                                                        trans.id),
+                                                tooltip: t.permanentDelete,
                                               ),
                                             Text(
-                                              DateFormat('HH:mm', 'ru')
-                                                  .format(t.date.toLocal()),
+                                              DateFormat('HH:mm')
+                                                  .format(trans.date.toLocal()),
                                               style: TextStyle(
                                                   color: isDeleted
                                                       ? colorScheme.onSurfaceVariant
@@ -566,7 +573,7 @@ class _TransactionsTabState extends State<TransactionsTab> {
                                         ),
                                         onTap: isDeleted
                                             ? null
-                                            : () => _editTransaction(t),
+                                            : () => _editTransaction(trans),
                                       ),
                                     );
                                   }).toList(),
@@ -578,7 +585,6 @@ class _TransactionsTabState extends State<TransactionsTab> {
             ),
           ],
         ),
-        // Кнопка добавления операции – для учредителя всегда, для других – по праву create_transaction
         if (widget.isFounder || widget.permissions.contains('create_transaction'))
           Positioned(
             bottom: 16,

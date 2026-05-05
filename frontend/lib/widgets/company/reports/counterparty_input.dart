@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../services/api_client.dart';
+import '../../../providers/locale_provider.dart';
+import 'package:frontend/l10n/app_localizations.dart';
 
-class CounterpartyInput extends StatefulWidget {
+class CounterpartyInput extends ConsumerStatefulWidget {
   final int companyId;
   final TextEditingController controller;
   final String? initialValue;
@@ -16,10 +19,10 @@ class CounterpartyInput extends StatefulWidget {
   });
 
   @override
-  State<CounterpartyInput> createState() => _CounterpartyInputState();
+  ConsumerState<CounterpartyInput> createState() => _CounterpartyInputState();
 }
 
-class _CounterpartyInputState extends State<CounterpartyInput> {
+class _CounterpartyInputState extends ConsumerState<CounterpartyInput> {
   List<String> _suggestions = [];
   bool _loading = false;
 
@@ -49,6 +52,8 @@ class _CounterpartyInputState extends State<CounterpartyInput> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(localeProvider);
+    final t = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
     return Autocomplete<String>(
       optionsBuilder: (TextEditingValue textEditingValue) async {
@@ -64,7 +69,6 @@ class _CounterpartyInputState extends State<CounterpartyInput> {
         widget.onChanged?.call(selection);
       },
       fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
-        // Связываем внешний контроллер с внутренним
         widget.controller.addListener(() {
           if (textEditingController.text != widget.controller.text) {
             textEditingController.text = widget.controller.text;
@@ -79,7 +83,7 @@ class _CounterpartyInputState extends State<CounterpartyInput> {
           controller: textEditingController,
           focusNode: focusNode,
           decoration: InputDecoration(
-            labelText: 'Контрагент (необязательно)',
+            labelText: t.counterpartyOptional,
             labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
             border: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
             enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),

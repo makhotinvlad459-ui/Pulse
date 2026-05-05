@@ -1,17 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/api_client.dart';
+import '../providers/locale_provider.dart';
+import 'package:frontend/l10n/app_localizations.dart';
 
-class ResetPasswordScreen extends StatefulWidget {
+class ResetPasswordScreen extends ConsumerStatefulWidget {
   final String token;
 
   const ResetPasswordScreen({super.key, required this.token});
 
   @override
-  State<ResetPasswordScreen> createState() => _ResetPasswordScreenState();
+  ConsumerState<ResetPasswordScreen> createState() => _ResetPasswordScreenState();
 }
 
-class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
+class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
   final _passwordController = TextEditingController();
   final _confirmController = TextEditingController();
@@ -40,7 +43,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
         'new_password': _passwordController.text.trim(),
       });
       setState(() {
-        _message = 'Пароль успешно изменён. Теперь вы можете войти.';
+        _message = AppLocalizations.of(context)!.passwordChangedSuccess;
         _loading = false;
       });
       Future.delayed(const Duration(seconds: 2), () {
@@ -48,17 +51,37 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       });
     } catch (e) {
       setState(() {
-        _message = 'Ошибка: ${e.toString()}';
+        _message = '${AppLocalizations.of(context)!.error}: ${e.toString()}';
         _loading = false;
       });
     }
+  }
+
+  void _setLanguage(Locale locale) {
+    ref.read(localeProvider.notifier).setLocale(locale);
   }
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('Сброс пароля')),
+      appBar: AppBar(
+        title: Text(AppLocalizations.of(context)!.resetPasswordTitle),
+        actions: [
+          Row(
+            children: [
+              IconButton(
+                icon: const Text('🇬🇧', style: TextStyle(fontSize: 28)),
+                onPressed: () => _setLanguage(const Locale('en')),
+              ),
+              IconButton(
+                icon: const Text('🇷🇺', style: TextStyle(fontSize: 28)),
+                onPressed: () => _setLanguage(const Locale('ru')),
+              ),
+            ],
+          ),
+        ],
+      ),
       body: Padding(
         padding: const EdgeInsets.all(24.0),
         child: Form(
@@ -68,7 +91,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
             children: [
               const SizedBox(height: 20),
               Text(
-                'Введите новый пароль.',
+                AppLocalizations.of(context)!.resetPasswordInstruction,
                 style: TextStyle(color: colorScheme.onSurfaceVariant),
               ),
               const SizedBox(height: 30),
@@ -76,7 +99,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                 controller: _passwordController,
                 obscureText: _obscurePassword,
                 decoration: InputDecoration(
-                  labelText: 'Новый пароль (мин. 8 символов)',
+                  labelText: AppLocalizations.of(context)!.newPasswordLabel,
                   border: const OutlineInputBorder(),
                   suffixIcon: IconButton(
                     icon: Icon(_obscurePassword
@@ -88,10 +111,10 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                 ),
                 validator: (value) {
                   if (value == null || value.isEmpty) {
-                    return 'Введите пароль';
+                    return AppLocalizations.of(context)!.enterPassword;
                   }
                   if (value.length < 8) {
-                    return 'Пароль должен содержать не менее 8 символов';
+                    return AppLocalizations.of(context)!.passwordTooShort;
                   }
                   return null;
                 },
@@ -101,7 +124,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                 controller: _confirmController,
                 obscureText: _obscureConfirm,
                 decoration: InputDecoration(
-                  labelText: 'Подтвердите пароль',
+                  labelText: AppLocalizations.of(context)!.confirmPasswordLabel,
                   border: const OutlineInputBorder(),
                   suffixIcon: IconButton(
                     icon: Icon(_obscureConfirm
@@ -113,7 +136,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                 ),
                 validator: (value) {
                   if (value != _passwordController.text) {
-                    return 'Пароли не совпадают';
+                    return AppLocalizations.of(context)!.passwordsDoNotMatch;
                   }
                   return null;
                 },
@@ -126,7 +149,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                   child: Text(
                     _message!,
                     style: TextStyle(
-                      color: _message!.startsWith('Ошибка')
+                      color: _message!.startsWith(AppLocalizations.of(context)!.error)
                           ? Colors.red
                           : Colors.green,
                     ),
@@ -135,7 +158,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                 ),
               ElevatedButton(
                 onPressed: _loading ? null : _resetPassword,
-                child: const Text('Сбросить пароль'),
+                child: Text(AppLocalizations.of(context)!.resetPasswordButton),
               ),
             ],
           ),

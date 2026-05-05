@@ -43,6 +43,7 @@ dev_dependencies:
   riverpod_generator: ^2.3.9
 
 flutter:
+  generate: true
   uses-material-design: true
   assets:
     - assets/videos/city.mp4
@@ -50,4 +51,3 @@ flutter:
     - assets/videos/dark1.mp4
     - assets/videos/city_blue.mp4
     - assets/videos/city_green.mp4
-  

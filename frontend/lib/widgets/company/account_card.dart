@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../providers/locale_provider.dart';
+import 'package:frontend/l10n/app_localizations.dart';
 
-class AccountCard extends StatelessWidget {
+class AccountCard extends ConsumerWidget {
   final Map<String, dynamic> account;
   final VoidCallback onDelete;
   final bool isFounder;
@@ -13,7 +16,9 @@ class AccountCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(localeProvider);
+    final t = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
     String icon;
     if (account['type'] == 'cash')
@@ -78,7 +83,7 @@ class AccountCard extends StatelessWidget {
                 )
               else
                 Text(
-                  'Архив',
+                  t.archive,
                   style: TextStyle(
                     fontSize: 12,
                     fontStyle: FontStyle.italic,
@@ -87,8 +92,8 @@ class AccountCard extends StatelessWidget {
                 ),
               Text(
                 account['type'] == 'cash'
-                    ? 'Наличные'
-                    : (account['type'] == 'bank' ? 'Банк' : 'Пользовательский'),
+                    ? t.cashType
+                    : (account['type'] == 'bank' ? t.bankType : t.customType),
                 style: TextStyle(
                   fontSize: 10,
                   color: colorScheme.onSurfaceVariant,

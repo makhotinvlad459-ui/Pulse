@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:flutter/cupertino.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/register_screen.dart';
 import 'providers/theme_provider.dart';
+import 'providers/locale_provider.dart'; 
 import 'screens/forgot_password_screen.dart';
 import 'screens/reset_password_screen.dart';
+import 'package:frontend/l10n/app_localizations.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -22,18 +23,21 @@ class MyApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final appTheme = ref.watch(themeProvider);
     final themeData = getThemeData(appTheme);
+    final locale = ref.watch(localeProvider); // подписываемся на текущую локаль
 
     return MaterialApp(
       title: 'Pulse',
       theme: themeData,
-      navigatorKey: navigatorKey,
-      initialRoute: '/login',
-      localizationsDelegates: const [
+      locale: locale, // указываем текущую локаль
+      localizationsDelegates: [
+        AppLocalizations.localizationsDelegates.first, // ваш генератор
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      supportedLocales: const [Locale('ru', 'RU'), Locale('en', 'US')],
+      supportedLocales: const [Locale('ru'), Locale('en')], // без региональных суффиксов (можно оставить ru, en)
+      navigatorKey: navigatorKey,
+      initialRoute: '/login',
       onGenerateRoute: (settings) {
         switch (settings.name) {
           case '/login':
@@ -45,10 +49,8 @@ class MyApp extends ConsumerWidget {
           case '/forgot-password':
             return MaterialPageRoute(builder: (_) => const ForgotPasswordScreen());
           case '/reset-password':
-            // Извлекаем токен из аргументов (если передан)
             final token = settings.arguments as String?;
             if (token == null) {
-              // Если токена нет, возможно, нужно вернуться на экран забытого пароля
               return MaterialPageRoute(builder: (_) => const ForgotPasswordScreen());
             }
             return MaterialPageRoute(

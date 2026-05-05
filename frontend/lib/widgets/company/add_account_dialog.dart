@@ -1,22 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../services/api_client.dart';
+import '../../providers/locale_provider.dart';
+import 'package:frontend/l10n/app_localizations.dart';
 
-class AddAccountDialog extends StatefulWidget {
+class AddAccountDialog extends ConsumerStatefulWidget {
   final int companyId;
   final VoidCallback onSuccess;
   const AddAccountDialog(
       {super.key, required this.companyId, required this.onSuccess});
 
   @override
-  State<AddAccountDialog> createState() => _AddAccountDialogState();
+  ConsumerState<AddAccountDialog> createState() => _AddAccountDialogState();
 }
 
-class _AddAccountDialogState extends State<AddAccountDialog> {
+class _AddAccountDialogState extends ConsumerState<AddAccountDialog> {
   final _nameController = TextEditingController();
   bool _includeInProfitLoss = true;
   bool _loading = false;
 
   Future<void> _submit() async {
+    final t = AppLocalizations.of(context)!;
     if (_nameController.text.isEmpty) return;
     setState(() => _loading = true);
     final api = ApiClient();
@@ -33,7 +37,7 @@ class _AddAccountDialogState extends State<AddAccountDialog> {
     } catch (e) {
       if (mounted)
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+            .showSnackBar(SnackBar(content: Text('${t.error}: $e')));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -41,31 +45,41 @@ class _AddAccountDialogState extends State<AddAccountDialog> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(localeProvider);
+    final t = AppLocalizations.of(context)!;
+    final colorScheme = Theme.of(context).colorScheme;
+
     return AlertDialog(
-      title: const Text('Новый пользовательский счёт'),
+      title: Text(t.newCustomAccount, style: TextStyle(color: colorScheme.onSurface)),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           TextField(
               controller: _nameController,
-              decoration: const InputDecoration(labelText: 'Название счёта')),
+              decoration: InputDecoration(labelText: t.accountName, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+              style: TextStyle(color: colorScheme.onSurface)),
           SwitchListTile(
-            title: const Text('Учитывать в прибыли/убытке'),
+            title: Text(t.includeInProfitLoss, style: TextStyle(color: colorScheme.onSurface)),
             value: _includeInProfitLoss,
             onChanged: (v) => setState(() => _includeInProfitLoss = v),
           ),
-          const Text(
-            'Вы можете выбрать, влияет ли этот счёт на финансовый результат.',
-            style: TextStyle(fontSize: 12, color: Colors.grey),
+          Text(
+            t.profitLossHint,
+            style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
           ),
         ],
       ),
       actions: [
         TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Отмена')),
+            child: Text(t.cancel, style: TextStyle(color: colorScheme.onSurfaceVariant))),
         ElevatedButton(
-            onPressed: _loading ? null : _submit, child: const Text('Создать')),
+            onPressed: _loading ? null : _submit,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: colorScheme.primary,
+              foregroundColor: colorScheme.onPrimary,
+            ),
+            child: Text(t.create)),
       ],
     );
   }

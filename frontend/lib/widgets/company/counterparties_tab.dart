@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../services/api_client.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/locale_provider.dart';
 import '../../models/user.dart';
+import 'package:frontend/l10n/app_localizations.dart';
 
 class CounterpartiesTab extends ConsumerStatefulWidget {
   final int companyId;
@@ -17,33 +19,55 @@ class CounterpartiesTab extends ConsumerStatefulWidget {
 class _CounterpartiesTabState extends ConsumerState<CounterpartiesTab> {
   List<Map<String, dynamic>> _counterparties = [];
   bool _loading = true;
+  String? _error;
 
+  bool get _canView => ref.read(authProvider).user?.role == UserRole.founder ||
+      widget.permissions.contains('view_counterparties');
   bool get _canEdit => ref.read(authProvider).user?.role == UserRole.founder ||
       widget.permissions.contains('manage_counterparties');
 
   @override
   void initState() {
     super.initState();
-    _loadCounterparties();
+    // Откладываем загрузку до первого кадра, чтобы context был готов
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadCounterparties();
+    });
   }
 
   Future<void> _loadCounterparties() async {
-    setState(() => _loading = true);
+    if (!mounted) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     final api = ApiClient();
+    // Не используем AppLocalizations.of(context) здесь, чтобы не рисковать.
+    // Получим его один раз в методе build или передадим в параметры.
     try {
       final res = await api.get('/counterparties', queryParameters: {'company_id': widget.companyId});
+      if (!mounted) return;
       setState(() {
         _counterparties = List<Map<String, dynamic>>.from(res.data);
         _loading = false;
       });
     } catch (e) {
-      setState(() => _loading = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка загрузки: $e')));
+      print('Error loading counterparties: $e');
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
+      // Используем context после mounted
+      if (mounted) {
+        final t = AppLocalizations.of(context)!;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+      }
     }
   }
 
-  // Диалог статистики контрагента (доход, расход, баланс, список операций)
   Future<void> _showStats(Map<String, dynamic> cp) async {
+    final t = AppLocalizations.of(context)!;
     final api = ApiClient();
     try {
       final res = await api.get('/statistics/counterparty-stats', queryParameters: {
@@ -71,7 +95,7 @@ class _CounterpartiesTabState extends ConsumerState<CounterpartiesTab> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Text('Доход:', style: TextStyle(fontWeight: FontWeight.bold)),
+                              Text(t.income, style: const TextStyle(fontWeight: FontWeight.bold)),
                               Text('${data['total_income']?.toStringAsFixed(2) ?? '0.00'} ₽',
                                   style: const TextStyle(color: Colors.green)),
                             ],
@@ -80,7 +104,7 @@ class _CounterpartiesTabState extends ConsumerState<CounterpartiesTab> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Text('Расход:', style: TextStyle(fontWeight: FontWeight.bold)),
+                              Text(t.expense, style: const TextStyle(fontWeight: FontWeight.bold)),
                               Text('${data['total_expense']?.toStringAsFixed(2) ?? '0.00'} ₽',
                                   style: const TextStyle(color: Colors.red)),
                             ],
@@ -89,7 +113,7 @@ class _CounterpartiesTabState extends ConsumerState<CounterpartiesTab> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Text('Баланс:', style: TextStyle(fontWeight: FontWeight.bold)),
+                              Text(t.balance, style: const TextStyle(fontWeight: FontWeight.bold)),
                               Text('${data['balance']?.toStringAsFixed(2) ?? '0.00'} ₽',
                                   style: TextStyle(
                                       color: (data['balance'] ?? 0) >= 0 ? Colors.green : Colors.red,
@@ -101,30 +125,31 @@ class _CounterpartiesTabState extends ConsumerState<CounterpartiesTab> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  const Text('Последние операции:', style: TextStyle(fontWeight: FontWeight.bold)),
-                  ...(data['transactions'] as List).map((t) => ListTile(
+                  Text(t.recentTransactions, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  ...(data['transactions'] as List).map((tItem) => ListTile(
                     dense: true,
-                    title: Text('${t['amount']} ₽'),
-                    subtitle: Text('${t['type'] == 'income' ? 'Приход' : 'Расход'} • ${t['description'] ?? ''}'),
-                    trailing: Text(DateFormat('dd.MM.yyyy').format(DateTime.parse(t['date']))),
+                    title: Text('${tItem['amount']} ₽'),
+                    subtitle: Text('${tItem['type'] == 'income' ? t.income : t.expense} • ${tItem['description'] ?? ''}'),
+                    trailing: Text(DateFormat('dd.MM.yyyy').format(DateTime.parse(tItem['date']))),
                   )).toList(),
                 ],
               ),
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Закрыть')),
+            TextButton(onPressed: () => Navigator.pop(context), child: Text(t.close)),
           ],
         ),
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка загрузки статистики: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
       }
     }
   }
 
   Future<void> _addEditCounterparty([Map<String, dynamic>? existing]) async {
+    final t = AppLocalizations.of(context)!;
     final isEdit = existing != null;
     final nameController = TextEditingController(text: existing?['name'] ?? '');
     final innController = TextEditingController(text: existing?['inn'] ?? '');
@@ -135,27 +160,27 @@ class _CounterpartiesTabState extends ConsumerState<CounterpartiesTab> {
     await showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(isEdit ? 'Редактировать контрагента' : 'Новый контрагент'),
+        title: Text(isEdit ? t.editCounterparty : t.newCounterparty),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Название*')),
+              TextField(controller: nameController, decoration: InputDecoration(labelText: t.nameRequired)),
               const SizedBox(height: 8),
-              TextField(controller: innController, decoration: const InputDecoration(labelText: 'ИНН (необязательно)')),
+              TextField(controller: innController, decoration: InputDecoration(labelText: t.innOptional)),
               const SizedBox(height: 8),
-              TextField(controller: phoneController, decoration: const InputDecoration(labelText: 'Телефон (необязательно)')),
+              TextField(controller: phoneController, decoration: InputDecoration(labelText: t.phoneOptional)),
               const SizedBox(height: 8),
-              TextField(controller: directorController, decoration: const InputDecoration(labelText: 'Директор (необязательно)')),
+              TextField(controller: directorController, decoration: InputDecoration(labelText: t.directorOptional)),
             ],
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
+          TextButton(onPressed: () => Navigator.pop(context), child: Text(t.cancel)),
           ElevatedButton(
             onPressed: () async {
               if (nameController.text.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Введите название')));
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.enterName)));
                 return;
               }
               try {
@@ -174,13 +199,14 @@ class _CounterpartiesTabState extends ConsumerState<CounterpartiesTab> {
                     'director': directorController.text,
                   });
                 }
+                if (!mounted) return;
                 Navigator.pop(context);
                 _loadCounterparties();
               } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
               }
             },
-            child: Text(isEdit ? 'Сохранить' : 'Создать'),
+            child: Text(isEdit ? t.save : t.create),
           ),
         ],
       ),
@@ -188,14 +214,15 @@ class _CounterpartiesTabState extends ConsumerState<CounterpartiesTab> {
   }
 
   Future<void> _deleteCounterparty(int id, String name) async {
+    final t = AppLocalizations.of(context)!;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Удалить контрагента?'),
-        content: Text('Контрагент "$name" будет удалён. Это не удалит связанные операции.'),
+        title: Text(t.deleteCounterpartyTitle),
+        content: Text('${t.deleteCounterpartyContent} "$name". ${t.operationsNotDeleted}'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отмена')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Удалить', style: TextStyle(color: Colors.red))),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(t.cancel)),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: Text(t.delete, style: const TextStyle(color: Colors.red))),
         ],
       ),
     );
@@ -205,13 +232,24 @@ class _CounterpartiesTabState extends ConsumerState<CounterpartiesTab> {
       await api.delete('/counterparties/$id', queryParameters: {'company_id': widget.companyId});
       _loadCounterparties();
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(localeProvider);
     final colorScheme = Theme.of(context).colorScheme;
+    final t = AppLocalizations.of(context)!;
+
+    if (!_canView) {
+      return Center(child: Text(t.noPermissionToViewCounterparties));
+    }
+
+    if (_error != null) {
+      return Center(child: Text('${t.error}: $_error'));
+    }
+
     return Column(
       children: [
         if (_canEdit)
@@ -220,14 +258,14 @@ class _CounterpartiesTabState extends ConsumerState<CounterpartiesTab> {
             child: ElevatedButton.icon(
               onPressed: () => _addEditCounterparty(),
               icon: const Icon(Icons.add),
-              label: const Text('Добавить контрагента'),
+              label: Text(t.addCounterparty),
             ),
           ),
         Expanded(
           child: _loading
               ? const Center(child: CircularProgressIndicator())
               : _counterparties.isEmpty
-                  ? Center(child: Text('Нет контрагентов', style: TextStyle(color: colorScheme.onSurfaceVariant)))
+                  ? Center(child: Text(t.noCounterparties, style: TextStyle(color: colorScheme.onSurfaceVariant)))
                   : ListView.builder(
                       itemCount: _counterparties.length,
                       itemBuilder: (context, index) {
@@ -235,9 +273,9 @@ class _CounterpartiesTabState extends ConsumerState<CounterpartiesTab> {
                         return Card(
                           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                           child: ListTile(
-                            onTap: () => _showStats(cp),   // ← открываем статистику по тапу
+                            onTap: () => _showStats(cp),
                             title: Text(cp['name'], style: TextStyle(color: colorScheme.onSurface)),
-                            subtitle: Text('ИНН: ${cp['inn'] ?? '—'} | Тел: ${cp['phone'] ?? '—'} | Директор: ${cp['director'] ?? '—'}'),
+                            subtitle: Text('${t.innLabel}: ${cp['inn'] ?? '—'} | ${t.phoneLabel}: ${cp['phone'] ?? '—'} | ${t.directorLabel}: ${cp['director'] ?? '—'}'),
                             trailing: _canEdit
                                 ? Row(
                                     mainAxisSize: MainAxisSize.min,

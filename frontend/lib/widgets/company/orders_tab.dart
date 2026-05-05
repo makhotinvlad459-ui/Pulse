@@ -4,21 +4,23 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../services/api_client.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../providers/locale_provider.dart';
 import 'orders/order_details_dialog.dart';
 import 'orders/create_order_dialog.dart';
+import 'package:frontend/l10n/app_localizations.dart';
 
 class OrdersTab extends ConsumerStatefulWidget {
   final int companyId;
   final Set<String> permissions;
   final bool isFounder;
-  final VoidCallback? onDataChanged; // добавили
+  final VoidCallback? onDataChanged;
 
   const OrdersTab({
     super.key,
     required this.companyId,
     required this.permissions,
     required this.isFounder,
-    this.onDataChanged, // добавили
+    this.onDataChanged,
   });
 
   @override
@@ -58,15 +60,18 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
         _orders = res.data;
         _loading = false;
       });
-      widget.onDataChanged?.call(); // уведомляем родителя
+      widget.onDataChanged?.call();
     } catch (e) {
       setState(() => _loading = false);
+      final t = AppLocalizations.of(context)!;
       String errorMsg = e.toString();
       if (errorMsg.contains('403')) {
-        errorMsg = 'У вас нет прав для просмотра заказов';
+        errorMsg = t.noPermissionToViewOrders;
+      } else {
+        errorMsg = '${t.error}: $errorMsg';
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка загрузки: $errorMsg')),
+        SnackBar(content: Text(errorMsg)),
       );
     }
   }
@@ -89,19 +94,21 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
       await api.post('/orders/$orderId/status', queryParameters: {'company_id': widget.companyId}, data: {'status': newStatus});
       _loadOrders();
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+      final t = AppLocalizations.of(context)!;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
     }
   }
 
   Future<void> _deleteOrder(int orderId) async {
+    final t = AppLocalizations.of(context)!;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Удалить заказ?'),
-        content: const Text('Заказ будет удалён безвозвратно.'),
+        title: Text(t.deleteOrderConfirmTitle),
+        content: Text(t.deleteOrderConfirmContent),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отмена')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Удалить', style: TextStyle(color: Colors.red))),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(t.cancel)),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: Text(t.delete, style: const TextStyle(color: Colors.red))),
         ],
       ),
     );
@@ -110,8 +117,9 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
     try {
       await api.delete('/orders/$orderId', queryParameters: {'company_id': widget.companyId});
       _loadOrders();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.orderDeleted)));
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
     }
   }
 
@@ -141,9 +149,12 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(localeProvider);
     final colorScheme = Theme.of(context).colorScheme;
+    final t = AppLocalizations.of(context)!;
+
     if (!_canView) {
-      return const Center(child: Text('Нет прав для просмотра заказов'));
+      return Center(child: Text(t.noPermissionToViewOrders));
     }
     return Column(
       children: [
@@ -153,7 +164,7 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
             child: ElevatedButton.icon(
               onPressed: _showCreateOrderDialog,
               icon: const Icon(Icons.add),
-              label: const Text('Создать заказ'),
+              label: Text(t.createOrder),
               style: ElevatedButton.styleFrom(
                 backgroundColor: colorScheme.primary,
                 foregroundColor: colorScheme.onPrimary,
@@ -168,17 +179,17 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
                   child: Column(
                     children: [
                       if (_pendingOrders.isNotEmpty)
-                        _buildSection('Ожидают', _pendingOrders, Colors.orange, colorScheme),
+                        _buildSection(t.pending, _pendingOrders, Colors.orange, colorScheme, t),
                       if (_acceptedOrders.isNotEmpty)
-                        _buildSection('Приняты', _acceptedOrders, Colors.blue, colorScheme),
+                        _buildSection(t.accepted, _acceptedOrders, Colors.blue, colorScheme, t),
                       if (_completedOrders.isNotEmpty)
-                        _buildSection('Выполнены', _completedOrders, Colors.green, colorScheme),
+                        _buildSection(t.completed, _completedOrders, Colors.green, colorScheme, t),
                       if (_failedOrders.isNotEmpty)
-                        _buildSection('Провалены', _failedOrders, Colors.red, colorScheme),
+                        _buildSection(t.failed, _failedOrders, Colors.red, colorScheme, t),
                       if (_orders.isEmpty)
                         Padding(
                           padding: const EdgeInsets.all(16.0),
-                          child: Text('Нет заказов', style: TextStyle(color: colorScheme.onSurfaceVariant)),
+                          child: Text(t.noOrders, style: TextStyle(color: colorScheme.onSurfaceVariant)),
                         ),
                     ],
                   ),
@@ -188,7 +199,7 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
     );
   }
 
-  Widget _buildSection(String title, List<Map<String, dynamic>> orders, Color color, ColorScheme colorScheme) {
+  Widget _buildSection(String title, List<Map<String, dynamic>> orders, Color color, ColorScheme colorScheme, AppLocalizations t) {
     final canEditAny = _canEdit;
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -233,9 +244,9 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
               subtitle: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Работы: ${order['work_price']} ₽', style: TextStyle(fontSize: 12)),
-                  Text('Материалы: ${(total - (order['work_price'] as num)).toStringAsFixed(2)} ₽', style: TextStyle(fontSize: 12)),
-                  Text('Оплачено: ${paid.toStringAsFixed(2)} ₽', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  Text('${t.workPrice}: ${order['work_price']} ₽', style: TextStyle(fontSize: 12)),
+                  Text('${t.materials}: ${(total - (order['work_price'] as num)).toStringAsFixed(2)} ₽', style: TextStyle(fontSize: 12)),
+                  Text('${t.paid}: ${paid.toStringAsFixed(2)} ₽', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                 ],
               ),
               trailing: canDelete
@@ -254,11 +265,11 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
                         Text('📄 ${order['description']}', style: TextStyle(fontSize: 13, color: colorScheme.onSurfaceVariant)),
                       const SizedBox(height: 4),
                       if (order['assignee_name'] != null)
-                        Text('👤 Назначен: ${order['assignee_name']}', style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant)),
+                        Text('👤 ${t.assignedTo}: ${order['assignee_name']}', style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant)),
                       if (order['deadline'] != null)
-                        Text('⏰ Дедлайн: ${DateFormat('dd.MM.yyyy').format(DateTime.parse(order['deadline']))}',
+                        Text('⏰ ${t.deadline}: ${DateFormat('dd.MM.yyyy').format(DateTime.parse(order['deadline']))}',
                             style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant)),
-                      Text('💰 Остаток: ${remaining.toStringAsFixed(2)} ₽',
+                      Text('${t.remaining}: ${remaining.toStringAsFixed(2)} ₽',
                           style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: remaining > 0 ? Colors.red : Colors.green)),
                       const SizedBox(height: 8),
                       Wrap(
@@ -268,24 +279,24 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
                             ElevatedButton(
                               onPressed: () => _updateOrderStatus(order['id'], 'accepted'),
                               style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white),
-                              child: const Text('Принять'),
+                              child: Text(t.accept),
                             ),
                           if (canComplete && (isAssignee || canEditOrder))
                             ElevatedButton(
                               onPressed: () => _updateOrderStatus(order['id'], 'completed'),
                               style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
-                              child: const Text('Выполнить'),
+                              child: Text(t.complete),
                             ),
                           if (canFail && (isAssignee || canEditOrder))
                             ElevatedButton(
                               onPressed: () => _updateOrderStatus(order['id'], 'failed'),
                               style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-                              child: const Text('Провалить'),
+                              child: Text(t.fail),
                             ),
                           ElevatedButton(
                             onPressed: () => _showOrderDetails(order),
                             style: ElevatedButton.styleFrom(backgroundColor: Colors.grey, foregroundColor: Colors.white),
-                            child: const Text('Детали'),
+                            child: Text(t.details),
                           ),
                         ],
                       ),

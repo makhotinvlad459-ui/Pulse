@@ -7,9 +7,10 @@ import 'package:local_auth/local_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../providers/auth_provider.dart';
 import '../providers/theme_provider.dart';
+import '../providers/locale_provider.dart';
 import '../widgets/video_background.dart';
+import 'package:frontend/l10n/app_localizations.dart';
 
-// Единый экземпляр LocalAuthentication
 final localAuthProvider = Provider<LocalAuthentication>((ref) {
   return LocalAuthentication();
 });
@@ -65,7 +66,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final localAuth = ref.read(localAuthProvider);
     try {
       final authenticated = await localAuth.authenticate(
-        localizedReason: 'Подтвердите вход с помощью биометрии',
+        localizedReason: AppLocalizations.of(context)!.fingerprintLogin,
         options: const AuthenticationOptions(
           stickyAuth: true,
           biometricOnly: true,
@@ -79,7 +80,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         } else {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Нет сохранённых учётных данных для входа по биометрии')),
+              SnackBar(content: Text(AppLocalizations.of(context)!.noSavedCredentials)),
             );
           }
         }
@@ -88,7 +89,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       debugPrint('Biometric error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Ошибка биометрической аутентификации')),
+          SnackBar(content: Text(AppLocalizations.of(context)!.biometricError)),
         );
       }
     }
@@ -115,13 +116,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       String message;
       final errorStr = e.toString().toLowerCase();
       if (errorStr.contains('401') || errorStr.contains('invalid credentials')) {
-        message = 'Неверный логин или пароль';
+        message = AppLocalizations.of(context)!.invalidCredentials;
       } else if (errorStr.contains('403')) {
-        message = 'Учётная запись деактивирована';
+        message = AppLocalizations.of(context)!.accountDeactivated;
       } else if (errorStr.contains('socket') || errorStr.contains('network')) {
-        message = 'Ошибка подключения к серверу';
+        message = AppLocalizations.of(context)!.connectionError;
       } else {
-        message = 'Произошла неизвестная ошибка';
+        message = AppLocalizations.of(context)!.unknownError;
       }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -144,6 +145,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
+  void _setLanguage(Locale locale) {
+    ref.read(localeProvider.notifier).setLocale(locale);
+  }
+
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
@@ -159,6 +164,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       loop: true,
       child: Scaffold(
         backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          actions: [
+            Row(
+              children: [
+                IconButton(
+                  icon: const Text('🇬🇧', style: TextStyle(fontSize: 28)),
+                  onPressed: () => _setLanguage(const Locale('en')),
+                ),
+                IconButton(
+                  icon: const Text('🇷🇺', style: TextStyle(fontSize: 28)),
+                  onPressed: () => _setLanguage(const Locale('ru')),
+                ),
+              ],
+            ),
+          ],
+        ),
         body: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(32.0),
@@ -178,7 +201,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         child: Column(
                           children: [
                             Text(
-                              'Пульс',
+                              AppLocalizations.of(context)!.appTitle,
                               style: GoogleFonts.orbitron(
                                 fontSize: 52,
                                 fontWeight: FontWeight.w700,
@@ -192,7 +215,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               highlightColor: Colors.grey.shade700,
                               period: const Duration(seconds: 2),
                               child: Text(
-                                'ваших финансов',
+                                AppLocalizations.of(context)!.subtitle,
                                 style: GoogleFonts.orbitron(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w500,
@@ -223,7 +246,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           controller: _loginController,
                           style: const TextStyle(color: Colors.black87),
                           decoration: InputDecoration(
-                            labelText: 'Логин (email или телефон)',
+                            labelText: AppLocalizations.of(context)!.loginLabel,
                             labelStyle: TextStyle(color: Colors.grey.shade600),
                             prefixIcon: Icon(Icons.person, color: Colors.grey.shade700),
                             filled: true,
@@ -245,7 +268,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           obscureText: true,
                           style: const TextStyle(color: Colors.black87),
                           decoration: InputDecoration(
-                            labelText: 'Пароль',
+                            labelText: AppLocalizations.of(context)!.passwordLabel,
                             labelStyle: TextStyle(color: Colors.grey.shade600),
                             prefixIcon: Icon(Icons.lock, color: Colors.grey.shade700),
                             filled: true,
@@ -272,7 +295,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 });
                               },
                             ),
-                            const Text('Запомнить меня'),
+                            Text(AppLocalizations.of(context)!.rememberMe),
                           ],
                         ),
                         const SizedBox(height: 16),
@@ -296,7 +319,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                 ),
-                                child: const Text('Войти'),
+                                child: Text(AppLocalizations.of(context)!.signIn),
                               ),
                               biometricAsync.maybeWhen(
                                 data: (isAvailable) => isAvailable
@@ -305,7 +328,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                         child: OutlinedButton.icon(
                                           onPressed: _authenticateWithBiometrics,
                                           icon: const Icon(Icons.fingerprint),
-                                          label: const Text('Войти по отпечатку пальца'),
+                                          label: Text(AppLocalizations.of(context)!.fingerprintLogin),
                                           style: OutlinedButton.styleFrom(
                                             foregroundColor: Colors.grey.shade800,
                                           ),
@@ -323,7 +346,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             foregroundColor: Colors.grey.shade900,
                           ),
                           child: Text(
-                            'Нет аккаунта? Создать аккаунт',
+                            AppLocalizations.of(context)!.noAccount,
                             style: TextStyle(
                               color: Colors.grey.shade900,
                               fontWeight: FontWeight.w500,
@@ -335,17 +358,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           style: TextButton.styleFrom(
                             foregroundColor: Colors.grey.shade900,
                           ),
-                          child: const Text('Забыли пароль?'),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Приложение не собирает персональные данные пользователей и не обрабатывает их.\n',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.grey.shade700,
-                            fontSize: 12,
-                            height: 1.4,
-                          ),
+                          child: Text(AppLocalizations.of(context)!.forgotPassword),
                         ),
                       ],
                     ),

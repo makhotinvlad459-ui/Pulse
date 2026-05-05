@@ -1,18 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/company.dart';
 import '../../services/api_client.dart';
+import '../../providers/locale_provider.dart';
+import 'package:frontend/l10n/app_localizations.dart';
 
-class EditCompanyDialog extends StatefulWidget {
+class EditCompanyDialog extends ConsumerStatefulWidget {
   final Company company;
   final VoidCallback onSuccess;
   const EditCompanyDialog(
       {super.key, required this.company, required this.onSuccess});
 
   @override
-  State<EditCompanyDialog> createState() => _EditCompanyDialogState();
+  ConsumerState<EditCompanyDialog> createState() => _EditCompanyDialogState();
 }
 
-class _EditCompanyDialogState extends State<EditCompanyDialog> {
+class _EditCompanyDialogState extends ConsumerState<EditCompanyDialog> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _nameController;
   late TextEditingController _managerNameController;
@@ -33,6 +36,7 @@ class _EditCompanyDialogState extends State<EditCompanyDialog> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     final api = ApiClient();
+    final t = AppLocalizations.of(context)!;
     try {
       await api.put('/companies/${widget.company.id}', data: {
         'name': _nameController.text,
@@ -42,11 +46,11 @@ class _EditCompanyDialogState extends State<EditCompanyDialog> {
       widget.onSuccess();
       if (mounted) Navigator.pop(context);
       ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Компания обновлена')));
+          .showSnackBar(SnackBar(content: Text(t.companyUpdated)));
     } catch (e) {
       if (mounted)
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+            .showSnackBar(SnackBar(content: Text('${t.error}: $e')));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -54,10 +58,12 @@ class _EditCompanyDialogState extends State<EditCompanyDialog> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(localeProvider);
+    final t = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
 
     return AlertDialog(
-      title: Text('Редактировать компанию', style: TextStyle(color: colorScheme.onSurface)),
+      title: Text(t.editCompanyTitle, style: TextStyle(color: colorScheme.onSurface)),
       content: Form(
         key: _formKey,
         child: SingleChildScrollView(
@@ -67,7 +73,7 @@ class _EditCompanyDialogState extends State<EditCompanyDialog> {
                   controller: _nameController,
                   style: TextStyle(color: colorScheme.onSurface),
                   decoration: InputDecoration(
-                    labelText: 'Название',
+                    labelText: t.companyName,
                     labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
                     border: OutlineInputBorder(
                       borderSide: BorderSide(color: colorScheme.outline),
@@ -79,12 +85,12 @@ class _EditCompanyDialogState extends State<EditCompanyDialog> {
                       borderSide: BorderSide(color: colorScheme.primary),
                     ),
                   ),
-                  validator: (v) => v!.isEmpty ? 'Введите название' : null),
+                  validator: (v) => v!.isEmpty ? t.enterCompanyName : null),
               TextFormField(
                   controller: _managerNameController,
                   style: TextStyle(color: colorScheme.onSurface),
                   decoration: InputDecoration(
-                    labelText: 'Управляющий (ФИО)',
+                    labelText: t.managerFullName,
                     labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
                     border: OutlineInputBorder(
                       borderSide: BorderSide(color: colorScheme.outline),
@@ -96,13 +102,13 @@ class _EditCompanyDialogState extends State<EditCompanyDialog> {
                       borderSide: BorderSide(color: colorScheme.primary),
                     ),
                   ),
-                  validator: (v) => v!.isEmpty ? 'Введите ФИО' : null),
+                  validator: (v) => v!.isEmpty ? t.enterFullName : null),
               TextFormField(
                   controller: _managerPhoneController,
                   style: TextStyle(color: colorScheme.onSurface),
                   decoration: InputDecoration(
-                    labelText: 'Телефон (логин)',
-                    hintText: 'Не менее 6 символов',
+                    labelText: t.phoneLogin,
+                    hintText: t.min6Chars,
                     labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
                     border: OutlineInputBorder(
                       borderSide: BorderSide(color: colorScheme.outline),
@@ -115,8 +121,8 @@ class _EditCompanyDialogState extends State<EditCompanyDialog> {
                     ),
                   ),
                   validator: (v) {
-                    if (v == null || v.isEmpty) return 'Введите телефон';
-                    if (v.length < 6) return 'Не менее 6 символов';
+                    if (v == null || v.isEmpty) return t.enterPhone;
+                    if (v.length < 6) return t.min6Chars;
                     return null;
                   }),
             ],
@@ -126,14 +132,14 @@ class _EditCompanyDialogState extends State<EditCompanyDialog> {
       actions: [
         TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Отмена', style: TextStyle(color: colorScheme.onSurfaceVariant))),
+            child: Text(t.cancel, style: TextStyle(color: colorScheme.onSurfaceVariant))),
         ElevatedButton(
             onPressed: _saving ? null : _save,
             style: ElevatedButton.styleFrom(
               backgroundColor: colorScheme.primary,
               foregroundColor: colorScheme.onPrimary,
             ),
-            child: const Text('Сохранить')),
+            child: Text(t.save)),
       ],
     );
   }

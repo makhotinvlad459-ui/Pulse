@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../providers/locale_provider.dart';
+import 'package:frontend/l10n/app_localizations.dart';
 
-class PeriodSelector extends StatelessWidget {
+class PeriodSelector extends ConsumerWidget {
   final String periodMode;
   final VoidCallback onDay;
   final VoidCallback onWeek;
@@ -25,7 +28,9 @@ class PeriodSelector extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(localeProvider);
+    final t = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
     return Row(
       children: [
@@ -40,17 +45,17 @@ class PeriodSelector extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: [
-              _buildPeriodButton('День', 'day', onDay, colorScheme),
-              _buildPeriodButton('Неделя', 'week', onWeek, colorScheme),
-              _buildPeriodButton('Месяц', 'month', onMonth, colorScheme),
-              _buildPeriodButton('Год', 'year', onYear, colorScheme),
+              _buildPeriodButton(t.dayLabel, 'day', onDay, colorScheme),
+              _buildPeriodButton(t.weekLabel, 'week', onWeek, colorScheme),
+              _buildPeriodButton(t.monthLabel, 'month', onMonth, colorScheme),
+              _buildPeriodButton(t.yearLabel, 'year', onYear, colorScheme),
               ElevatedButton(
                 onPressed: onCustom,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: colorScheme.surfaceContainerHighest,
                   foregroundColor: colorScheme.onSurface,
                 ),
-                child: const Text('Выбрать'),
+                child: Text(t.customButton),
               ),
             ],
           ),

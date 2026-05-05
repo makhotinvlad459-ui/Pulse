@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../providers/locale_provider.dart';
+import 'package:frontend/l10n/app_localizations.dart';
 
-class SummaryCards extends StatelessWidget {
+class SummaryCards extends ConsumerWidget {
   final double income;
   final double expense;
   final double profit;
@@ -8,15 +11,17 @@ class SummaryCards extends StatelessWidget {
   const SummaryCards({super.key, required this.income, required this.expense, required this.profit});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(localeProvider);
+    final t = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
     return Row(
       children: [
-        _SummaryCard(title: 'Доход', amount: income, color: Colors.green, colorScheme: colorScheme),
+        _SummaryCard(title: t.incomeTitle, amount: income, color: Colors.green, colorScheme: colorScheme),
         const SizedBox(width: 8),
-        _SummaryCard(title: 'Расход', amount: expense, color: Colors.red, colorScheme: colorScheme),
+        _SummaryCard(title: t.expenseTitle, amount: expense, color: Colors.red, colorScheme: colorScheme),
         const SizedBox(width: 8),
-        _SummaryCard(title: 'Прибыль', amount: profit, color: Colors.blue, colorScheme: colorScheme),
+        _SummaryCard(title: t.profitTitle, amount: profit, color: Colors.blue, colorScheme: colorScheme),
       ],
     );
   }

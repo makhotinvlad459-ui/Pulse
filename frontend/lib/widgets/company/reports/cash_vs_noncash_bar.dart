@@ -1,16 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../providers/locale_provider.dart';
+import 'package:frontend/l10n/app_localizations.dart';
 
-class CashVsNoncashBar extends StatelessWidget {
+class CashVsNoncashBar extends ConsumerWidget {
   final double cash;
   final double noncash;
 
   const CashVsNoncashBar({super.key, required this.cash, required this.noncash});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(localeProvider);
+    final t = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
     final total = cash + noncash;
-    if (total == 0) return Text('Нет данных', style: TextStyle(color: colorScheme.onSurfaceVariant));
+    if (total == 0) return Text(t.noData, style: TextStyle(color: colorScheme.onSurfaceVariant));
     final cashPercent = (cash / total * 100).clamp(0, 100);
     final noncashPercent = (noncash / total * 100).clamp(0, 100);
     return Column(
@@ -47,8 +52,8 @@ class CashVsNoncashBar extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Row(children: [Container(width: 12, height: 12, color: Colors.orange), const SizedBox(width: 4), Text('Наличные: ${cash.toStringAsFixed(2)} ₽', style: TextStyle(color: colorScheme.onSurfaceVariant))]),
-            Row(children: [Container(width: 12, height: 12, color: Colors.blue), const SizedBox(width: 4), Text('Безналичные: ${noncash.toStringAsFixed(2)} ₽', style: TextStyle(color: colorScheme.onSurfaceVariant))]),
+            Row(children: [Container(width: 12, height: 12, color: Colors.orange), const SizedBox(width: 4), Text('${t.cash}: ${cash.toStringAsFixed(2)} ₽', style: TextStyle(color: colorScheme.onSurfaceVariant))]),
+            Row(children: [Container(width: 12, height: 12, color: Colors.blue), const SizedBox(width: 4), Text('${t.nonCash}: ${noncash.toStringAsFixed(2)} ₽', style: TextStyle(color: colorScheme.onSurfaceVariant))]),
           ],
         ),
       ],

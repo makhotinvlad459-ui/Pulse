@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../../../services/api_client.dart';
 import '../../../services/image_compression.dart';
+import '../../../providers/locale_provider.dart';
+import 'package:frontend/l10n/app_localizations.dart';
 
-class AddTransactionDialog extends StatefulWidget {
+class AddTransactionDialog extends ConsumerStatefulWidget {
   final int companyId;
   final Future<void> Function() onSuccess;
   final List<dynamic> accounts;
@@ -24,10 +27,10 @@ class AddTransactionDialog extends StatefulWidget {
   });
 
   @override
-  State<AddTransactionDialog> createState() => _AddTransactionDialogState();
+  ConsumerState<AddTransactionDialog> createState() => _AddTransactionDialogState();
 }
 
-class _AddTransactionDialogState extends State<AddTransactionDialog> {
+class _AddTransactionDialogState extends ConsumerState<AddTransactionDialog> {
   final _formKey = GlobalKey<FormState>();
   late String _type;
   double _amount = 0;
@@ -139,13 +142,14 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
   }
 
   Future<void> _addProduct() async {
+    final t = AppLocalizations.of(context)!;
     final api = ApiClient();
     List<dynamic> products = [];
     try {
       final res = await api.get('/products', queryParameters: {'company_id': widget.companyId});
       products = res.data;
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка загрузки товаров: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
       return;
     }
 
@@ -161,16 +165,16 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
       builder: (context) => StatefulBuilder(
         builder: (context, setStateDialog) {
           return AlertDialog(
-            title: const Text('Добавить товар'),
+            title: Text(t.addProductTitle),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 DropdownButtonFormField<int>(
-                  decoration: const InputDecoration(labelText: 'Товар'),
+                  decoration: InputDecoration(labelText: t.productLabel),
                   items: products.map((p) {
                     return DropdownMenuItem<int>(
                       value: p['id'],
-                      child: Text('${p['name']} (остаток: ${p['current_quantity']} ${p['unit']})'),
+                      child: Text('${p['name']} (${t.remainingStock}: ${p['current_quantity']} ${p['unit']})'),
                     );
                   }).toList(),
                   onChanged: (v) {
@@ -183,26 +187,25 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
                 const SizedBox(height: 8),
                 TextField(
                   controller: quantityController,
-                  decoration: const InputDecoration(labelText: 'Количество'),
+                  decoration: InputDecoration(labelText: t.quantityLabel),
                   keyboardType: TextInputType.number,
                   onChanged: (v) => quantity = _parseAmount(v),
                 ),
                 const SizedBox(height: 8),
                 TextField(
                   controller: totalController,
-                  decoration: const InputDecoration(labelText: 'Сумма (₽)'),
+                  decoration: InputDecoration(labelText: t.totalAmountLabel),
                   keyboardType: TextInputType.number,
                   onChanged: (v) => total = _parseAmount(v),
                 ),
               ],
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
+              TextButton(onPressed: () => Navigator.pop(context), child: Text(t.cancel)),
               ElevatedButton(
                 onPressed: () {
                   if (selectedProductId == null || quantity <= 0 || total <= 0) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Заполните все поля корректно')));
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.fillAllFields)));
                     return;
                   }
                   final pricePerUnit = total / quantity;
@@ -217,7 +220,7 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
                   });
                   Navigator.pop(context);
                 },
-                child: const Text('Добавить'),
+                child: Text(t.add),
               ),
             ],
           );
@@ -238,8 +241,8 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
       _amount = _calculatedAmount;
     }
     if (_amount <= 0 && _selectedProducts.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Укажите сумму или добавьте товары')));
+      final t = AppLocalizations.of(context)!;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.enterAmountOrProducts)));
       return;
     }
     setState(() => _loading = true);
@@ -262,17 +265,14 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
         }).toList();
       }
     } else if (_type == 'transfer') {
+      final t = AppLocalizations.of(context)!;
       if (_transferToAccountId == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Выберите счёт получатель')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.selectDestAccount)));
         setState(() => _loading = false);
         return;
       }
       if (_transferToAccountId == _accountId) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Нельзя переводить на тот же счёт')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.cannotTransferSame)));
         setState(() => _loading = false);
         return;
       }
@@ -295,11 +295,12 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
     } catch (e) {
       if (mounted) {
         String errorMessage = e.toString();
+        final t = AppLocalizations.of(context)!;
         if (errorMessage.contains('Insufficient stock')) {
-          errorMessage = 'Недостаточно товара на складе для продажи';
+          errorMessage = t.insufficientStock;
         }
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Ошибка: $errorMessage')));
+            .showSnackBar(SnackBar(content: Text('${t.error}: $errorMessage')));
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -308,6 +309,8 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(localeProvider);
+    final t = AppLocalizations.of(context)!;
     final isSmallScreen = MediaQuery.of(context).size.width < 500;
     final showAmountField = _selectedProducts.isEmpty;
     final effectiveAmount = showAmountField ? _amount : _calculatedAmount;
@@ -315,8 +318,8 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       title: Text(_type == 'income'
-          ? 'Новый приход (продажа)'
-          : (_type == 'expense' ? 'Новый расход (покупка)' : 'Новый перевод')),
+          ? t.newIncomeTitle
+          : (_type == 'expense' ? t.newExpenseTitle : t.newTransferTitle)),
       content: Form(
         key: _formKey,
         child: Container(
@@ -350,17 +353,17 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
                         segments: [
                           ButtonSegment(
                             value: 'income',
-                            label: Text(isSmallScreen ? 'Приход' : 'Приход (Продажа)'),
+                            label: Text(isSmallScreen ? t.incomeShort : t.incomeFull),
                             icon: isSmallScreen ? null : const Icon(Icons.arrow_upward),
                           ),
                           ButtonSegment(
                             value: 'expense',
-                            label: Text(isSmallScreen ? 'Расход' : 'Расход (Покупка)'),
+                            label: Text(isSmallScreen ? t.expenseShort : t.expenseFull),
                             icon: isSmallScreen ? null : const Icon(Icons.arrow_downward),
                           ),
                           ButtonSegment(
                             value: 'transfer',
-                            label: Text(isSmallScreen ? 'Перевод' : 'Перевод'),
+                            label: Text(isSmallScreen ? t.transferShort : t.transferFull),
                             icon: isSmallScreen ? null : const Icon(Icons.swap_horiz),
                           ),
                         ],
@@ -402,14 +405,14 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
                       controller: textController,
                       focusNode: focusNode,
                       decoration: InputDecoration(
-                        labelText: 'Контрагент (необязательно)',
+                        labelText: t.counterpartyOptional,
                         border: const OutlineInputBorder(),
                         suffixIcon: _loadingCounterparties
                             ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
                             : IconButton(
                                 icon: const Icon(Icons.refresh),
                                 onPressed: _loadCounterparties,
-                                tooltip: 'Обновить список',
+                                tooltip: t.refreshList,
                               ),
                       ),
                     );
@@ -456,17 +459,17 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
                       }
                     });
                   },
-                  decoration: const InputDecoration(labelText: 'Счёт', border: OutlineInputBorder()),
+                  decoration: InputDecoration(labelText: t.accountLabel, border: const OutlineInputBorder()),
                 ),
                 const SizedBox(height: 12),
                 if (showAmountField)
                   TextFormField(
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'Сумма', border: OutlineInputBorder()),
+                    decoration: InputDecoration(labelText: t.amountLabel, border: const OutlineInputBorder()),
                     onChanged: (v) => _amount = _parseAmount(v),
                     validator: (v) => v == null || v.isEmpty
-                        ? 'Введите сумму'
-                        : (double.tryParse(v.replaceFirst(',', '.')) == null ? 'Введите число' : null),
+                        ? t.enterAmount
+                        : (double.tryParse(v.replaceFirst(',', '.')) == null ? t.invalidNumber : null),
                   ),
                 if (_type != 'transfer') ...[
                   const SizedBox(height: 8),
@@ -476,7 +479,7 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
                         child: ElevatedButton.icon(
                           onPressed: _addProduct,
                           icon: const Icon(Icons.add_shopping_cart),
-                          label: const Text('Добавить товар'),
+                          label: Text(t.addProductButton),
                           style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade200, foregroundColor: Colors.black),
                         ),
                       ),
@@ -484,7 +487,7 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
                   ),
                   if (_selectedProducts.isNotEmpty) ...[
                     const SizedBox(height: 8),
-                    const Text('Товары в операции:', style: TextStyle(fontWeight: FontWeight.bold)),
+                    Text(t.productsInOperation, style: const TextStyle(fontWeight: FontWeight.bold)),
                     const SizedBox(height: 4),
                     ConstrainedBox(
                       constraints: const BoxConstraints(maxHeight: 150),
@@ -493,13 +496,13 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
                         itemCount: _selectedProducts.length,
                         itemBuilder: (context, idx) {
                           final p = _selectedProducts[idx];
-                          final productName = p['product_name']?.toString() ?? 'Товар';
+                          final productName = p['product_name']?.toString() ?? t.productLabel;
                           final quantity = (p['quantity'] as num?)?.toDouble() ?? 0;
                           final total = (p['total'] as num?)?.toDouble() ?? 0;
                           return ListTile(
                             dense: true,
                             title: Text(productName),
-                            subtitle: Text('$quantity шт — ${total.toStringAsFixed(2)} ₽'),
+                            subtitle: Text('$quantity ${t.pcs} — ${total.toStringAsFixed(2)} ₽'),
                             trailing: IconButton(
                               icon: const Icon(Icons.delete, color: Colors.red),
                               onPressed: () => _removeProduct(idx),
@@ -509,12 +512,12 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    Text('Итого: ${effectiveAmount.toStringAsFixed(2)} ₽', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    Text('${t.totalLabel}: ${effectiveAmount.toStringAsFixed(2)} ₽', style: const TextStyle(fontWeight: FontWeight.bold)),
                   ],
                 ],
                 const SizedBox(height: 12),
                 ListTile(
-                  title: const Text('Дата'),
+                  title: Text(t.dateLabel),
                   trailing: Text(DateFormat('dd.MM.yyyy', 'ru').format(_date)),
                   onTap: () async {
                     final picked = await showDatePicker(
@@ -536,7 +539,7 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
                           child: Text('${c['icon'] ?? '📁'} ${c['name']}'),
                         )).toList(),
                     onChanged: (v) => setState(() => _categoryId = v),
-                    decoration: const InputDecoration(labelText: 'Категория (необязательно)', border: OutlineInputBorder()),
+                    decoration: InputDecoration(labelText: t.categoryOptional, border: const OutlineInputBorder()),
                   ),
                 if (_type == 'transfer')
                   DropdownButtonFormField<int>(
@@ -546,11 +549,11 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
                           child: Text(a['name']),
                         )).toList(),
                     onChanged: (v) => setState(() => _transferToAccountId = v),
-                    decoration: const InputDecoration(labelText: 'Счёт получатель', border: OutlineInputBorder()),
+                    decoration: InputDecoration(labelText: t.toAccountLabel, border: const OutlineInputBorder()),
                   ),
                 const SizedBox(height: 12),
                 TextFormField(
-                  decoration: const InputDecoration(labelText: 'Описание', border: OutlineInputBorder()),
+                  decoration: InputDecoration(labelText: t.descriptionLabel, border: const OutlineInputBorder()),
                   onChanged: (v) => _description = v,
                 ),
                 const SizedBox(height: 12),
@@ -560,13 +563,13 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
                     ElevatedButton.icon(
                       onPressed: _pickFile,
                       icon: const Icon(Icons.attach_file),
-                      label: const Text('Файл'),
+                      label: Text(t.fileButton),
                       style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade200, foregroundColor: Colors.black),
                     ),
                     ElevatedButton.icon(
                       onPressed: _takePhoto,
                       icon: const Icon(Icons.camera_alt),
-                      label: const Text('Камера'),
+                      label: Text(t.cameraButton),
                       style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade200, foregroundColor: Colors.black),
                     ),
                   ],
@@ -595,11 +598,11 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
+        TextButton(onPressed: () => Navigator.pop(context), child: Text(t.cancel)),
         ElevatedButton(
           onPressed: _loading ? null : _submit,
           style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade200, foregroundColor: Colors.black),
-          child: const Text('Сохранить'),
+          child: Text(t.save),
         ),
       ],
     );

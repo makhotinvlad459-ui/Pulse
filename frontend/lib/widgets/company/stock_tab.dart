@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../services/api_client.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/locale_provider.dart';
 import '../../models/user.dart';
+import 'package:frontend/l10n/app_localizations.dart';
 
 class StockTab extends ConsumerStatefulWidget {
   final int companyId;
@@ -21,13 +23,12 @@ class StockTab extends ConsumerStatefulWidget {
 class _StockTabState extends ConsumerState<StockTab> {
   List<dynamic> _products = [];
   bool _loading = true;
-  String _activeType = 'product'; // 'product' or 'material'
+  String _activeType = 'product';
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
 
   final List<String> _materialUnits = ['шт', 'м', 'мм', 'см', 'дюймы', 'кг', 'г', 'л', 'мл', 'упаковка'];
 
-  // Проверки прав
   bool get _canViewProducts {
     final authState = ref.read(authProvider);
     final isFounder = authState.user?.role == UserRole.founder;
@@ -66,10 +67,8 @@ class _StockTabState extends ConsumerState<StockTab> {
 
   bool get _canCreate => _activeType == 'product' ? _canCreateProduct : _canCreateMaterial;
   bool get _canEdit => _activeType == 'product' ? _canEditProduct : _canEditMaterial;
-  // Право на удаление (используем edit, либо отдельное)
-  bool get _canDelete => _canEdit; // или отдельное право delete_product, но для простоты используем edit
+  bool get _canDelete => _canEdit;
 
-  // Доступные для просмотра типы
   List<String> get _availableTypes {
     final types = <String>[];
     if (_canViewProducts) types.add('product');
@@ -101,8 +100,9 @@ class _StockTabState extends ConsumerState<StockTab> {
       });
     } catch (e) {
       setState(() => _loading = false);
+      final t = AppLocalizations.of(context)!;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка загрузки: $e')),
+        SnackBar(content: Text('${t.error}: $e')),
       );
     }
   }
@@ -115,25 +115,21 @@ class _StockTabState extends ConsumerState<StockTab> {
     ).toList();
   }
 
-  // Удаление товара (мягкое)
   Future<void> _deleteProduct(Map<String, dynamic> product) async {
+    final t = AppLocalizations.of(context)!;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Удалить товар/материал?'),
-        content: Text(
-          'Вы уверены, что хотите удалить "${product['name']}"?\n\n'
-          'Товар будет помечен как удалённый и перестанет отображаться в списках, '
-          'но останется в истории заказов.',
-        ),
+        title: Text(t.deleteProductConfirmTitle),
+        content: Text('${t.deleteProductConfirmContent}\n\n${t.productWillBeHidden}'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Отмена'),
+            child: Text(t.cancel),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Удалить', style: TextStyle(color: Colors.red)),
+            child: Text(t.delete, style: const TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -144,11 +140,11 @@ class _StockTabState extends ConsumerState<StockTab> {
       await api.delete('/products/${product['id']}', queryParameters: {'company_id': widget.companyId});
       _loadProducts();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Товар удалён')),
+        SnackBar(content: Text(t.productDeleted)),
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка удаления: $e')),
+        SnackBar(content: Text('${t.error}: $e')),
       );
     }
   }
@@ -158,6 +154,7 @@ class _StockTabState extends ConsumerState<StockTab> {
     final isEdit = existing != null;
     if (isEdit && !_canEdit) return;
 
+    final t = AppLocalizations.of(context)!;
     final nameController = TextEditingController(text: existing?['name'] ?? '');
     String? unit = existing?['unit'];
     final labelController = TextEditingController(text: existing?['label'] ?? '');
@@ -173,7 +170,7 @@ class _StockTabState extends ConsumerState<StockTab> {
     await showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(isEdit ? 'Редактировать' : 'Новый ${_activeType == 'product' ? 'товар' : 'материал'}',
+        title: Text(isEdit ? t.editProduct : (t.newProduct + (_activeType == 'product' ? t.products : t.materials)),
             style: TextStyle(color: colorScheme.onSurface)),
         content: SingleChildScrollView(
           child: Column(
@@ -181,13 +178,13 @@ class _StockTabState extends ConsumerState<StockTab> {
             children: [
               TextField(
                 controller: nameController,
-                decoration: InputDecoration(labelText: 'Название*', labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+                decoration: InputDecoration(labelText: t.nameRequired, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
                 style: TextStyle(color: colorScheme.onSurface),
               ),
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
                 value: unit,
-                decoration: InputDecoration(labelText: 'Единица измерения*', labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+                decoration: InputDecoration(labelText: t.unitRequired, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
                 dropdownColor: colorScheme.surface,
                 style: TextStyle(color: colorScheme.onSurface),
                 items: units.map((u) => DropdownMenuItem(value: u, child: Text(u))).toList(),
@@ -196,36 +193,39 @@ class _StockTabState extends ConsumerState<StockTab> {
               const SizedBox(height: 8),
               TextField(
                 controller: labelController,
-                decoration: InputDecoration(labelText: 'Артикул / метка (необязательно)', labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+                decoration: InputDecoration(labelText: t.articleOptional, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
                 style: TextStyle(color: colorScheme.onSurface),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: sizeController,
-                decoration: InputDecoration(labelText: 'Размер (необязательно)', labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+                decoration: InputDecoration(labelText: t.sizeOptional, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
                 style: TextStyle(color: colorScheme.onSurface),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: barcodeController,
-                decoration: InputDecoration(labelText: 'Штрихкод / маркировка (необязательно)', labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+                decoration: InputDecoration(labelText: t.barcodeOptional, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
                 style: TextStyle(color: colorScheme.onSurface),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: supplierController,
-                decoration: InputDecoration(labelText: 'Поставщик (необязательно)', labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+                decoration: InputDecoration(labelText: t.supplierOptional, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
                 style: TextStyle(color: colorScheme.onSurface),
               ),
             ],
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text('Отмена', style: TextStyle(color: colorScheme.onSurfaceVariant))),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(t.cancel, style: TextStyle(color: colorScheme.onSurfaceVariant)),
+          ),
           ElevatedButton(
             onPressed: () async {
               if (nameController.text.isEmpty || unit == null) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Заполните название и единицу измерения')));
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.fillNameAndUnit)));
                 return;
               }
               final api = ApiClient();
@@ -253,14 +253,14 @@ class _StockTabState extends ConsumerState<StockTab> {
                 Navigator.pop(context);
                 _loadProducts();
               } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
               }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: colorScheme.primary,
               foregroundColor: colorScheme.onPrimary,
             ),
-            child: Text(isEdit ? 'Сохранить' : 'Создать'),
+            child: Text(isEdit ? t.save : t.create),
           ),
         ],
       ),
@@ -269,11 +269,13 @@ class _StockTabState extends ConsumerState<StockTab> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(localeProvider);
     final colorScheme = Theme.of(context).colorScheme;
+    final t = AppLocalizations.of(context)!;
     final availableTypes = _availableTypes;
 
     if (availableTypes.isEmpty) {
-      return const Center(child: Text('Нет прав для просмотра склада'));
+      return Center(child: Text(t.noStockPermission));
     }
 
     final showTypeSelector = availableTypes.length > 1;
@@ -296,9 +298,9 @@ class _StockTabState extends ConsumerState<StockTab> {
                       return colorScheme.surfaceContainerHighest;
                     }),
                   ),
-                  segments: const [
-                    ButtonSegment(value: 'product', label: Text('Товары'), icon: Icon(Icons.inventory)),
-                    ButtonSegment(value: 'material', label: Text('Материалы'), icon: Icon(Icons.handyman)),
+                  segments: [
+                    ButtonSegment(value: 'product', label: Text(t.products), icon: const Icon(Icons.inventory)),
+                    ButtonSegment(value: 'material', label: Text(t.materials), icon: const Icon(Icons.handyman)),
                   ],
                   selected: {_activeType},
                   onSelectionChanged: (Set<String> newSelection) {
@@ -325,7 +327,7 @@ class _StockTabState extends ConsumerState<StockTab> {
             controller: _searchController,
             onChanged: (v) => setState(() => _searchQuery = v),
             decoration: InputDecoration(
-              hintText: 'Поиск по названию или артикулу',
+              hintText: t.searchByNameOrArticle,
               hintStyle: TextStyle(color: colorScheme.onSurfaceVariant),
               prefixIcon: Icon(Icons.search, color: colorScheme.onSurfaceVariant),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -338,7 +340,7 @@ class _StockTabState extends ConsumerState<StockTab> {
           child: _loading
               ? const Center(child: CircularProgressIndicator())
               : _filteredProducts.isEmpty
-                  ? Center(child: Text('Нет данных', style: TextStyle(color: colorScheme.onSurfaceVariant)))
+                  ? Center(child: Text(t.noData, style: TextStyle(color: colorScheme.onSurfaceVariant)))
                   : ListView.builder(
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                       itemCount: _filteredProducts.length,
@@ -372,7 +374,7 @@ class _StockTabState extends ConsumerState<StockTab> {
                                             Text(p['name'],
                                                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: colorScheme.onSurface)),
                                             if (p['label'] != null && p['label'].isNotEmpty)
-                                              Text('Артикул: ${p['label']}', style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant)),
+                                              Text('${t.article}: ${p['label']}', style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant)),
                                           ],
                                         ),
                                       ),
@@ -382,7 +384,7 @@ class _StockTabState extends ConsumerState<StockTab> {
                                         IconButton(
                                           icon: const Icon(Icons.delete, color: Colors.red),
                                           onPressed: () => _deleteProduct(p),
-                                          tooltip: 'Удалить',
+                                          tooltip: t.delete,
                                         ),
                                     ],
                                   ),
@@ -391,11 +393,11 @@ class _StockTabState extends ConsumerState<StockTab> {
                                     spacing: 8,
                                     children: [
                                       if (p['size'] != null && p['size'].isNotEmpty)
-                                        Chip(label: Text('Размер: ${p['size']}'), materialTapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                                        Chip(label: Text('${t.size}: ${p['size']}'), materialTapTargetSize: MaterialTapTargetSize.shrinkWrap),
                                       if (p['barcode'] != null && p['barcode'].isNotEmpty)
-                                        Chip(label: Text('Штрихкод: ${p['barcode']}'), materialTapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                                        Chip(label: Text('${t.barcode}: ${p['barcode']}'), materialTapTargetSize: MaterialTapTargetSize.shrinkWrap),
                                       if (p['supplier'] != null && p['supplier'].isNotEmpty)
-                                        Chip(label: Text('Поставщик: ${p['supplier']}'), materialTapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                                        Chip(label: Text('${t.supplier}: ${p['supplier']}'), materialTapTargetSize: MaterialTapTargetSize.shrinkWrap),
                                     ],
                                   ),
                                 ],

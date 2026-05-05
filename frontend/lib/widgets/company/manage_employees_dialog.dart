@@ -3,20 +3,22 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../services/api_client.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/locale_provider.dart';
 import '../../models/user.dart';
 import 'member_permissions_dialog.dart';
+import 'package:frontend/l10n/app_localizations.dart';
 
-class ManageEmployeesDialog extends StatefulWidget {
+class ManageEmployeesDialog extends ConsumerStatefulWidget {
   final int companyId;
   final VoidCallback onSuccess;
   const ManageEmployeesDialog(
       {super.key, required this.companyId, required this.onSuccess});
 
   @override
-  State<ManageEmployeesDialog> createState() => _ManageEmployeesDialogState();
+  ConsumerState<ManageEmployeesDialog> createState() => _ManageEmployeesDialogState();
 }
 
-class _ManageEmployeesDialogState extends State<ManageEmployeesDialog> {
+class _ManageEmployeesDialogState extends ConsumerState<ManageEmployeesDialog> {
   List<Map<String, dynamic>> _members = [];
   bool _loading = true;
   final _formKey = GlobalKey<FormState>();
@@ -25,27 +27,28 @@ class _ManageEmployeesDialogState extends State<ManageEmployeesDialog> {
   String _selectedRole = 'employee';
   bool _adding = false;
   Set<String> _currentUserPermissions = {};
+  bool _dataLoaded = false;
 
   @override
-  void initState() {
-    super.initState();
-    _loadMembers();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_dataLoaded && mounted) {
+      _dataLoaded = true;
+      _loadMembers();
+    }
   }
 
   Future<void> _loadMembers() async {
     setState(() => _loading = true);
     final api = ApiClient();
     try {
-      // Загружаем права текущего пользователя
       final myPerms = await api.getMyPermissions(widget.companyId);
       _currentUserPermissions = Set<String>.from(myPerms['permissions']);
 
       final response = await api.get('/companies/${widget.companyId}/members');
       List<Map<String, dynamic>> members = List<Map<String, dynamic>>.from(response.data);
-      final container = ProviderScope.containerOf(context);
-      final authState = container.read(authProvider);
+      final authState = ref.read(authProvider);
       final currentUserId = authState.user?.id;
-      // Исключаем учредителя и текущего пользователя
       members.removeWhere((m) => m['is_founder'] == true || m['user_id'] == currentUserId);
       setState(() {
         _members = members;
@@ -53,8 +56,11 @@ class _ManageEmployeesDialogState extends State<ManageEmployeesDialog> {
       });
     } catch (e) {
       setState(() => _loading = false);
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Ошибка загрузки: $e')));
+      if (mounted) {
+        final t = AppLocalizations.of(context)!;
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+      }
     }
   }
 
@@ -62,6 +68,7 @@ class _ManageEmployeesDialogState extends State<ManageEmployeesDialog> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _adding = true);
     final api = ApiClient();
+    final t = AppLocalizations.of(context)!;
     try {
       final response = await api.post(
         '/companies/${widget.companyId}/members',
@@ -76,7 +83,7 @@ class _ManageEmployeesDialogState extends State<ManageEmployeesDialog> {
         await api.put('/companies/${widget.companyId}/manager',
             data: {'user_id': userId});
         ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Пользователь назначен управляющим')));
+            SnackBar(content: Text(t.userAssignedAsManager)));
       } else {
         if (data.containsKey('password')) {
           _showPasswordDialog(
@@ -89,32 +96,33 @@ class _ManageEmployeesDialogState extends State<ManageEmployeesDialog> {
       widget.onSuccess();
     } catch (e) {
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+          .showSnackBar(SnackBar(content: Text('${t.error}: $e')));
     } finally {
       setState(() => _adding = false);
     }
   }
 
   void _showPasswordDialog(String fullName, String password) {
+    final t = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Пароль для $fullName', style: TextStyle(color: colorScheme.onSurface)),
+        title: Text('${t.passwordFor} $fullName', style: TextStyle(color: colorScheme.onSurface)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Логин: телефон', style: TextStyle(color: colorScheme.onSurface)),
-            Text('Пароль: $password', style: TextStyle(color: colorScheme.onSurface)),
+            Text('${t.loginLabel}: ${t.phoneLabel}', style: TextStyle(color: colorScheme.onSurface)),
+            Text('${t.passwordLabel}: $password', style: TextStyle(color: colorScheme.onSurface)),
             const SizedBox(height: 16),
             ElevatedButton.icon(
               onPressed: () {
                 Clipboard.setData(ClipboardData(text: password));
                 ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Пароль скопирован')));
+                    SnackBar(content: Text(t.passwordCopied)));
               },
               icon: const Icon(Icons.copy),
-              label: const Text('Копировать пароль'),
+              label: Text(t.copyPassword),
               style: ElevatedButton.styleFrom(
                 backgroundColor: colorScheme.primary,
                 foregroundColor: colorScheme.onPrimary,
@@ -125,7 +133,7 @@ class _ManageEmployeesDialogState extends State<ManageEmployeesDialog> {
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context),
-              child: Text('Закрыть', style: TextStyle(color: colorScheme.onSurfaceVariant))),
+              child: Text(t.close, style: TextStyle(color: colorScheme.onSurfaceVariant))),
         ],
       ),
     );
@@ -133,6 +141,7 @@ class _ManageEmployeesDialogState extends State<ManageEmployeesDialog> {
 
   Future<void> _resetPassword(int userId, String fullName) async {
     final api = ApiClient();
+    final t = AppLocalizations.of(context)!;
     try {
       final response = await api.post(
           '/companies/${widget.companyId}/members/$userId/reset-password');
@@ -141,23 +150,24 @@ class _ManageEmployeesDialogState extends State<ManageEmployeesDialog> {
       widget.onSuccess();
     } catch (e) {
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+          .showSnackBar(SnackBar(content: Text('${t.error}: $e')));
     }
   }
 
   Future<void> _removeMember(int userId, String fullName) async {
+    final t = AppLocalizations.of(context)!;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Удалить $fullName?', style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
-        content: const Text('Сотрудник потеряет доступ к компании.'),
+        title: Text('${t.deleteEmployee} $fullName?', style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
+        content: Text(t.employeeWillLoseAccess),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Отмена')),
+              child: Text(t.cancel)),
           TextButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Удалить', style: TextStyle(color: Colors.red))),
+              child: Text(t.delete, style: const TextStyle(color: Colors.red))),
         ],
       ),
     );
@@ -169,24 +179,19 @@ class _ManageEmployeesDialogState extends State<ManageEmployeesDialog> {
       widget.onSuccess();
     } catch (e) {
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+          .showSnackBar(SnackBar(content: Text('${t.error}: $e')));
     }
   }
 
-  Future<bool> _canManageEmployees() async {
-    // уже есть права в _currentUserPermissions
-    return _currentUserPermissions.contains('manage_employees');
-  }
-
-  Future<bool> _canManagePermissions() async {
-    return _currentUserPermissions.contains('manage_permissions');
-  }
+  bool get _canManageEmployees => _currentUserPermissions.contains('manage_employees');
+  bool get _canManagePermissions => _currentUserPermissions.contains('manage_permissions');
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(localeProvider);
+    final t = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
-    final container = ProviderScope.containerOf(context);
-    final authState = container.read(authProvider);
+    final authState = ref.read(authProvider);
     final isFounder = authState.user?.role == UserRole.founder;
 
     return Dialog(
@@ -198,7 +203,7 @@ class _ManageEmployeesDialogState extends State<ManageEmployeesDialog> {
         child: Column(
           children: [
             AppBar(
-              title: const Text('Управление сотрудниками'),
+              title: Text(t.manageEmployees),
               backgroundColor: colorScheme.surface,
               foregroundColor: colorScheme.onSurface,
               automaticallyImplyLeading: false,
@@ -221,7 +226,7 @@ class _ManageEmployeesDialogState extends State<ManageEmployeesDialog> {
                             controller: _fullNameController,
                             style: TextStyle(color: colorScheme.onSurface),
                             decoration: InputDecoration(
-                              labelText: 'ФИО',
+                              labelText: t.fullName,
                               labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
                               border: OutlineInputBorder(
                                 borderSide: BorderSide(color: colorScheme.outline),
@@ -234,7 +239,7 @@ class _ManageEmployeesDialogState extends State<ManageEmployeesDialog> {
                               ),
                             ),
                             validator: (v) =>
-                                v == null || v.isEmpty ? 'Введите ФИО' : null,
+                                v == null || v.isEmpty ? t.enterFullName : null,
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -243,7 +248,7 @@ class _ManageEmployeesDialogState extends State<ManageEmployeesDialog> {
                             controller: _phoneController,
                             style: TextStyle(color: colorScheme.onSurface),
                             decoration: InputDecoration(
-                              labelText: 'Телефон',
+                              labelText: t.phoneLabel,
                               labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
                               border: OutlineInputBorder(
                                 borderSide: BorderSide(color: colorScheme.outline),
@@ -256,18 +261,18 @@ class _ManageEmployeesDialogState extends State<ManageEmployeesDialog> {
                               ),
                             ),
                             validator: (v) => v == null || v.isEmpty
-                                ? 'Введите телефон'
+                                ? t.enterPhone
                                 : null,
                           ),
                         ),
                         const SizedBox(width: 8),
                         DropdownButton<String>(
                           value: _selectedRole,
-                          items: const [
+                          items: [
                             DropdownMenuItem(
-                                value: 'employee', child: Text('Сотрудник')),
+                                value: 'employee', child: Text(t.employeeRole)),
                             DropdownMenuItem(
-                                value: 'manager', child: Text('Управляющий')),
+                                value: 'manager', child: Text(t.managerRole)),
                           ],
                           onChanged: (v) => setState(() => _selectedRole = v!),
                           dropdownColor: colorScheme.surface,
@@ -286,7 +291,7 @@ class _ManageEmployeesDialogState extends State<ManageEmployeesDialog> {
                                   height: 20,
                                   child:
                                       CircularProgressIndicator(strokeWidth: 2))
-                              : const Text('Добавить'),
+                              : Text(t.add),
                         ),
                       ],
                     ),
@@ -298,74 +303,66 @@ class _ManageEmployeesDialogState extends State<ManageEmployeesDialog> {
             Expanded(
               child: _loading
                   ? const Center(child: CircularProgressIndicator())
-                  : FutureBuilder<(bool, bool)>(
-                      future: Future.wait([_canManageEmployees(), _canManagePermissions()])
-                          .then((results) => (results[0], results[1])),
-                      builder: (context, snapshot) {
-                        final canManageEmployees = isFounder || (snapshot.data?.$1 ?? false);
-                        final canManagePermissions = isFounder || (snapshot.data?.$2 ?? false);
-                        return ListView.builder(
-                          itemCount: _members.length,
-                          itemBuilder: (context, index) {
-                            final m = _members[index];
-                            final isManager = m['role_in_company'] == 'manager';
-                            final roleText = isManager ? 'Управляющий' : 'Сотрудник';
-                            return ListTile(
-                              title: Text(m['full_name'], style: TextStyle(color: colorScheme.onSurface)),
-                              subtitle: Text('${m['phone']} • $roleText', style: TextStyle(color: colorScheme.onSurfaceVariant)),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  if (canManagePermissions)
-                                    IconButton(
-                                      icon: Icon(Icons.security, color: Colors.blue),
-                                      onPressed: () async {
-                                        final api = ApiClient();
-                                        final res = await api.getCompanyPermissions(widget.companyId);
-                                        final membersList = res as List;
-                                        final thisMember = membersList.firstWhere(
-                                          (member) => member['member_id'] == m['id'],
-                                          orElse: () => null,
-                                        );
-                                        if (thisMember == null) {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                              const SnackBar(content: Text('Не удалось загрузить права сотрудника')));
-                                          return;
-                                        }
-                                        final currentPermissions = List<String>.from(thisMember['permissions'] ?? []);
-                                        await showDialog(
-                                          context: context,
-                                          builder: (_) => MemberPermissionsDialog(
-                                            companyId: widget.companyId,
-                                            memberId: m['id'],
-                                            memberName: m['full_name'],
-                                            currentPermissions: currentPermissions,
-                                            onSuccess: () {
-                                              widget.onSuccess();
-                                            },
-                                            isFounder: false,
-                                            currentUserPermissions: _currentUserPermissions,
-                                          ),
-                                        );
-                                      },
-                                      tooltip: 'Управление правами',
-                                    ),
-                                  if (canManageEmployees)
-                                    IconButton(
-                                      icon: Icon(Icons.refresh, color: Colors.blueGrey),
-                                      onPressed: () => _resetPassword(m['user_id'], m['full_name']),
-                                      tooltip: 'Сбросить пароль',
-                                    ),
-                                  if (canManageEmployees)
-                                    IconButton(
-                                      icon: const Icon(Icons.delete, color: Colors.red),
-                                      onPressed: () => _removeMember(m['user_id'], m['full_name']),
-                                      tooltip: 'Удалить сотрудника',
-                                    ),
-                                ],
-                              ),
-                            );
-                          },
+                  : ListView.builder(
+                      itemCount: _members.length,
+                      itemBuilder: (context, index) {
+                        final m = _members[index];
+                        final isManager = m['role_in_company'] == 'manager';
+                        final roleText = isManager ? t.managerRole : t.employeeRole;
+                        return ListTile(
+                          title: Text(m['full_name'], style: TextStyle(color: colorScheme.onSurface)),
+                          subtitle: Text('${m['phone']} • $roleText', style: TextStyle(color: colorScheme.onSurfaceVariant)),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (_canManagePermissions || isFounder)
+                                IconButton(
+                                  icon: Icon(Icons.security, color: Colors.blue),
+                                  onPressed: () async {
+                                    final api = ApiClient();
+                                    final res = await api.getCompanyPermissions(widget.companyId);
+                                    final membersList = res as List;
+                                    final thisMember = membersList.firstWhere(
+                                      (member) => member['member_id'] == m['id'],
+                                      orElse: () => null,
+                                    );
+                                    if (thisMember == null) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(content: Text(t.failedToLoadPermissions)));
+                                      return;
+                                    }
+                                    final currentPermissions = List<String>.from(thisMember['permissions'] ?? []);
+                                    await showDialog(
+                                      context: context,
+                                      builder: (_) => MemberPermissionsDialog(
+                                        companyId: widget.companyId,
+                                        memberId: m['id'],
+                                        memberName: m['full_name'],
+                                        currentPermissions: currentPermissions,
+                                        onSuccess: () {
+                                          widget.onSuccess();
+                                        },
+                                        isFounder: false,
+                                        currentUserPermissions: _currentUserPermissions,
+                                      ),
+                                    );
+                                  },
+                                  tooltip: t.managePermissionsTooltip,
+                                ),
+                              if (_canManageEmployees || isFounder)
+                                IconButton(
+                                  icon: Icon(Icons.refresh, color: Colors.blueGrey),
+                                  onPressed: () => _resetPassword(m['user_id'], m['full_name']),
+                                  tooltip: t.resetPasswordTooltip,
+                                ),
+                              if (_canManageEmployees || isFounder)
+                                IconButton(
+                                  icon: const Icon(Icons.delete, color: Colors.red),
+                                  onPressed: () => _removeMember(m['user_id'], m['full_name']),
+                                  tooltip: t.deleteEmployeeTooltip,
+                                ),
+                            ],
+                          ),
                         );
                       },
                     ),

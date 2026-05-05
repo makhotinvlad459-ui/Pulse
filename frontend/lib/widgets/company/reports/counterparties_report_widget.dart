@@ -1,17 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../services/api_client.dart';
+import '../../../providers/locale_provider.dart';
+import 'package:frontend/l10n/app_localizations.dart';
 
-class CounterpartiesReportWidget extends StatefulWidget {
+class CounterpartiesReportWidget extends ConsumerStatefulWidget {
   final int companyId;
   final DateTime startDate;
   final DateTime endDate;
   const CounterpartiesReportWidget({super.key, required this.companyId, required this.startDate, required this.endDate});
 
   @override
-  State<CounterpartiesReportWidget> createState() => _CounterpartiesReportWidgetState();
+  ConsumerState<CounterpartiesReportWidget> createState() => _CounterpartiesReportWidgetState();
 }
 
-class _CounterpartiesReportWidgetState extends State<CounterpartiesReportWidget> {
+class _CounterpartiesReportWidgetState extends ConsumerState<CounterpartiesReportWidget> {
   List<Map<String, dynamic>> _data = [];
   bool _loading = true;
 
@@ -50,20 +53,21 @@ class _CounterpartiesReportWidgetState extends State<CounterpartiesReportWidget>
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(localeProvider);
+    final t = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
     if (_loading) return const CircularProgressIndicator();
-    if (_data.isEmpty) return const Text('Нет контрагентов за выбранный период');
+    if (_data.isEmpty) return Text(t.noCounterpartiesPeriod, style: TextStyle(color: colorScheme.onSurfaceVariant));
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: DataTable(
         headingRowColor: MaterialStateProperty.all(colorScheme.primary),
         headingTextStyle: TextStyle(color: colorScheme.onPrimary, fontWeight: FontWeight.bold),
-        dataRowColor: MaterialStateProperty.all(colorScheme.surface),
-        columns: const [
-          DataColumn(label: Text('Контрагент')),
-          DataColumn(label: Text('Доход, ₽')),
-          DataColumn(label: Text('Расход, ₽')),
-          DataColumn(label: Text('Баланс, ₽')),
+        columns: [
+          DataColumn(label: Text(t.counterpartyLabel)),
+          DataColumn(label: Text('${t.income}, ₽')),
+          DataColumn(label: Text('${t.expense}, ₽')),
+          DataColumn(label: Text('${t.balance}, ₽')),
         ],
         rows: _data.map((row) {
           final balance = row['balance'] as double;

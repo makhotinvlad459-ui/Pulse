@@ -6,6 +6,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:shimmer/shimmer.dart';
 import '../providers/home_provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/locale_provider.dart';
 import '../widgets/video_background.dart';
 import '../models/company.dart';
 import '../screens/create_company_screen.dart';
@@ -13,6 +14,7 @@ import '../screens/company_screen.dart';
 import '../services/api_client.dart';
 import '../providers/theme_provider.dart';
 import '../models/user.dart';
+import 'package:frontend/l10n/app_localizations.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -80,9 +82,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final currentTheme = ref.watch(themeProvider);
     final videoPath = _getVideoPath(currentTheme);
     final colorScheme = Theme.of(context).colorScheme;
+    final t = AppLocalizations.of(context)!;
 
     return VideoBackground(
-      key: ValueKey(videoPath),
+      key: ValueKey(videoPath),   // быстрая смена видео при смене темы
       videoPath: videoPath,
       fit: BoxFit.cover,
       muted: true,
@@ -93,7 +96,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         body: SafeArea(
           child: Column(
             children: [
-              // Верхняя панель
+              // Верхняя панель (без флагов)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Row(
@@ -104,7 +107,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       highlightColor: colorScheme.onSurface,
                       period: const Duration(seconds: 2),
                       child: Text(
-                        'Пульс',
+                        t.appTitle,
                         style: GoogleFonts.caveat(fontSize: 32, color: colorScheme.onSurface),
                       ),
                     ),
@@ -116,7 +119,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             onPressed: () => Scaffold.of(context).openDrawer(),
                           ),
                           Text(
-                            'Настройки',
+                            t.settings,
                             style: TextStyle(fontSize: 10, color: colorScheme.onSurface),
                           ),
                         ],
@@ -135,7 +138,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     highlightColor: colorScheme.onSurface,
                     period: const Duration(seconds: 2),
                     child: Text(
-                      'ваших финансов',
+                      t.subtitle,
                       style: GoogleFonts.orbitron(
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
@@ -164,11 +167,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           if (overview.hasAnyAccountsPermission)
                             Row(
                               children: [
-                                _StatCard(title: 'Суммарно', amount: overview.totalAll),
+                                _StatCard(title: t.totalAll, amount: overview.totalAll),
                                 const SizedBox(width: 8),
-                                _StatCard(title: 'Наличные', amount: overview.totalCash),
+                                _StatCard(title: t.totalCash, amount: overview.totalCash),
                                 const SizedBox(width: 8),
-                                _StatCard(title: 'Банк', amount: overview.totalBank),
+                                _StatCard(title: t.totalBank, amount: overview.totalBank),
                               ],
                             ),
                           const SizedBox(height: 16),
@@ -188,7 +191,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     },
                     loading: () => const Center(child: CircularProgressIndicator()),
                     error: (error, stack) => Center(
-                      child: Text('Ошибка: $error',
+                      child: Text('${t.error}: $error',
                           style: TextStyle(color: colorScheme.error)),
                     ),
                   ),
@@ -257,14 +260,14 @@ class _CompanyCard extends StatefulWidget {
   final WidgetRef ref;
   final int unreadMessages;
   final int pendingTasks;
-  final bool showBalance; // добавили
+  final bool showBalance;
 
   const _CompanyCard({
     required this.company,
     required this.ref,
     required this.unreadMessages,
     required this.pendingTasks,
-    required this.showBalance, // добавили
+    required this.showBalance,
   });
 
   @override
@@ -299,13 +302,14 @@ class _CompanyCardState extends State<_CompanyCard>
     final highlight = isDark
         ? Colors.white.withOpacity(0.6)
         : Colors.white.withOpacity(0.8);
+    final t = AppLocalizations.of(context)!;
 
     return AnimatedBuilder(
       animation: _animationController,
       builder: (context, _) {
-        final double t = _animationController.value;
-        final start = Alignment(-1.0 + t * 2, -1.0 + t);
-        final end = Alignment(1.0 - t, 1.0 - t);
+        final double tVal = _animationController.value;
+        final start = Alignment(-1.0 + tVal * 2, -1.0 + tVal);
+        final end = Alignment(1.0 - tVal, 1.0 - tVal);
 
         final gradient = LinearGradient(
           begin: start,
@@ -378,7 +382,7 @@ class _CompanyCardState extends State<_CompanyCard>
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: Text(
-                                      'Сообщения: ${widget.unreadMessages}',
+                                      '${t.messages}: ${widget.unreadMessages}',
                                       style: const TextStyle(
                                           color: Colors.white, fontSize: 10),
                                     ),
@@ -392,7 +396,7 @@ class _CompanyCardState extends State<_CompanyCard>
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: Text(
-                                      'Задачи: ${widget.pendingTasks}',
+                                      '${t.tasks}: ${widget.pendingTasks}',
                                       style: const TextStyle(
                                           color: Colors.white, fontSize: 10),
                                     ),
@@ -402,14 +406,14 @@ class _CompanyCardState extends State<_CompanyCard>
                         ],
                       ),
                       const SizedBox(height: 4),
-                      Text('Управляющий: ${widget.company.managerFullName}',
+                      Text('${t.manager}: ${widget.company.managerFullName}',
                           style: TextStyle(color: colorScheme.onSurfaceVariant)),
-                      Text('Тел: ${widget.company.managerPhone}',
+                      Text('${t.phone}: ${widget.company.managerPhone}',
                           style: TextStyle(color: colorScheme.onSurfaceVariant)),
                       const SizedBox(height: 4),
                       if (widget.showBalance)
                         Text(
-                          'Сумма: ${widget.company.totalBalance.toStringAsFixed(2)} ₽',
+                          '${t.totalAmount}: ${widget.company.totalBalance.toStringAsFixed(2)} ₽',
                           style: TextStyle(
                               color: colorScheme.onSurface,
                               fontWeight: FontWeight.w500),
@@ -477,11 +481,17 @@ class _BorderGradientPainter extends CustomPainter {
 class SettingsDrawer extends StatelessWidget {
   const SettingsDrawer({super.key});
 
+  void _setLanguage(BuildContext context, Locale locale) {
+    final ref = ProviderScope.containerOf(context).read(localeProvider.notifier);
+    ref.setLocale(locale);
+  }
+
   @override
   Widget build(BuildContext context) {
     final ref = ProviderScope.containerOf(context).read(authProvider.notifier);
     final colorScheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final t = AppLocalizations.of(context)!;
     return Drawer(
       backgroundColor: colorScheme.surface,
       child: ListView(
@@ -493,26 +503,43 @@ class SettingsDrawer extends StatelessWidget {
                   ? Colors.grey[800]
                   : const Color.fromARGB(255, 191, 193, 194),
             ),
-            child: Text('Настройки',
+            child: Text(t.settings,
                 style: TextStyle(
                     fontSize: 28, color: isDark ? Colors.white : Colors.white)),
           ),
           ListTile(
+            leading: const Icon(Icons.language),
+            title: Text(t.language),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Text('🇬🇧', style: TextStyle(fontSize: 24)),
+                  onPressed: () => _setLanguage(context, const Locale('en')),
+                ),
+                IconButton(
+                  icon: const Text('🇷🇺', style: TextStyle(fontSize: 24)),
+                  onPressed: () => _setLanguage(context, const Locale('ru')),
+                ),
+              ],
+            ),
+          ),
+          const Divider(),
+          ListTile(
             leading: Icon(Icons.people, color: colorScheme.onSurfaceVariant),
-            title: Text('Сотрудники',
+            title: Text(t.employees,
                 style: TextStyle(color: colorScheme.onSurfaceVariant)),
             onTap: () {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                    content: Text('Список сотрудников в разработке')),
+                SnackBar(content: Text(t.employeesInDevelopment)),
               );
             },
           ),
           const Divider(),
-          const Padding(
-            padding: EdgeInsets.only(left: 16.0, top: 8.0, bottom: 4.0),
+          Padding(
+            padding: const EdgeInsets.only(left: 16.0, top: 8.0, bottom: 4.0),
             child: Text(
-              'Выберите тему',
+              t.chooseTheme,
               style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
             ),
           ),
@@ -524,16 +551,16 @@ class SettingsDrawer extends StatelessWidget {
                   String themeName;
                   switch (theme) {
                     case AppTheme.light:
-                      themeName = 'Светлая';
+                      themeName = t.themeLight;
                       break;
                     case AppTheme.dark:
-                      themeName = 'Тёмная';
+                      themeName = t.themeDark;
                       break;
                     case AppTheme.blue:
-                      themeName = 'Голубая';
+                      themeName = t.themeBlue;
                       break;
                     case AppTheme.green:
-                      themeName = 'Зелёная';
+                      themeName = t.themeGreen;
                       break;
                   }
                   return RadioListTile<AppTheme>(
@@ -553,19 +580,19 @@ class SettingsDrawer extends StatelessWidget {
           ),
           const Divider(),
           ExpansionTile(
-            title: Text('Подписка',
+            title: Text(t.subscription,
                 style: TextStyle(color: colorScheme.onSurfaceVariant)),
-            children: const [ListTile(title: Text('Статус: Активна'))],
+            children: [ListTile(title: Text(t.subscriptionStatus))],
           ),
           ExpansionTile(
-            title: Text('Поддержка',
+            title: Text(t.support,
                 style: TextStyle(color: colorScheme.onSurfaceVariant)),
-            children: const [ListTile(title: Text('Email: support@pulse.ru'))],
+            children: [ListTile(title: Text('${t.emailSupport}: support@pulse.ru'))],
           ),
           const Divider(),
           ListTile(
             leading: const Icon(Icons.logout, color: Colors.red),
-            title: const Text('Выйти', style: TextStyle(color: Colors.red)),
+            title: Text(t.logout, style: const TextStyle(color: Colors.red)),
             onTap: () async {
               Navigator.pop(context);
               await ref.logout();

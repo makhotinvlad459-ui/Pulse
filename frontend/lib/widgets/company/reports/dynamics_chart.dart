@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
+import '../../../providers/locale_provider.dart';
+import 'package:frontend/l10n/app_localizations.dart';
 
-class DynamicsChart extends StatelessWidget {
+class DynamicsChart extends ConsumerWidget {
   final List<FlSpot> incomeSpots;
   final List<FlSpot> expenseSpots;
   final List<String> xLabels;
@@ -17,10 +20,12 @@ class DynamicsChart extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(localeProvider);
+    final t = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
     if (incomeSpots.isEmpty || incomeSpots.length <= 2) {
-      return const Center(child: Text('Нет данных для графика'));
+      return Center(child: Text(t.noChartData, style: TextStyle(color: colorScheme.onSurfaceVariant)));
     }
     return Container(
       padding: const EdgeInsets.only(right: 40),
@@ -79,7 +84,7 @@ class DynamicsChart extends StatelessWidget {
             touchTooltipData: LineTouchTooltipData(
               getTooltipItems: (touchedSpots) {
                 return touchedSpots.map((spot) => LineTooltipItem(
-                  '${spot.barIndex == 0 ? 'Доход' : 'Расход'}: ${spot.y.toStringAsFixed(2)} ₽',
+                  '${spot.barIndex == 0 ? t.incomeTooltip : t.expenseTooltip}: ${spot.y.toStringAsFixed(2)} ₽',
                   const TextStyle(color: Colors.white),
                 )).toList();
               },

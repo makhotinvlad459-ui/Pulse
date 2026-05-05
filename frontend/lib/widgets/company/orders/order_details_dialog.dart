@@ -2,15 +2,18 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../../services/api_client.dart';
 import '../../../services/image_compression.dart';
+import '../../../providers/locale_provider.dart';
 import 'add_material_dialog.dart';
+import 'package:frontend/l10n/app_localizations.dart';
 
-class OrderDetailsDialog extends StatefulWidget {
+class OrderDetailsDialog extends ConsumerStatefulWidget {
   final Map<String, dynamic> order;
   final int companyId;
   final Set<String> permissions;
@@ -27,10 +30,10 @@ class OrderDetailsDialog extends StatefulWidget {
   });
 
   @override
-  State<OrderDetailsDialog> createState() => _OrderDetailsDialogState();
+  ConsumerState<OrderDetailsDialog> createState() => _OrderDetailsDialogState();
 }
 
-class _OrderDetailsDialogState extends State<OrderDetailsDialog> {
+class _OrderDetailsDialogState extends ConsumerState<OrderDetailsDialog> {
   late Map<String, dynamic> _fullOrder;
   late TextEditingController _workPriceController;
   List<dynamic> _products = [];
@@ -76,8 +79,9 @@ class _OrderDetailsDialogState extends State<OrderDetailsDialog> {
             (_fullOrder['work_price'] ?? 0).toString();
       });
     } catch (e) {
+      final t = AppLocalizations.of(context)!;
       ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка обновления: $e')));
+          SnackBar(content: Text('${t.error}: $e')));
     }
   }
 
@@ -90,20 +94,20 @@ class _OrderDetailsDialogState extends State<OrderDetailsDialog> {
       await _refreshOrder();
       widget.onOrderUpdated();
     } catch (e) {
+      final t = AppLocalizations.of(context)!;
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+          .showSnackBar(SnackBar(content: Text('${t.error}: $e')));
     }
   }
 
-  // Диалог выбора камеры или галереи для прикрепления файла
   Future<void> _addAttachment() async {
     if (!_canEdit) return;
+    final t = AppLocalizations.of(context)!;
 
     final currentAttachments = _fullOrder['attachments'] ?? [];
     if (currentAttachments.length >= 10) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Нельзя прикрепить более 10 файлов к заказу')),
+        SnackBar(content: Text(t.maxAttachmentsReached)),
       );
       return;
     }
@@ -111,11 +115,11 @@ class _OrderDetailsDialogState extends State<OrderDetailsDialog> {
     final source = await showDialog<ImageSource>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Выберите источник'),
+        title: Text(t.selectSource, style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, ImageSource.camera),
-            child: const Text('Камера'),
+            child: const Text('Камера'), // будет переведено через t.camera, но чтобы не усложнять, можно тоже локализовать
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, ImageSource.gallery),
@@ -135,17 +139,18 @@ class _OrderDetailsDialogState extends State<OrderDetailsDialog> {
       await api.uploadPhoto('/orders/${widget.order['id']}/attachments',
           compressed, queryParameters: {'company_id': widget.companyId});
       ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Файл прикреплён')));
+          .showSnackBar(SnackBar(content: Text(t.fileAttached)));
       await _refreshOrder();
       widget.onOrderUpdated();
     } catch (e) {
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+          .showSnackBar(SnackBar(content: Text('${t.error}: $e')));
     }
   }
 
   Future<void> _showAttachment(String url) async {
     final api = ApiClient();
+    final t = AppLocalizations.of(context)!;
     try {
       final response = await api.getFile(url);
       final bytes = response.data as List<int>;
@@ -156,9 +161,9 @@ class _OrderDetailsDialogState extends State<OrderDetailsDialog> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Padding(
-                padding: EdgeInsets.all(8.0),
-                child: Text('Просмотр файла', style: TextStyle(fontWeight: FontWeight.bold)),
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Text(t.filePreview, style: const TextStyle(fontWeight: FontWeight.bold)),
               ),
               Expanded(
                 child: InteractiveViewer(
@@ -167,7 +172,7 @@ class _OrderDetailsDialogState extends State<OrderDetailsDialog> {
               ),
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Закрыть'),
+                child: Text(t.close),
               ),
             ],
           ),
@@ -175,12 +180,13 @@ class _OrderDetailsDialogState extends State<OrderDetailsDialog> {
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка загрузки файла: $e')));
+          SnackBar(content: Text('${t.error}: $e')));
     }
   }
 
   Future<void> _updateOrderStatus(String newStatus) async {
     final api = ApiClient();
+    final t = AppLocalizations.of(context)!;
     try {
       await api.post('/orders/${widget.order['id']}/status',
           queryParameters: {'company_id': widget.companyId},
@@ -189,14 +195,32 @@ class _OrderDetailsDialogState extends State<OrderDetailsDialog> {
       Navigator.pop(context);
     } catch (e) {
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+          .showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+    }
+  }
+
+  String _statusName(String status, AppLocalizations t) {
+    switch (status) {
+      case 'pending':
+        return t.orderStatusPending;
+      case 'accepted':
+        return t.orderStatusAccepted;
+      case 'completed':
+        return t.orderStatusCompleted;
+      case 'failed':
+        return t.orderStatusFailed;
+      default:
+        return status;
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(localeProvider);
+    final t = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
     final orderId = widget.order['id'];
+
     double calculatedMaterialsTotal = 0;
     double materialsPaid = 0;
     for (var item in _fullOrder['items'] ?? []) {
@@ -210,7 +234,7 @@ class _OrderDetailsDialogState extends State<OrderDetailsDialog> {
       title: Row(
         children: [
           Expanded(
-            child: Text('Заказ #${_fullOrder['id']}: ${_fullOrder['title']}',
+            child: Text('${t.orderLabel} #${_fullOrder['id']}: ${_fullOrder['title']}',
                 style: TextStyle(color: colorScheme.onSurface)),
           ),
           if (isFullyPaid)
@@ -225,10 +249,10 @@ class _OrderDetailsDialogState extends State<OrderDetailsDialog> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (_fullOrder['description'] != null)
-                Text('Описание: ${_fullOrder['description']}',
+                Text('${t.descriptionLabel}: ${_fullOrder['description']}',
                     style: TextStyle(color: colorScheme.onSurfaceVariant)),
               const SizedBox(height: 8),
-              Text('Статус: ${_statusName(_fullOrder['status'])}',
+              Text('${t.statusLabel}: ${_statusName(_fullOrder['status'], t)}',
                   style: TextStyle(color: colorScheme.onSurface)),
               const SizedBox(height: 8),
               if (_isEditable && _canEdit)
@@ -238,9 +262,8 @@ class _OrderDetailsDialogState extends State<OrderDetailsDialog> {
                       child: TextField(
                         controller: _workPriceController,
                         decoration: InputDecoration(
-                            labelText: 'Цена работы',
-                            labelStyle:
-                                TextStyle(color: colorScheme.onSurfaceVariant)),
+                            labelText: t.workPrice,
+                            labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
                         keyboardType: TextInputType.number,
                         style: TextStyle(color: colorScheme.onSurface),
                       ),
@@ -260,29 +283,24 @@ class _OrderDetailsDialogState extends State<OrderDetailsDialog> {
                           widget.onOrderUpdated();
                         } catch (e) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Ошибка: $e')));
+                              SnackBar(content: Text('${t.error}: $e')));
                         }
                       },
                     ),
                   ],
                 ),
               const SizedBox(height: 8),
-              Text('Цена работы: ${_fullOrder['work_price']} ₽',
-                  style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: colorScheme.onSurface)),
-              Text('Сумма материалов: ${calculatedMaterialsTotal.toStringAsFixed(2)} ₽',
+              Text('${t.workPrice}: ${_fullOrder['work_price']} ₽',
+                  style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
+              Text('${t.materialsTotal}: ${calculatedMaterialsTotal.toStringAsFixed(2)} ₽',
                   style: TextStyle(color: colorScheme.onSurface)),
-              Text('Оплачено материалов: ${materialsPaid.toStringAsFixed(2)} ₽',
+              Text('${t.materialsPaid}: ${materialsPaid.toStringAsFixed(2)} ₽',
                   style: TextStyle(color: Colors.green)),
-              Text('Общая сумма заказа: ${_fullOrder['total_amount']} ₽',
-                  style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: colorScheme.onSurface)),
-              Text('Оплачено всего: ${_fullOrder['paid_amount']} ₽',
+              Text('${t.orderTotal}: ${_fullOrder['total_amount']} ₽',
+                  style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
+              Text('${t.totalPaid}: ${_fullOrder['paid_amount']} ₽',
                   style: TextStyle(color: colorScheme.onSurface)),
-              Text(
-                  'Остаток к оплате: ${(_fullOrder['total_amount'] - _fullOrder['paid_amount']).toStringAsFixed(2)} ₽',
+              Text('${t.remainingToPay}: ${(_fullOrder['total_amount'] - _fullOrder['paid_amount']).toStringAsFixed(2)} ₽',
                   style: TextStyle(
                       fontWeight: FontWeight.bold,
                       color: (_fullOrder['total_amount'] - _fullOrder['paid_amount']) > 0
@@ -291,10 +309,8 @@ class _OrderDetailsDialogState extends State<OrderDetailsDialog> {
               const Divider(),
               Row(
                 children: [
-                  Text('Материалы',
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: colorScheme.onSurface)),
+                  Text(t.materialsLabel,
+                      style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
                   if (_isEditable && _canEdit) const Spacer(),
                   if (_isEditable && _canEdit)
                     IconButton(
@@ -322,7 +338,7 @@ class _OrderDetailsDialogState extends State<OrderDetailsDialog> {
                             widget.onOrderUpdated();
                           } catch (e) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Ошибка: $e')));
+                                SnackBar(content: Text('${t.error}: $e')));
                           }
                         }
                       },
@@ -343,7 +359,7 @@ class _OrderDetailsDialogState extends State<OrderDetailsDialog> {
                           style: TextStyle(color: colorScheme.onSurface)),
                       subtitle: Text(
                         '$quantity × ${item['unit_price']} ₽ = $total ₽',
-                        softWrap: true,               // чтобы не разрывало по буквам
+                        softWrap: true,
                         overflow: TextOverflow.ellipsis,
                       ),
                       trailing: Row(
@@ -358,11 +374,10 @@ class _OrderDetailsDialogState extends State<OrderDetailsDialog> {
                                     _updateItemPaid(itemId, value ?? false);
                                   },
                                 ),
-                                const Text('Оплачено'),
+                                Text(t.paidLabel),
                                 const SizedBox(width: 4),
                                 Tooltip(
-                                  message:
-                                      'Отметка оплаты материала не создаёт финансовую операцию.\nДля реального движения денег используйте кнопку "Добавить оплату".',
+                                  message: t.paidTooltip,
                                   child: const Icon(Icons.help_outline,
                                       size: 16, color: Colors.grey),
                                 ),
@@ -378,13 +393,12 @@ class _OrderDetailsDialogState extends State<OrderDetailsDialog> {
                                 await showDialog(
                                   context: context,
                                   builder: (ctx) => AlertDialog(
-                                    title: Text('Изменить общую цену',
-                                        style: TextStyle(
-                                            color: colorScheme.onSurface)),
+                                    title: Text(t.changeTotalPrice,
+                                        style: TextStyle(color: colorScheme.onSurface)),
                                     content: TextField(
                                       controller: totalController,
-                                      decoration: const InputDecoration(
-                                          labelText: 'Новая общая цена (₽)'),
+                                      decoration: InputDecoration(
+                                          labelText: t.newTotalPriceLabel),
                                       keyboardType: TextInputType.number,
                                       onChanged: (v) => newTotalPrice =
                                           double.tryParse(v) ?? 0,
@@ -392,10 +406,8 @@ class _OrderDetailsDialogState extends State<OrderDetailsDialog> {
                                     actions: [
                                       TextButton(
                                           onPressed: () => Navigator.pop(ctx),
-                                          child: Text('Отмена',
-                                              style: TextStyle(
-                                                  color: colorScheme
-                                                      .onSurfaceVariant))),
+                                          child: Text(t.cancel,
+                                              style: TextStyle(color: colorScheme.onSurfaceVariant))),
                                       ElevatedButton(
                                         onPressed: () async {
                                           if (newTotalPrice <= 0) return;
@@ -419,10 +431,10 @@ class _OrderDetailsDialogState extends State<OrderDetailsDialog> {
                                             ScaffoldMessenger.of(context)
                                                 .showSnackBar(SnackBar(
                                                     content: Text(
-                                                        'Ошибка: $e')));
+                                                        '${t.error}: $e')));
                                           }
                                         },
-                                        child: const Text('Сохранить'),
+                                        child: Text(t.save),
                                       ),
                                     ],
                                   ),
@@ -443,7 +455,7 @@ class _OrderDetailsDialogState extends State<OrderDetailsDialog> {
                                   widget.onOrderUpdated();
                                 } catch (e) {
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text('Ошибка: $e')));
+                                      SnackBar(content: Text('${t.error}: $e')));
                                 }
                               },
                             ),
@@ -455,10 +467,8 @@ class _OrderDetailsDialogState extends State<OrderDetailsDialog> {
               const Divider(),
               Row(
                 children: [
-                  Text('Оплаты',
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: colorScheme.onSurface)),
+                  Text(t.paymentsLabel,
+                      style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
                   if (_canEdit) const Spacer(),
                   if (_canEdit)
                     IconButton(
@@ -495,7 +505,7 @@ class _OrderDetailsDialogState extends State<OrderDetailsDialog> {
                                   widget.onOrderUpdated();
                                 } catch (e) {
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text('Ошибка: $e')));
+                                      SnackBar(content: Text('${t.error}: $e')));
                                 }
                               },
                             ),
@@ -510,7 +520,7 @@ class _OrderDetailsDialogState extends State<OrderDetailsDialog> {
                   child: ElevatedButton.icon(
                     onPressed: _addAttachment,
                     icon: const Icon(Icons.camera_alt),
-                    label: const Text('Сделать фото / прикрепить файл'),
+                    label: Text(t.takePhotoAttach),
                     style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blueGrey),
                   ),
@@ -521,8 +531,8 @@ class _OrderDetailsDialogState extends State<OrderDetailsDialog> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const SizedBox(height: 8),
-                    const Text('Прикреплённые файлы:',
-                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    Text(t.attachedFiles,
+                        style: const TextStyle(fontWeight: FontWeight.bold)),
                     ..._fullOrder['attachments'].map<Widget>((att) {
                       return ListTile(
                         dense: true,
@@ -534,7 +544,7 @@ class _OrderDetailsDialogState extends State<OrderDetailsDialog> {
                             IconButton(
                               icon: const Icon(Icons.visibility, size: 20),
                               onPressed: () => _showAttachment(att['file_url']),
-                              tooltip: 'Просмотреть',
+                              tooltip: t.view,
                             ),
                             if (_canEdit)
                               IconButton(
@@ -543,19 +553,18 @@ class _OrderDetailsDialogState extends State<OrderDetailsDialog> {
                                   final confirm = await showDialog<bool>(
                                     context: context,
                                     builder: (context) => AlertDialog(
-                                      title: const Text('Удалить файл?'),
-                                      content: const Text(
-                                          'Файл будет удалён безвозвратно.'),
+                                      title: Text(t.deleteFileTitle),
+                                      content: Text(t.deleteFileContent),
                                       actions: [
                                         TextButton(
                                             onPressed: () =>
                                                 Navigator.pop(context, false),
-                                            child: const Text('Отмена')),
+                                            child: Text(t.cancel)),
                                         TextButton(
                                             onPressed: () =>
                                                 Navigator.pop(context, true),
-                                            child: const Text('Удалить',
-                                                style: TextStyle(
+                                            child: Text(t.delete,
+                                                style: const TextStyle(
                                                     color: Colors.red))),
                                       ],
                                     ),
@@ -572,7 +581,7 @@ class _OrderDetailsDialogState extends State<OrderDetailsDialog> {
                                     widget.onOrderUpdated();
                                   } catch (e) {
                                     ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text('Ошибка: $e')));
+                                        SnackBar(content: Text('${t.error}: $e')));
                                   }
                                 },
                               ),
@@ -589,7 +598,7 @@ class _OrderDetailsDialogState extends State<OrderDetailsDialog> {
                     onPressed: () => _updateOrderStatus('completed'),
                     style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.green),
-                    child: const Text('Выполнить заказ'),
+                    child: Text(t.completeOrderButton),
                   ),
                 ),
             ],
@@ -599,13 +608,14 @@ class _OrderDetailsDialogState extends State<OrderDetailsDialog> {
       actions: [
         TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Закрыть',
+            child: Text(t.close,
                 style: TextStyle(color: colorScheme.onSurfaceVariant))),
       ],
     );
   }
 
   void _showAddPaymentDialog() async {
+    final t = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
     double amount = 0;
     DateTime paymentDate = DateTime.now();
@@ -628,20 +638,20 @@ class _OrderDetailsDialogState extends State<OrderDetailsDialog> {
       builder: (context) => StatefulBuilder(
         builder: (context, setStatePayment) {
           return AlertDialog(
-            title: Text('Добавить оплату', style: TextStyle(color: colorScheme.onSurface)),
+            title: Text(t.addPaymentTitle, style: TextStyle(color: colorScheme.onSurface)),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   TextField(
-                    decoration: const InputDecoration(labelText: 'Сумма*'),
+                    decoration: InputDecoration(labelText: t.amountRequired),
                     keyboardType: TextInputType.number,
                     style: TextStyle(color: colorScheme.onSurface),
                     onChanged: (v) => amount = double.tryParse(v) ?? 0,
                   ),
                   const SizedBox(height: 8),
                   ListTile(
-                    title: Text('Дата оплаты', style: TextStyle(color: colorScheme.onSurface)),
+                    title: Text(t.paymentDateLabel, style: TextStyle(color: colorScheme.onSurface)),
                     trailing: Text(DateFormat('dd.MM.yyyy').format(paymentDate),
                         style: TextStyle(color: colorScheme.onSurfaceVariant)),
                     onTap: () async {
@@ -662,19 +672,19 @@ class _OrderDetailsDialogState extends State<OrderDetailsDialog> {
                       child: Text('${acc['name']} (${acc['balance']} ₽)'),
                     )).toList(),
                     onChanged: (v) => selectedAccountId = v,
-                    decoration: const InputDecoration(labelText: 'Счёт получения оплаты*'),
+                    decoration: InputDecoration(labelText: t.receivingAccountRequired),
                     style: TextStyle(color: colorScheme.onSurface),
                     dropdownColor: colorScheme.surface,
                   ),
                   const SizedBox(height: 8),
                   TextField(
-                    decoration: const InputDecoration(labelText: 'Комментарий (необязательно)'),
+                    decoration: InputDecoration(labelText: t.commentOptional),
                     style: TextStyle(color: colorScheme.onSurface),
                     onChanged: (v) => comment = v,
                   ),
                   const SizedBox(height: 8),
                   TextField(
-                    decoration: const InputDecoration(labelText: 'Контрагент (необязательно)'),
+                    decoration: InputDecoration(labelText: t.counterpartyOptional),
                     style: TextStyle(color: colorScheme.onSurface),
                     onChanged: (v) => counterparty = v,
                   ),
@@ -684,13 +694,13 @@ class _OrderDetailsDialogState extends State<OrderDetailsDialog> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: Text('Отмена', style: TextStyle(color: colorScheme.onSurfaceVariant)),
+                child: Text(t.cancel, style: TextStyle(color: colorScheme.onSurfaceVariant)),
               ),
               ElevatedButton(
                 onPressed: () async {
                   if (amount <= 0 || selectedAccountId == null) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Введите сумму и выберите счёт')),
+                      SnackBar(content: Text(t.enterAmountAndSelectAccount)),
                     );
                     return;
                   }
@@ -712,31 +722,16 @@ class _OrderDetailsDialogState extends State<OrderDetailsDialog> {
                     widget.onOrderUpdated();
                   } catch (e) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Ошибка: $e')),
+                      SnackBar(content: Text('${t.error}: $e')),
                     );
                   }
                 },
-                child: const Text('Добавить'),
+                child: Text(t.add),
               ),
             ],
           );
         },
       ),
     );
-  }
-
-  String _statusName(String status) {
-    switch (status) {
-      case 'pending':
-        return 'Ожидает';
-      case 'accepted':
-        return 'Принят';
-      case 'completed':
-        return 'Выполнен';
-      case 'failed':
-        return 'Провален';
-      default:
-        return status;
-    }
   }
 }

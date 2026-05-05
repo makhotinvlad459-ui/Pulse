@@ -1,17 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../services/api_client.dart';
+import '../../../providers/locale_provider.dart';
+import 'package:frontend/l10n/app_localizations.dart';
 
-class AddMaterialDialog extends StatefulWidget {
+class AddMaterialDialog extends ConsumerStatefulWidget {
   final List<dynamic> products;
   final int companyId;
 
   const AddMaterialDialog({super.key, required this.products, required this.companyId});
 
   @override
-  State<AddMaterialDialog> createState() => _AddMaterialDialogState();
+  ConsumerState<AddMaterialDialog> createState() => _AddMaterialDialogState();
 }
 
-class _AddMaterialDialogState extends State<AddMaterialDialog> {
+class _AddMaterialDialogState extends ConsumerState<AddMaterialDialog> {
   String _searchQuery = '';
   List<dynamic> _filteredProducts = [];
   int? _selectedProductId;
@@ -28,9 +31,11 @@ class _AddMaterialDialogState extends State<AddMaterialDialog> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(localeProvider);
+    final t = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
     return AlertDialog(
-      title: Text('Добавить материал', style: TextStyle(color: colorScheme.onSurface)),
+      title: Text(t.addMaterialTitle, style: TextStyle(color: colorScheme.onSurface)),
       content: SizedBox(
         width: 400,
         child: SingleChildScrollView(
@@ -48,7 +53,7 @@ class _AddMaterialDialogState extends State<AddMaterialDialog> {
                     }
                   });
                 },
-                decoration: InputDecoration(labelText: 'Поиск материала или введите название нового'),
+                decoration: InputDecoration(labelText: t.searchMaterialHint, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
                 style: TextStyle(color: colorScheme.onSurface),
               ),
               if (_filteredProducts.isNotEmpty) ...[
@@ -61,7 +66,7 @@ class _AddMaterialDialogState extends State<AddMaterialDialog> {
                       final prod = _filteredProducts[idx];
                       return ListTile(
                         title: Text(prod['name'], style: TextStyle(color: colorScheme.onSurface)),
-                        subtitle: Text('${prod['unit']} / Остаток: ${prod['current_quantity']}', style: TextStyle(color: colorScheme.onSurfaceVariant)),
+                        subtitle: Text('${prod['unit']} / ${t.remainingStockLower}: ${prod['current_quantity']}', style: TextStyle(color: colorScheme.onSurfaceVariant)),
                         onTap: () {
                           setState(() {
                             _selectedProductId = prod['id'];
@@ -79,7 +84,7 @@ class _AddMaterialDialogState extends State<AddMaterialDialog> {
               if (_selectedProductId != null) ...[
                 const SizedBox(height: 8),
                 ListTile(
-                  title: Text('Выбран: $_selectedProductName', style: TextStyle(color: colorScheme.onSurface)),
+                  title: Text('${t.selectedLabel}: $_selectedProductName', style: TextStyle(color: colorScheme.onSurface)),
                   trailing: IconButton(
                     icon: const Icon(Icons.clear),
                     onPressed: () => setState(() {
@@ -95,20 +100,20 @@ class _AddMaterialDialogState extends State<AddMaterialDialog> {
                 ElevatedButton.icon(
                   onPressed: _createNewProduct,
                   icon: const Icon(Icons.add),
-                  label: const Text('Создать новый материал'),
+                  label: Text(t.createNewMaterialButton),
                 ),
               ],
               const SizedBox(height: 8),
               TextField(
                 onChanged: (v) => _quantity = double.tryParse(v) ?? 0,
-                decoration: const InputDecoration(labelText: 'Количество*'),
+                decoration: InputDecoration(labelText: t.quantityRequired, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
                 keyboardType: TextInputType.number,
                 style: TextStyle(color: colorScheme.onSurface),
               ),
               const SizedBox(height: 8),
               TextField(
                 onChanged: (v) => _totalPrice = double.tryParse(v) ?? 0,
-                decoration: const InputDecoration(labelText: 'Общая цена (₽)*'),
+                decoration: InputDecoration(labelText: t.totalPriceRequired, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
                 keyboardType: TextInputType.number,
                 style: TextStyle(color: colorScheme.onSurface),
               ),
@@ -120,7 +125,7 @@ class _AddMaterialDialogState extends State<AddMaterialDialog> {
                     onChanged: (v) => setState(() => _useFromStock = v ?? false),
                   ),
                   const SizedBox(width: 8),
-                  Text('Использовать со склада', style: TextStyle(color: colorScheme.onSurface)),
+                  Text(t.useFromStockLabel, style: TextStyle(color: colorScheme.onSurface)),
                 ],
               ),
             ],
@@ -128,16 +133,17 @@ class _AddMaterialDialogState extends State<AddMaterialDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: Text('Отмена', style: TextStyle(color: colorScheme.onSurfaceVariant))),
+        TextButton(onPressed: () => Navigator.pop(context), child: Text(t.cancel, style: TextStyle(color: colorScheme.onSurfaceVariant))),
         ElevatedButton(
           onPressed: _submit,
-          child: const Text('Добавить'),
+          child: Text(t.add),
         ),
       ],
     );
   }
 
   Future<void> _createNewProduct() async {
+    final t = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
     final nameController = TextEditingController();
     String unit = 'шт';
@@ -145,19 +151,19 @@ class _AddMaterialDialogState extends State<AddMaterialDialog> {
     await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Новый материал', style: TextStyle(color: colorScheme.onSurface)),
+        title: Text(t.newMaterialTitle, style: TextStyle(color: colorScheme.onSurface)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: nameController,
-              decoration: const InputDecoration(labelText: 'Название*'),
+              decoration: InputDecoration(labelText: t.nameRequired, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
               style: TextStyle(color: colorScheme.onSurface),
             ),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
               value: unit,
-              decoration: const InputDecoration(labelText: 'Единица измерения*'),
+              decoration: InputDecoration(labelText: t.unitRequired, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
               dropdownColor: colorScheme.surface,
               style: TextStyle(color: colorScheme.onSurface),
               items: ['шт', 'кг', 'г', 'л', 'мл', 'м', 'см', 'упаковка'].map((u) => DropdownMenuItem(value: u, child: Text(u))).toList(),
@@ -165,7 +171,7 @@ class _AddMaterialDialogState extends State<AddMaterialDialog> {
             ),
             const SizedBox(height: 8),
             TextField(
-              decoration: const InputDecoration(labelText: 'Цена за единицу (0 - бесплатно)'),
+              decoration: InputDecoration(labelText: t.pricePerUnitHint, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
               keyboardType: TextInputType.number,
               style: TextStyle(color: colorScheme.onSurface),
               onChanged: (v) => price = double.tryParse(v) ?? 0,
@@ -173,11 +179,11 @@ class _AddMaterialDialogState extends State<AddMaterialDialog> {
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Отмена', style: TextStyle(color: colorScheme.onSurfaceVariant))),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(t.cancel, style: TextStyle(color: colorScheme.onSurfaceVariant))),
           ElevatedButton(
             onPressed: () async {
               if (nameController.text.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Введите название')));
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.enterMaterialName)));
                 return;
               }
               final api = ApiClient();
@@ -195,10 +201,10 @@ class _AddMaterialDialogState extends State<AddMaterialDialog> {
                 });
                 Navigator.pop(ctx);
               } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
               }
             },
-            child: const Text('Создать'),
+            child: Text(t.create),
           ),
         ],
       ),
@@ -206,8 +212,9 @@ class _AddMaterialDialogState extends State<AddMaterialDialog> {
   }
 
   void _submit() {
+    final t = AppLocalizations.of(context)!;
     if (_selectedProductId == null || _quantity <= 0 || _totalPrice <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Выберите материал, укажите количество и цену')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.selectMaterialAndQuantity)));
       return;
     }
     final unitPrice = _totalPrice / _quantity;

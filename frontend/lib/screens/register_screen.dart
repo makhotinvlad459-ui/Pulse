@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../providers/auth_provider.dart';
+import '../providers/locale_provider.dart';
 import '../widgets/video_background.dart';
+import 'package:frontend/l10n/app_localizations.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
@@ -38,25 +40,25 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     final password = _passwordController.text.trim();
     final confirm = _confirmController.text.trim();
 
-    // Валидация
+    // Валидация с локализацией
     if (!email.contains('@') || !email.contains('.')) {
-      _showSnackBar('Введите корректный email');
+      _showSnackBar(AppLocalizations.of(context)!.invalidEmail);
       return;
     }
     if (phone.isNotEmpty && phone.length < 6) {
-      _showSnackBar('Телефон должен содержать не менее 6 символов');
+      _showSnackBar(AppLocalizations.of(context)!.phoneTooShort);
       return;
     }
     if (fullName.isEmpty) {
-      _showSnackBar('Введите имя');
+      _showSnackBar(AppLocalizations.of(context)!.enterName);
       return;
     }
     if (password.length < 8) {
-      _showSnackBar('Пароль должен содержать не менее 8 символов');
+      _showSnackBar(AppLocalizations.of(context)!.passwordTooShort);
       return;
     }
     if (password != confirm) {
-      _showSnackBar('Пароли не совпадают');
+      _showSnackBar(AppLocalizations.of(context)!.passwordsDoNotMatch);
       return;
     }
 
@@ -70,12 +72,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     if (success && mounted) {
       Navigator.pushReplacementNamed(context, '/home');
     } else if (mounted) {
-      _showSnackBar(ref.read(authProvider).error ?? 'Ошибка регистрации');
+      _showSnackBar(ref.read(authProvider).error ?? AppLocalizations.of(context)!.registrationError);
     }
   }
 
   void _showSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _setLanguage(Locale locale) {
+    ref.read(localeProvider.notifier).setLocale(locale);
   }
 
   @override
@@ -90,6 +96,24 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       loop: true,
       child: Scaffold(
         backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          actions: [
+            Row(
+              children: [
+                IconButton(
+                  icon: const Text('🇬🇧', style: TextStyle(fontSize: 28)),
+                  onPressed: () => _setLanguage(const Locale('en')),
+                ),
+                IconButton(
+                  icon: const Text('🇷🇺', style: TextStyle(fontSize: 28)),
+                  onPressed: () => _setLanguage(const Locale('ru')),
+                ),
+              ],
+            ),
+          ],
+        ),
         body: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(32.0),
@@ -105,7 +129,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       child: Column(
                         children: [
                           Text(
-                            'Регистрация',
+                            AppLocalizations.of(context)!.registrationTitle,
                             style: GoogleFonts.orbitron(
                               fontSize: 42,
                               fontWeight: FontWeight.w700,
@@ -122,7 +146,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'создайте аккаунт',
+                            AppLocalizations.of(context)!.registrationSubtitle,
                             style: GoogleFonts.orbitron(
                               fontSize: 16,
                               fontWeight: FontWeight.w500,
@@ -151,7 +175,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           controller: _emailController,
                           style: const TextStyle(color: Colors.black87),
                           decoration: InputDecoration(
-                            labelText: 'Email*',
+                            labelText: AppLocalizations.of(context)!.emailRequired,
                             labelStyle: TextStyle(color: Colors.grey.shade600),
                             prefixIcon: Icon(Icons.email, color: Colors.grey.shade700),
                             filled: true,
@@ -172,8 +196,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           controller: _phoneController,
                           style: const TextStyle(color: Colors.black87),
                           decoration: InputDecoration(
-                            labelText: 'Телефон (необязательно)',
-                            hintText: 'Минимум 6 символов',
+                            labelText: AppLocalizations.of(context)!.phoneOptional,
+                            hintText: AppLocalizations.of(context)!.min6Chars,
                             labelStyle: TextStyle(color: Colors.grey.shade600),
                             prefixIcon: Icon(Icons.phone, color: Colors.grey.shade700),
                             filled: true,
@@ -194,7 +218,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           controller: _nameController,
                           style: const TextStyle(color: Colors.black87),
                           decoration: InputDecoration(
-                            labelText: 'Имя*',
+                            labelText: AppLocalizations.of(context)!.nameRequired,
                             labelStyle: TextStyle(color: Colors.grey.shade600),
                             prefixIcon: Icon(Icons.person, color: Colors.grey.shade700),
                             filled: true,
@@ -216,7 +240,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           obscureText: _obscurePassword,
                           style: const TextStyle(color: Colors.black87),
                           decoration: InputDecoration(
-                            labelText: 'Пароль (мин. 8 символов)*',
+                            labelText: AppLocalizations.of(context)!.passwordMin8,
                             labelStyle: TextStyle(color: Colors.grey.shade600),
                             prefixIcon: Icon(Icons.lock, color: Colors.grey.shade700),
                             suffixIcon: IconButton(
@@ -242,7 +266,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           obscureText: _obscureConfirm,
                           style: const TextStyle(color: Colors.black87),
                           decoration: InputDecoration(
-                            labelText: 'Подтвердите пароль*',
+                            labelText: AppLocalizations.of(context)!.confirmPassword,
                             labelStyle: TextStyle(color: Colors.grey.shade600),
                             prefixIcon: Icon(Icons.lock_outline, color: Colors.grey.shade700),
                             suffixIcon: IconButton(
@@ -276,14 +300,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                                 borderRadius: BorderRadius.circular(8),
                               ),
                             ),
-                            child: const Text('Зарегистрироваться'),
+                            child: Text(AppLocalizations.of(context)!.registerButton),
                           ),
                         const SizedBox(height: 16),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text(
-                              'Уже есть аккаунт?',
+                              AppLocalizations.of(context)!.alreadyHaveAccount,
                               style: TextStyle(color: Colors.grey.shade700),
                             ),
                             TextButton(
@@ -291,17 +315,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                               style: TextButton.styleFrom(
                                 foregroundColor: Colors.grey.shade900,
                               ),
-                              child: const Text(
-                                'Войти',
-                                style: TextStyle(fontWeight: FontWeight.bold),
+                              child: Text(
+                                AppLocalizations.of(context)!.signIn,
+                                style: const TextStyle(fontWeight: FontWeight.bold),
                               ),
                             ),
                           ],
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          '⚠️ При утере пароля вы сможете восстановить его через email.\n'
-                          'Сохраните пароль в надёжном месте.',
+                          AppLocalizations.of(context)!.passwordWarning,
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: Colors.grey.shade700,
@@ -313,12 +336,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 16),
-                Text(
-                  'Приложение не собирает персональные данные пользователей и не обрабатывает их.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
-                ),
+                
               ],
             ),
           ),

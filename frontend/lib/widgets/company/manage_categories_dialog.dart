@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../services/api_client.dart';
+import '../../providers/locale_provider.dart';
+import 'package:frontend/l10n/app_localizations.dart';
 
-class ManageCategoriesDialog extends StatefulWidget {
+class ManageCategoriesDialog extends ConsumerStatefulWidget {
   final int companyId;
   final VoidCallback onSuccess;
   final List<dynamic> categories;
@@ -13,10 +16,10 @@ class ManageCategoriesDialog extends StatefulWidget {
   });
 
   @override
-  State<ManageCategoriesDialog> createState() => _ManageCategoriesDialogState();
+  ConsumerState<ManageCategoriesDialog> createState() => _ManageCategoriesDialogState();
 }
 
-class _ManageCategoriesDialogState extends State<ManageCategoriesDialog> {
+class _ManageCategoriesDialogState extends ConsumerState<ManageCategoriesDialog> {
   final _nameController = TextEditingController();
   String _selectedIcon = '💰';
   bool _loading = false;
@@ -38,6 +41,7 @@ class _ManageCategoriesDialogState extends State<ManageCategoriesDialog> {
 
   Future<void> _addCategory() async {
     if (_nameController.text.isEmpty) return;
+    final t = AppLocalizations.of(context)!;
     setState(() => _loading = true);
     final api = ApiClient();
     try {
@@ -54,17 +58,16 @@ class _ManageCategoriesDialogState extends State<ManageCategoriesDialog> {
       });
       _nameController.clear();
       widget.onSuccess();
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Категория добавлена')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.categoryAdded)));
     } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
     } finally {
       setState(() => _loading = false);
     }
   }
 
   Future<void> _deleteCategory(int id) async {
+    final t = AppLocalizations.of(context)!;
     final api = ApiClient();
     try {
       await api.delete('/categories/$id',
@@ -73,20 +76,20 @@ class _ManageCategoriesDialogState extends State<ManageCategoriesDialog> {
         _localCategories.removeWhere((c) => c['id'] == id);
       });
       widget.onSuccess();
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Категория удалена')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.categoryDeleted)));
     } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(localeProvider);
+    final t = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
 
     return AlertDialog(
-      title: Text('Управление категориями', style: TextStyle(color: colorScheme.onSurface)),
+      title: Text(t.manageCategories, style: TextStyle(color: colorScheme.onSurface)),
       content: SizedBox(
         width: 500,
         height: 500,
@@ -99,7 +102,7 @@ class _ManageCategoriesDialogState extends State<ManageCategoriesDialog> {
                         controller: _nameController,
                         style: TextStyle(color: colorScheme.onSurface),
                         decoration: InputDecoration(
-                          labelText: 'Название',
+                          labelText: t.nameLabel,
                           labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
                           border: OutlineInputBorder(
                             borderSide: BorderSide(color: colorScheme.outline),
@@ -116,7 +119,7 @@ class _ManageCategoriesDialogState extends State<ManageCategoriesDialog> {
                   value: _selectedIcon,
                   items: _icons
                       .map((icon) =>
-                          DropdownMenuItem(value: icon, child: Text(icon, style: TextStyle(fontSize: 24))))
+                          DropdownMenuItem(value: icon, child: Text(icon, style: const TextStyle(fontSize: 24))))
                       .toList(),
                   onChanged: (v) => setState(() => _selectedIcon = v!),
                   dropdownColor: colorScheme.surface,
@@ -131,7 +134,7 @@ class _ManageCategoriesDialogState extends State<ManageCategoriesDialog> {
                           backgroundColor: colorScheme.primary,
                           foregroundColor: colorScheme.onPrimary,
                         ),
-                        child: const Text('Добавить')),
+                        child: Text(t.add)),
               ],
             ),
             const SizedBox(height: 16),
@@ -157,7 +160,7 @@ class _ManageCategoriesDialogState extends State<ManageCategoriesDialog> {
       actions: [
         TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Закрыть', style: TextStyle(color: colorScheme.onSurfaceVariant))),
+            child: Text(t.close, style: TextStyle(color: colorScheme.onSurfaceVariant))),
       ],
     );
   }

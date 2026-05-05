@@ -14,9 +14,10 @@ import 'package:photo_view/photo_view.dart';
 import '../../services/api_client.dart';
 import '../../services/image_compression.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/locale_provider.dart';
 import '../../models/user.dart';
+import 'package:frontend/l10n/app_localizations.dart';
 
-// Перечисление для действий с сообщением
 enum _MessageAction { edit, delete, cancel }
 
 class ChatAndTasksTab extends ConsumerStatefulWidget {
@@ -52,7 +53,6 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
   WebSocketChannel? _chatChannel;
   WebSocketChannel? _tasksChannel;
 
-  // Переменные для вложений
   XFile? _attachmentFile;
   PlatformFile? _webFile;
 
@@ -91,8 +91,9 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
     super.dispose();
   }
 
-  // ==================== ВЛОЖЕНИЯ И ФАЙЛЫ ====================
+  // ==================== ВЛОЖЕНИЯ ====================
   Future<void> _showAttachmentPicker(BuildContext context) async {
+    final t = AppLocalizations.of(context)!;
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -103,7 +104,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
           children: [
             ListTile(
               leading: const Icon(Icons.photo_library),
-              title: const Text('Выбрать из галереи'),
+              title: Text(t.chooseFromGallery),
               onTap: () async {
                 Navigator.pop(context);
                 await _pickFile(ImageSource.gallery);
@@ -111,7 +112,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
             ),
             ListTile(
               leading: const Icon(Icons.camera_alt),
-              title: const Text('Сделать фото'),
+              title: Text(t.takePhoto),
               onTap: () async {
                 Navigator.pop(context);
                 await _pickFile(ImageSource.camera);
@@ -119,7 +120,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
             ),
             ListTile(
               leading: const Icon(Icons.insert_drive_file),
-              title: const Text('Выбрать файл'),
+              title: Text(t.chooseFile),
               onTap: () async {
                 Navigator.pop(context);
                 await _pickFile();
@@ -148,6 +149,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
   }
 
   Future<void> _showAttachmentDialog(String url) async {
+    final t = AppLocalizations.of(context)!;
     final api = ApiClient();
     try {
       final response = await api.getFile(url);
@@ -166,9 +168,9 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Padding(
-                    padding: EdgeInsets.all(8.0),
-                    child: Text('Фото', style: TextStyle(fontWeight: FontWeight.bold)),
+                  Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Text(t.photo, style: const TextStyle(fontWeight: FontWeight.bold)),
                   ),
                   Expanded(
                     child: PhotoView(
@@ -180,7 +182,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
                   ),
                   TextButton(
                     onPressed: () => Navigator.pop(context),
-                    child: const Text('Закрыть'),
+                    child: Text(t.close),
                   ),
                 ],
               ),
@@ -191,16 +193,16 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
         final confirm = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('Файл'),
-            content: const Text('Скачать вложение?'),
+            title: Text(t.file),
+            content: Text(t.downloadAttachment),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
-                child: const Text('Отмена'),
+                child: Text(t.cancel),
               ),
               TextButton(
                 onPressed: () => Navigator.pop(context, true),
-                child: const Text('Скачать'),
+                child: Text(t.download),
               ),
             ],
           ),
@@ -211,13 +213,13 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
           final file = File('${directory.path}/$filename');
           await file.writeAsBytes(bytes);
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Сохранено: ${file.path}'))
+            SnackBar(content: Text('${t.savedTo}: ${file.path}'))
           );
         }
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка загрузки вложения: $e'))
+        SnackBar(content: Text('${t.error}: $e'))
       );
     }
   }
@@ -344,26 +346,25 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
   }
 
   Future<void> _loadChatMessages() async {
-  final api = ApiClient();
-  try {
-    final res = await api.get('/chat/company/${widget.companyId}');
-    final newMessages = List<Map<String, dynamic>>.from(res.data);
-    setState(() {
-      _messages = newMessages;
-      _loadingMessages = false;
-    });
-    // Всегда обновляем last_visit и помечаем прочитанным, если мы на вкладке чата
-    if (_tabController.index == 0) {
-      await _markChatRead();
-      _lastVisit = DateTime.now();
+    final api = ApiClient();
+    try {
+      final res = await api.get('/chat/company/${widget.companyId}');
+      final newMessages = List<Map<String, dynamic>>.from(res.data);
+      setState(() {
+        _messages = newMessages;
+        _loadingMessages = false;
+      });
+      if (_tabController.index == 0) {
+        await _markChatRead();
+        _lastVisit = DateTime.now();
+      }
+      _updateUnreadCount();
+      _scrollToBottom();
+    } catch (e) {
+      setState(() => _loadingMessages = false);
+      print('Error loading chat: $e');
     }
-    _updateUnreadCount();
-    _scrollToBottom();
-  } catch (e) {
-    setState(() => _loadingMessages = false);
-    print('Error loading chat: $e');
   }
-}
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -393,61 +394,60 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
   }
 
   Future<void> _sendMessage() async {
-  final text = _messageController.text.trim();
-  if (text.isEmpty && _attachmentFile == null && _webFile == null) return;
+    final t = AppLocalizations.of(context)!;
+    final text = _messageController.text.trim();
+    if (text.isEmpty && _attachmentFile == null && _webFile == null) return;
 
-  setState(() => _loadingMessages = true);
-  final api = ApiClient();
-  try {
-    String? attachmentUrl;
-    if (_attachmentFile != null || _webFile != null) {
-      final uploadRes = await api.uploadChatFile(
-        _attachmentFile,
-        _webFile,
-        widget.companyId,
-      );
-      attachmentUrl = uploadRes['url'];
+    setState(() => _loadingMessages = true);
+    final api = ApiClient();
+    try {
+      String? attachmentUrl;
+      if (_attachmentFile != null || _webFile != null) {
+        final uploadRes = await api.uploadChatFile(
+          _attachmentFile,
+          _webFile,
+          widget.companyId,
+        );
+        attachmentUrl = uploadRes['url'];
+      }
+
+      await api.post('/chat/company/${widget.companyId}', data: {
+        'message': text,
+        'attachment_url': attachmentUrl,
+      });
+
+      _messageController.clear();
+      setState(() {
+        _attachmentFile = null;
+        _webFile = null;
+      });
+
+      await _loadChatMessages();
+      widget.onUnreadMessagesChanged?.call(0);
+      await _markChatRead();
+      _lastVisit = DateTime.now();
+    } catch (e) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('${t.sendError}: $e')));
+    } finally {
+      if (mounted) setState(() => _loadingMessages = false);
     }
-
-    await api.post('/chat/company/${widget.companyId}', data: {
-      'message': text,
-      'attachment_url': attachmentUrl,
-    });
-
-    _messageController.clear();
-    setState(() {
-      _attachmentFile = null;
-      _webFile = null;
-    });
-
-    // Перезагружаем сообщения
-    await _loadChatMessages();
-    // Принудительно сбрасываем счётчик для родителя, потому что мы только что прочитали все сообщения
-    widget.onUnreadMessagesChanged?.call(0);
-    // Дополнительно пометим чат прочитанным (на сервере и локально)
-    await _markChatRead();
-    _lastVisit = DateTime.now();
-  } catch (e) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text('Ошибка отправки: $e')));
-  } finally {
-    if (mounted) setState(() => _loadingMessages = false);
   }
-}
 
   Future<void> _clearChat() async {
+    final t = AppLocalizations.of(context)!;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Очистить чат?'),
-        content: const Text('Все сообщения будут удалены безвозвратно.'),
+        title: Text(t.clearChatTitle),
+        content: Text(t.clearChatContent),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Отмена')),
+              child: Text(t.cancel)),
           TextButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Очистить', style: TextStyle(color: Colors.red))),
+              child: Text(t.clear, style: const TextStyle(color: Colors.red))),
         ],
       ),
     );
@@ -458,28 +458,29 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
       await _loadChatMessages();
     } catch (e) {
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+          .showSnackBar(SnackBar(content: Text('${t.error}: $e')));
     }
   }
 
   // ==================== ДЕЙСТВИЯ С СООБЩЕНИЯМИ ====================
   Future<void> _showMessageActions(Map<String, dynamic> msg) async {
+    final t = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
     final action = await showDialog<_MessageAction>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Действия с сообщением', style: TextStyle(color: colorScheme.onSurface)),
+        title: Text(t.messageActions, style: TextStyle(color: colorScheme.onSurface)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
               leading: Icon(Icons.edit, color: colorScheme.primary),
-              title: Text('Редактировать', style: TextStyle(color: colorScheme.onSurface)),
+              title: Text(t.edit, style: TextStyle(color: colorScheme.onSurface)),
               onTap: () => Navigator.pop(context, _MessageAction.edit),
             ),
             ListTile(
               leading: Icon(Icons.delete, color: Colors.red),
-              title: Text('Удалить', style: TextStyle(color: Colors.red)),
+              title: Text(t.delete, style: TextStyle(color: Colors.red)),
               onTap: () => Navigator.pop(context, _MessageAction.delete),
             ),
           ],
@@ -487,7 +488,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, _MessageAction.cancel),
-            child: Text('Отмена', style: TextStyle(color: colorScheme.onSurfaceVariant)),
+            child: Text(t.cancel, style: TextStyle(color: colorScheme.onSurfaceVariant)),
           ),
         ],
       ),
@@ -500,22 +501,23 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
   }
 
   Future<void> _editMessageContent(Map<String, dynamic> msg) async {
+    final t = AppLocalizations.of(context)!;
     final controller = TextEditingController(text: msg['message']);
     final colorScheme = Theme.of(context).colorScheme;
     await showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Редактировать сообщение', style: TextStyle(color: colorScheme.onSurface)),
+        title: Text(t.editMessage, style: TextStyle(color: colorScheme.onSurface)),
         content: TextField(
           controller: controller,
-          decoration: InputDecoration(hintText: 'Новый текст', hintStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+          decoration: InputDecoration(hintText: t.newText, hintStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
           style: TextStyle(color: colorScheme.onSurface),
           maxLines: 3,
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Отмена', style: TextStyle(color: colorScheme.onSurfaceVariant)),
+            child: Text(t.cancel, style: TextStyle(color: colorScheme.onSurfaceVariant)),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -526,14 +528,14 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
                 await api.patch('/chat/message/${msg['id']}', data: {'message': newText});
                 if (mounted) Navigator.pop(context);
               } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
               }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: colorScheme.primary,
               foregroundColor: colorScheme.onPrimary,
             ),
-            child: const Text('Сохранить'),
+            child: Text(t.save),
           ),
         ],
       ),
@@ -541,14 +543,15 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
   }
 
   Future<void> _deleteMessage(Map<String, dynamic> msg) async {
+    final t = AppLocalizations.of(context)!;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Удалить сообщение?'),
-        content: const Text('Сообщение будет удалено безвозвратно.'),
+        title: Text(t.deleteMessageTitle),
+        content: Text(t.deleteMessageContent),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отмена')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Удалить', style: TextStyle(color: Colors.red))),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(t.cancel)),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: Text(t.delete, style: const TextStyle(color: Colors.red))),
         ],
       ),
     );
@@ -557,22 +560,20 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
     final api = ApiClient();
     try {
       await api.delete('/chat/message/${msg['id']}');
-      // Локальное удаление для отзывчивости (WebSocket тоже удалит, но сразу)
       setState(() {
         _messages.removeWhere((m) => m['id'] == msg['id']);
       });
       _updateUnreadCount();
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка удаления: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
     }
   }
 
-  // ==================== ЗАДАЧИ (без изменений) ====================
+  // ==================== ЗАДАЧИ ====================
   Future<void> _createTask() async {
-    // ... (ваш существующий код создания задачи)
+    final t = AppLocalizations.of(context)!;
     if (_employees.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Загрузка списка сотрудников... Попробуйте позже')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.loadEmployeesFirst)));
       return;
     }
     final titleController = TextEditingController();
@@ -587,7 +588,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
       builder: (context) => StatefulBuilder(
         builder: (context, setStateDialog) {
           return AlertDialog(
-            title: Text('Новая задача', style: TextStyle(color: colorScheme.onSurface)),
+            title: Text(t.newTaskTitle, style: TextStyle(color: colorScheme.onSurface)),
             content: Form(
               key: formKey,
               child: Column(
@@ -595,21 +596,21 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
                 children: [
                   TextFormField(
                       controller: titleController,
-                      decoration: InputDecoration(labelText: 'Название', labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+                      decoration: InputDecoration(labelText: t.taskName, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
                       style: TextStyle(color: colorScheme.onSurface),
-                      validator: (v) => v!.isEmpty ? 'Введите название' : null),
+                      validator: (v) => v!.isEmpty ? t.enterTaskName : null),
                   const SizedBox(height: 8),
                   TextFormField(
                       controller: descController,
-                      decoration: InputDecoration(labelText: 'Описание', labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+                      decoration: InputDecoration(labelText: t.taskDescription, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
                       style: TextStyle(color: colorScheme.onSurface)),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<int>(
-                    decoration: InputDecoration(labelText: 'Назначить', labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+                    decoration: InputDecoration(labelText: t.assignTo, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
                     dropdownColor: colorScheme.surface,
                     style: TextStyle(color: colorScheme.onSurface),
                     items: [
-                      const DropdownMenuItem(value: null, child: Text('Не назначено')),
+                       DropdownMenuItem(value: null, child: Text(t.notAssigned)),
                       ..._employees.map((e) => DropdownMenuItem(
                           value: e['user_id'], child: Text(e['full_name']))),
                     ],
@@ -617,8 +618,8 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
                   ),
                   const SizedBox(height: 8),
                   ListTile(
-                    title: Text('Дедлайн', style: TextStyle(color: colorScheme.onSurface)),
-                    trailing: Text(deadline == null ? 'Не выбран' : DateFormat('dd.MM.yyyy').format(deadline!),
+                    title: Text(t.deadline, style: TextStyle(color: colorScheme.onSurface)),
+                    trailing: Text(deadline == null ? t.notSelected : DateFormat('dd.MM.yyyy').format(deadline!),
                         style: TextStyle(color: colorScheme.onSurfaceVariant)),
                     onTap: () async {
                       final picked = await showDatePicker(
@@ -637,7 +638,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
             actions: [
               TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: Text('Отмена', style: TextStyle(color: colorScheme.onSurfaceVariant))),
+                  child: Text(t.cancel, style: TextStyle(color: colorScheme.onSurfaceVariant))),
               ElevatedButton(
                 onPressed: () async {
                   if (!formKey.currentState!.validate()) return;
@@ -654,14 +655,14 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
                     Navigator.pop(context);
                   } catch (e) {
                     ScaffoldMessenger.of(context)
-                        .showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+                        .showSnackBar(SnackBar(content: Text('${t.error}: $e')));
                   }
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: colorScheme.primary,
                   foregroundColor: colorScheme.onPrimary,
                 ),
-                child: const Text('Создать'),
+                child: Text(t.create),
               ),
             ],
           );
@@ -671,6 +672,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
   }
 
   Future<void> _updateTaskStatus(int taskId, String newStatus) async {
+    final t = AppLocalizations.of(context)!;
     final api = ApiClient();
     try {
       await api.patch('/tasks/$taskId/status',
@@ -678,23 +680,24 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
           data: {'status': newStatus});
     } catch (e) {
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+          .showSnackBar(SnackBar(content: Text('${t.error}: $e')));
     }
   }
 
   Future<void> _deleteTask(int taskId) async {
+    final t = AppLocalizations.of(context)!;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Удалить задачу?'),
-        content: const Text('Задача будет удалена безвозвратно.'),
+        title: Text(t.deleteTaskTitle),
+        content: Text(t.deleteTaskContent),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Отмена')),
+              child: Text(t.cancel)),
           TextButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Удалить', style: TextStyle(color: Colors.red))),
+              child: Text(t.delete, style: const TextStyle(color: Colors.red))),
         ],
       ),
     );
@@ -705,37 +708,27 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
           queryParameters: {'company_id': widget.companyId});
     } catch (e) {
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+          .showSnackBar(SnackBar(content: Text('${t.error}: $e')));
     }
   }
 
-  String _statusName(String status) {
+  String _statusName(String status, AppLocalizations t) {
     switch (status) {
-      case 'pending':
-        return 'Ожидают';
-      case 'accepted':
-        return 'Приняты';
-      case 'completed':
-        return 'Выполнены';
-      case 'failed':
-        return 'Провалены';
-      default:
-        return status;
+      case 'pending': return t.pendingStatus;
+      case 'accepted': return t.acceptedStatus;
+      case 'completed': return t.completedStatus;
+      case 'failed': return t.failedStatus;
+      default: return status;
     }
   }
 
   Color _statusColor(String status) {
     switch (status) {
-      case 'pending':
-        return Colors.orange;
-      case 'accepted':
-        return Colors.blue;
-      case 'completed':
-        return Colors.green;
-      case 'failed':
-        return Colors.red;
-      default:
-        return Colors.grey;
+      case 'pending': return Colors.orange;
+      case 'accepted': return Colors.blue;
+      case 'completed': return Colors.green;
+      case 'failed': return Colors.red;
+      default: return Colors.grey;
     }
   }
 
@@ -752,6 +745,8 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    ref.watch(localeProvider);
+    final t = AppLocalizations.of(context)!;
     final authState = ref.watch(authProvider);
     final currentUser = authState.user;
     final isFounder = currentUser?.role == UserRole.founder;
@@ -761,12 +756,12 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
     return Column(
       children: [
         TabBar(
-          controller: _tabController,
-          tabs: const [Tab(text: 'Чат'), Tab(text: 'Задачи')],
-          labelColor: colorScheme.primary,
-          unselectedLabelColor: colorScheme.onSurfaceVariant,
-          indicatorColor: colorScheme.primary,
-        ),
+  controller: _tabController,
+  tabs: [Tab(text: t.chatTab), Tab(text: t.tasksTab)],
+  labelColor: colorScheme.primary,
+  unselectedLabelColor: colorScheme.onSurfaceVariant,
+  indicatorColor: colorScheme.primary,
+),
         Expanded(
           child: TabBarView(
             controller: _tabController,
@@ -780,7 +775,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
                       child: IconButton(
                         icon: const Icon(Icons.delete_sweep, color: Colors.red),
                         onPressed: _clearChat,
-                        tooltip: 'Очистить чат',
+                        tooltip: t.clearChatTooltip,
                       ),
                     ),
                   Expanded(
@@ -793,7 +788,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
                               final msg = _messages[index];
                               final isMe = msg['user_id'] == currentUser?.id;
                               final displayName = msg['user_full_name'];
-                              return _buildMessageBubble(isMe, displayName, msg, isFounder, colorScheme);
+                              return _buildMessageBubble(isMe, displayName, msg, isFounder, colorScheme, t);
                             },
                           ),
                   ),
@@ -804,7 +799,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
                         IconButton(
                           icon: const Icon(Icons.attach_file),
                           onPressed: () => _showAttachmentPicker(context),
-                          tooltip: 'Прикрепить файл',
+                          tooltip: t.attachFileTooltip,
                         ),
                         const SizedBox(width: 8),
                         Expanded(
@@ -812,7 +807,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
                             controller: _messageController,
                             style: TextStyle(color: colorScheme.onSurface),
                             decoration: InputDecoration(
-                              hintText: 'Введите сообщение...',
+                              hintText: t.enterMessageHint,
                               hintStyle: TextStyle(color: colorScheme.onSurfaceVariant),
                               filled: true,
                               fillColor: colorScheme.surfaceContainerHighest,
@@ -877,7 +872,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
                       child: ElevatedButton.icon(
                         onPressed: _createTask,
                         icon: const Icon(Icons.add),
-                        label: const Text('Новая задача'),
+                        label: Text(t.newTaskButton),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: colorScheme.primary,
                           foregroundColor: colorScheme.onPrimary,
@@ -893,26 +888,21 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
                             child: Column(
                               children: [
                                 if (_pendingTasks.isNotEmpty)
-                                  _buildTaskSection('Ожидают', _pendingTasks,
-                                      Colors.orange, currentUser, isFounder, colorScheme),
+                                  _buildTaskSection(t.pendingStatus, _pendingTasks,
+                                      Colors.orange, currentUser, isFounder, colorScheme, t),
                                 if (_acceptedTasks.isNotEmpty)
-                                  _buildTaskSection('Приняты', _acceptedTasks,
-                                      Colors.blue, currentUser, isFounder, colorScheme),
+                                  _buildTaskSection(t.acceptedStatus, _acceptedTasks,
+                                      Colors.blue, currentUser, isFounder, colorScheme, t),
                                 if (_completedTasks.isNotEmpty)
-                                  _buildTaskSection(
-                                      'Выполнены',
-                                      _completedTasks,
-                                      Colors.green,
-                                      currentUser,
-                                      isFounder,
-                                      colorScheme),
+                                  _buildTaskSection(t.completedStatus, _completedTasks,
+                                      Colors.green, currentUser, isFounder, colorScheme, t),
                                 if (_failedTasks.isNotEmpty)
-                                  _buildTaskSection('Провалены', _failedTasks,
-                                      Colors.red, currentUser, isFounder, colorScheme),
+                                  _buildTaskSection(t.failedStatus, _failedTasks,
+                                      Colors.red, currentUser, isFounder, colorScheme, t),
                                 if (_tasks.isEmpty)
                                   Padding(
                                       padding: const EdgeInsets.all(16.0),
-                                      child: Text('Нет задач', style: TextStyle(color: colorScheme.onSurfaceVariant))),
+                                      child: Text(t.noTasks, style: TextStyle(color: colorScheme.onSurfaceVariant))),
                               ],
                             ),
                           ),
@@ -927,7 +917,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
   }
 
   Widget _buildMessageBubble(
-      bool isMe, String displayName, Map<String, dynamic> msg, bool isFounder, ColorScheme colorScheme) {
+      bool isMe, String displayName, Map<String, dynamic> msg, bool isFounder, ColorScheme colorScheme, AppLocalizations t) {
     final hasAttachment = msg['attachment_url'] != null && msg['attachment_url'].toString().isNotEmpty;
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 20),
@@ -945,7 +935,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
               ),
               if (msg['edited'] == true) ...[
                 const SizedBox(width: 4),
-                Text('(изменено)',
+                Text(t.editedLabel,
                     style: TextStyle(fontSize: 10, color: colorScheme.onSurfaceVariant)),
               ],
               const Spacer(),
@@ -1039,7 +1029,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
   }
 
   Widget _buildTaskSection(String title, List<Map<String, dynamic>> tasks,
-      Color color, User? currentUser, bool isFounder, ColorScheme colorScheme) {
+      Color color, User? currentUser, bool isFounder, ColorScheme colorScheme, AppLocalizations t) {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       elevation: 2,
@@ -1084,7 +1074,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
                           style: TextStyle(fontWeight: FontWeight.w500, color: colorScheme.onSurface))),
                 ],
               ),
-              subtitle: Text('Автор: $authorName',
+              subtitle: Text('${t.taskAuthorLabel}: $authorName',
                   style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant)),
               children: [
                 Padding(
@@ -1097,10 +1087,10 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
                             style: TextStyle(fontSize: 13, color: colorScheme.onSurfaceVariant)),
                       const SizedBox(height: 4),
                       if (assigneeName != null)
-                        Text('👤 Назначена: $assigneeName',
+                        Text('👤 ${t.taskAssigneeLabel}: $assigneeName',
                             style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant)),
                       if (task['deadline'] != null)
-                        Text('⏰ Дедлайн: ${DateFormat('dd.MM.yyyy').format(DateTime.parse(task['deadline']))}',
+                        Text('⏰ ${t.deadlineLabel}: ${DateFormat('dd.MM.yyyy').format(DateTime.parse(task['deadline']))}',
                             style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant)),
                       const SizedBox(height: 8),
                       Wrap(
@@ -1113,7 +1103,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
                                 backgroundColor: Colors.blue,
                                 foregroundColor: Colors.white,
                               ),
-                              child: const Text('Принять'),
+                              child: Text(t.acceptButton),
                             ),
                           if (task['status'] == 'accepted' && isAssignee)
                             ElevatedButton(
@@ -1122,7 +1112,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
                                 backgroundColor: Colors.green,
                                 foregroundColor: Colors.white,
                               ),
-                              child: const Text('Выполнить'),
+                              child: Text(t.completeButton),
                             ),
                           if (task['status'] == 'accepted' && isAssignee)
                             ElevatedButton(
@@ -1131,7 +1121,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
                                 backgroundColor: Colors.red,
                                 foregroundColor: Colors.white,
                               ),
-                              child: const Text('Провалить'),
+                              child: Text(t.failButton),
                             ),
                           if (canDelete)
                             IconButton(

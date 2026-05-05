@@ -1,17 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../services/api_client.dart';
+import '../../../providers/locale_provider.dart';
+import 'package:frontend/l10n/app_localizations.dart';
 
-class OrderStatsWidget extends StatefulWidget {
+class OrderStatsWidget extends ConsumerStatefulWidget {
   final int companyId;
   final DateTime startDate;
   final DateTime endDate;
   const OrderStatsWidget({super.key, required this.companyId, required this.startDate, required this.endDate});
 
   @override
-  State<OrderStatsWidget> createState() => _OrderStatsWidgetState();
+  ConsumerState<OrderStatsWidget> createState() => _OrderStatsWidgetState();
 }
 
-class _OrderStatsWidgetState extends State<OrderStatsWidget> {
+class _OrderStatsWidgetState extends ConsumerState<OrderStatsWidget> {
   Map<String, dynamic> _stats = {};
   bool _loading = true;
 
@@ -48,12 +51,12 @@ class _OrderStatsWidgetState extends State<OrderStatsWidget> {
     }
   }
 
-  String _statusName(String status) {
+  String _statusName(String status, AppLocalizations t) {
     switch (status) {
-      case 'pending': return 'Ожидают';
-      case 'accepted': return 'Приняты';
-      case 'completed': return 'Выполнены';
-      case 'failed': return 'Провалены';
+      case 'pending': return t.pendingStatus;
+      case 'accepted': return t.acceptedStatus;
+      case 'completed': return t.completedStatus;
+      case 'failed': return t.failedStatus;
       default: return status;
     }
   }
@@ -70,13 +73,15 @@ class _OrderStatsWidgetState extends State<OrderStatsWidget> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(localeProvider);
+    final t = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
     if (_loading) return const CircularProgressIndicator();
-    if (_stats.isEmpty) return Text('Нет данных о заказах', style: TextStyle(color: colorScheme.onSurfaceVariant));
+    if (_stats.isEmpty) return Text(t.noOrderData, style: TextStyle(color: colorScheme.onSurfaceVariant));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Статистика заказов', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        Text(t.orderStatisticsTitle, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
         const SizedBox(height: 8),
         Wrap(
           spacing: 12,
@@ -99,12 +104,12 @@ class _OrderStatsWidgetState extends State<OrderStatsWidget> {
                       children: [
                         Container(width: 12, height: 12, decoration: BoxDecoration(color: _statusColor(status), shape: BoxShape.circle)),
                         const SizedBox(width: 8),
-                        Text(_statusName(status), style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
+                        Text(_statusName(status, t), style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
                       ],
                     ),
                     const SizedBox(height: 8),
-                    Text('Количество: $count', style: TextStyle(color: colorScheme.onSurfaceVariant)),
-                    Text('Сумма: ${totalSum.toStringAsFixed(2)} ₽', style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
+                    Text('${t.quantityLabelLower}: $count', style: TextStyle(color: colorScheme.onSurfaceVariant)),
+                    Text('${t.amountLabelLower}: ${totalSum.toStringAsFixed(2)} ₽', style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
                   ],
                 ),
               ),

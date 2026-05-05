@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../../../services/api_client.dart';
 import '../../../services/image_compression.dart';
+import '../../../providers/locale_provider.dart';
+import 'package:frontend/l10n/app_localizations.dart';
 
-class EditTransactionDialog extends StatefulWidget {
+class EditTransactionDialog extends ConsumerStatefulWidget {
   final Map<String, dynamic> transaction;
   final int companyId;
   final List<dynamic> accounts;
@@ -24,10 +27,10 @@ class EditTransactionDialog extends StatefulWidget {
   });
 
   @override
-  State<EditTransactionDialog> createState() => _EditTransactionDialogState();
+  ConsumerState<EditTransactionDialog> createState() => _EditTransactionDialogState();
 }
 
-class _EditTransactionDialogState extends State<EditTransactionDialog> {
+class _EditTransactionDialogState extends ConsumerState<EditTransactionDialog> {
   late String _type;
   late double _amount;
   late DateTime _date;
@@ -64,7 +67,7 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
       _selectedProducts = items.map((item) {
         final quantity = (item['quantity'] as num?)?.toDouble() ?? 0;
         final pricePerUnit = (item['price_per_unit'] as num?)?.toDouble() ?? 0;
-        final productName = item['product_name']?.toString() ?? 'Товар';
+        final productName = item['product_name']?.toString() ?? 'Product';
         final total = quantity * pricePerUnit;
         return {
           'product_id': item['product_id'] ?? 0,
@@ -154,13 +157,14 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
   }
 
   Future<void> _addProduct() async {
+    final t = AppLocalizations.of(context)!;
     final api = ApiClient();
     List<dynamic> products = [];
     try {
       final res = await api.get('/products', queryParameters: {'company_id': widget.companyId});
       products = res.data;
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка загрузки товаров: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
       return;
     }
 
@@ -176,16 +180,16 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
       builder: (context) => StatefulBuilder(
         builder: (context, setStateDialog) {
           return AlertDialog(
-            title: const Text('Добавить товар'),
+            title: Text(t.addProductTitle),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 DropdownButtonFormField<int>(
-                  decoration: const InputDecoration(labelText: 'Товар'),
+                  decoration: InputDecoration(labelText: t.productLabel),
                   items: products.map((p) {
                     return DropdownMenuItem<int>(
                       value: p['id'],
-                      child: Text('${p['name']} (остаток: ${p['current_quantity']} ${p['unit']})'),
+                      child: Text('${p['name']} (${t.remainingStock}: ${p['current_quantity']} ${p['unit']})'),
                     );
                   }).toList(),
                   onChanged: (v) {
@@ -198,43 +202,42 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
                 const SizedBox(height: 8),
                 TextField(
                   controller: quantityController,
-                  decoration: const InputDecoration(labelText: 'Количество'),
+                  decoration: InputDecoration(labelText: t.quantityLabel),
                   keyboardType: TextInputType.number,
                   onChanged: (v) => quantity = _parseAmount(v),
                 ),
                 const SizedBox(height: 8),
                 TextField(
                   controller: totalController,
-                  decoration: const InputDecoration(labelText: 'Сумма (₽)'),
+                  decoration: InputDecoration(labelText: t.totalAmountLabel),
                   keyboardType: TextInputType.number,
                   onChanged: (v) => total = _parseAmount(v),
                 ),
               ],
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
+              TextButton(onPressed: () => Navigator.pop(context), child: Text(t.cancel)),
               ElevatedButton(
                 onPressed: () {
                   final q = quantity;
-                  final t = total;
-                  if (selectedProductId == null || q <= 0 || t <= 0) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Заполните все поля корректно')));
+                  final tot = total;
+                  if (selectedProductId == null || q <= 0 || tot <= 0) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.fillAllFields)));
                     return;
                   }
-                  final pricePerUnit = t / q;
+                  final pricePerUnit = tot / q;
                   setState(() {
                     _selectedProducts.add({
                       'product_id': selectedProductId,
                       'product_name': selectedProduct?['name'] ?? '',
                       'quantity': q,
                       'price_per_unit': pricePerUnit,
-                      'total': t,
+                      'total': tot,
                     });
                   });
                   Navigator.pop(context);
                 },
-                child: const Text('Добавить'),
+                child: Text(t.add),
               ),
             ],
           );
@@ -244,6 +247,7 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
   }
 
   void _editProduct(int index) async {
+    final t = AppLocalizations.of(context)!;
     final product = _selectedProducts[index];
     final quantityController = TextEditingController(text: product['quantity'].toString());
     final totalController = TextEditingController(text: product['total'].toString());
@@ -252,27 +256,27 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
     await showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Редактировать товар'),
+        title: Text(t.editProductTitle),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: quantityController,
-              decoration: const InputDecoration(labelText: 'Количество'),
+              decoration: InputDecoration(labelText: t.quantityLabel),
               keyboardType: TextInputType.number,
               onChanged: (v) => quantity = _parseAmount(v),
             ),
             const SizedBox(height: 8),
             TextField(
               controller: totalController,
-              decoration: const InputDecoration(labelText: 'Сумма (₽)'),
+              decoration: InputDecoration(labelText: t.totalAmountLabel),
               keyboardType: TextInputType.number,
               onChanged: (v) => total = _parseAmount(v),
             ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
+          TextButton(onPressed: () => Navigator.pop(context), child: Text(t.cancel)),
           ElevatedButton(
             onPressed: () {
               if (quantity <= 0 || total <= 0) return;
@@ -287,7 +291,7 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
               });
               Navigator.pop(context);
             },
-            child: const Text('Сохранить'),
+            child: Text(t.save),
           ),
         ],
       ),
@@ -342,11 +346,12 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
     } catch (e) {
       if (mounted) {
         String errorMessage = e.toString();
+        final t = AppLocalizations.of(context)!;
         if (errorMessage.contains('Insufficient stock')) {
-          errorMessage = 'Недостаточно товара на складе для продажи';
+          errorMessage = t.insufficientStock;
         }
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Ошибка: $errorMessage')));
+            .showSnackBar(SnackBar(content: Text('${t.error}: $errorMessage')));
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -354,15 +359,16 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
   }
 
   Future<void> _deleteTransaction() async {
+    final t = AppLocalizations.of(context)!;
     String title, content, confirmText;
     if (widget.isFounder) {
-      title = 'Удалить операцию';
-      content = 'Операция будет удалена навсегда. Восстановление невозможно.';
-      confirmText = 'Удалить';
+      title = t.deleteTransactionTitle;
+      content = t.deleteTransactionContentPermanent;
+      confirmText = t.delete;
     } else {
-      title = 'Скрыть операцию';
-      content = 'Операция будет скрыта из отчётов, но останется в истории. Вы сможете восстановить её позже.';
-      confirmText = 'Скрыть';
+      title = t.hideTransactionTitle;
+      content = t.hideTransactionContent;
+      confirmText = t.hide;
     }
     final confirm = await showDialog<bool>(
       context: context,
@@ -370,7 +376,7 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
         title: Text(title),
         content: Text(content),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отмена')),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(t.cancel)),
           TextButton(onPressed: () => Navigator.pop(context, true), child: Text(confirmText, style: const TextStyle(color: Colors.red))),
         ],
       ),
@@ -385,11 +391,11 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
       await widget.onSuccess();
       if (mounted) Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(widget.isFounder ? 'Операция удалена' : 'Операция скрыта')),
+        SnackBar(content: Text(widget.isFounder ? t.transactionDeletedPermanent : t.transactionHidden)),
       );
     } catch (e) {
       if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -397,20 +403,22 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(localeProvider);
+    final t = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
     final isSmallScreen = MediaQuery.of(context).size.width < 500;
 
     if (widget.accounts.isEmpty) {
       return AlertDialog(
-        title: const Text('Ошибка'),
-        content: const Text('Нет доступных счетов для редактирования.'),
-        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Закрыть'))],
+        title: Text(t.error),
+        content: Text(t.noAccountsAvailable),
+        actions: [TextButton(onPressed: () => Navigator.pop(context), child: Text(t.close))],
       );
     }
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       title: Text(
-        _type == 'income' ? 'Редактировать приход (продажа)' : (_type == 'expense' ? 'Редактировать расход (покупка)' : 'Редактировать перевод'),
+        _type == 'income' ? t.editIncomeTitle : (_type == 'expense' ? t.editExpenseTitle : t.editTransferTitle),
         style: TextStyle(color: colorScheme.onSurface),
       ),
       content: Container(
@@ -444,17 +452,17 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
                       segments: [
                         ButtonSegment(
                           value: 'income',
-                          label: Text(isSmallScreen ? 'Приход' : 'Приход (Продажа)'),
+                          label: Text(isSmallScreen ? t.incomeShort : t.incomeFull),
                           icon: isSmallScreen ? null : const Icon(Icons.arrow_upward),
                         ),
                         ButtonSegment(
                           value: 'expense',
-                          label: Text(isSmallScreen ? 'Расход' : 'Расход (Покупка)'),
+                          label: Text(isSmallScreen ? t.expenseShort : t.expenseFull),
                           icon: isSmallScreen ? null : const Icon(Icons.arrow_downward),
                         ),
                         ButtonSegment(
                           value: 'transfer',
-                          label: Text(isSmallScreen ? 'Перевод' : 'Перевод'),
+                          label: Text(isSmallScreen ? t.transferShort : t.transferFull),
                           icon: isSmallScreen ? null : const Icon(Icons.swap_horiz),
                         ),
                       ],
@@ -496,14 +504,14 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
                     controller: textController,
                     focusNode: focusNode,
                     decoration: InputDecoration(
-                      labelText: 'Контрагент (необязательно)',
+                      labelText: t.counterpartyOptional,
                       border: const OutlineInputBorder(),
                       suffixIcon: _loadingCounterparties
                           ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
                           : IconButton(
                               icon: const Icon(Icons.refresh),
                               onPressed: _loadCounterparties,
-                              tooltip: 'Обновить список',
+                              tooltip: t.refreshList,
                             ),
                     ),
                   );
@@ -549,7 +557,7 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
                   });
                 },
                 decoration: InputDecoration(
-                  labelText: 'Счёт',
+                  labelText: t.accountLabel,
                   labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
                   border: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
                   enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
@@ -563,7 +571,7 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
                 initialValue: _amount.toString(),
                 keyboardType: TextInputType.number,
                 decoration: InputDecoration(
-                  labelText: 'Сумма',
+                  labelText: t.amountLabel,
                   labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
                   border: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
                   enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
@@ -574,7 +582,7 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
               ),
               const SizedBox(height: 12),
               ListTile(
-                title: Text('Дата', style: TextStyle(color: colorScheme.onSurface)),
+                title: Text(t.dateLabel, style: TextStyle(color: colorScheme.onSurface)),
                 trailing: Text(DateFormat('dd.MM.yyyy', 'ru').format(_date), style: TextStyle(color: colorScheme.onSurfaceVariant)),
                 onTap: () async {
                   final picked = await showDatePicker(
@@ -597,7 +605,7 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
                       )).toList(),
                   onChanged: (v) => setState(() => _categoryId = v),
                   decoration: InputDecoration(
-                    labelText: 'Категория (необязательно)',
+                    labelText: t.categoryOptional,
                     labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
                     border: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
                     enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
@@ -615,7 +623,7 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
                       )).toList(),
                   onChanged: (v) => setState(() => _transferToAccountId = v),
                   decoration: InputDecoration(
-                    labelText: 'Счёт получатель',
+                    labelText: t.toAccountLabel,
                     labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
                     border: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
                     enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
@@ -628,7 +636,7 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
               TextFormField(
                 initialValue: _description,
                 decoration: InputDecoration(
-                  labelText: 'Описание',
+                  labelText: t.descriptionLabel,
                   labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
                   border: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
                   enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
@@ -645,7 +653,7 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
                       child: ElevatedButton.icon(
                         onPressed: _addProduct,
                         icon: const Icon(Icons.add_shopping_cart),
-                        label: const Text('Добавить товар'),
+                        label: Text(t.addProductButton),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: colorScheme.primary.withOpacity(0.2),
                           foregroundColor: colorScheme.onSurface,
@@ -656,7 +664,7 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
                 ),
                 if (_selectedProducts.isNotEmpty) ...[
                   const SizedBox(height: 8),
-                  Text('Товары в операции:', style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
+                  Text(t.productsInOperation, style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
                   const SizedBox(height: 4),
                   ConstrainedBox(
                     constraints: const BoxConstraints(maxHeight: 150),
@@ -665,13 +673,13 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
                       itemCount: _selectedProducts.length,
                       itemBuilder: (context, idx) {
                         final p = _selectedProducts[idx];
-                        final productName = p['product_name']?.toString() ?? 'Товар';
+                        final productName = p['product_name']?.toString() ?? t.productLabel;
                         final quantity = (p['quantity'] as num?)?.toDouble() ?? 0;
                         final total = (p['total'] as num?)?.toDouble() ?? 0;
                         return ListTile(
                           dense: true,
                           title: Text(productName, style: TextStyle(color: colorScheme.onSurface)),
-                          subtitle: Text('$quantity шт — ${total.toStringAsFixed(2)} ₽', style: TextStyle(color: colorScheme.onSurfaceVariant)),
+                          subtitle: Text('$quantity ${t.pcs} — ${total.toStringAsFixed(2)} ₽', style: TextStyle(color: colorScheme.onSurfaceVariant)),
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
@@ -698,7 +706,7 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
                   ElevatedButton.icon(
                     onPressed: _pickFile,
                     icon: const Icon(Icons.attach_file),
-                    label: const Text('Файл'),
+                    label: Text(t.fileButton),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: colorScheme.primary.withOpacity(0.2),
                       foregroundColor: colorScheme.onSurface,
@@ -707,7 +715,7 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
                   ElevatedButton.icon(
                     onPressed: _takePhoto,
                     icon: const Icon(Icons.camera_alt),
-                    label: const Text('Камера'),
+                    label: Text(t.cameraButton),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: colorScheme.primary.withOpacity(0.2),
                       foregroundColor: colorScheme.onSurface,
@@ -722,8 +730,8 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
                     children: [
                       Icon(Icons.attachment, color: colorScheme.primary),
                       const SizedBox(width: 8),
-                      Text('Есть вложение', style: TextStyle(color: colorScheme.onSurface)),
-                      TextButton(onPressed: _deleteAttachment, child: const Text('Удалить', style: TextStyle(color: Colors.red))),
+                      Text(t.hasAttachment, style: TextStyle(color: colorScheme.onSurface)),
+                      TextButton(onPressed: _deleteAttachment, child: Text(t.delete, style: const TextStyle(color: Colors.red))),
                     ],
                   ),
                 ),
@@ -752,11 +760,11 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: Text('Отмена', style: TextStyle(color: colorScheme.onSurfaceVariant)),
+          child: Text(t.cancel, style: TextStyle(color: colorScheme.onSurfaceVariant)),
         ),
         TextButton(
           onPressed: _deleteTransaction,
-          child: const Text('Удалить', style: TextStyle(color: Colors.red)),
+          child: Text(t.delete, style: const TextStyle(color: Colors.red)),
         ),
         ElevatedButton(
           onPressed: _loading ? null : _save,
@@ -764,7 +772,7 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
             backgroundColor: colorScheme.primary,
             foregroundColor: colorScheme.onPrimary,
           ),
-          child: const Text('Сохранить'),
+          child: Text(t.save),
         ),
       ],
     );

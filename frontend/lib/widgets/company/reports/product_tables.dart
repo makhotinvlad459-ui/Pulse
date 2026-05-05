@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../providers/locale_provider.dart';
+import 'package:frontend/l10n/app_localizations.dart';
 
-class ProductTables extends StatelessWidget {
+class ProductTables extends ConsumerWidget {
   final List<dynamic> productIncome;
   final List<dynamic> productConsumption;
 
   const ProductTables({super.key, required this.productIncome, required this.productConsumption});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(localeProvider);
+    final t = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -16,9 +21,9 @@ class ProductTables extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Общий расход товара (склад+витрина)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              Text(t.totalConsumptionTitle, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              _buildProductTable(productConsumption, colorScheme),
+              _buildProductTable(productConsumption, colorScheme, t),
             ],
           ),
         ),
@@ -27,9 +32,9 @@ class ProductTables extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Общий приход товара (склад)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              Text(t.totalIncomeTitle, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              _buildProductTable(productIncome, colorScheme),
+              _buildProductTable(productIncome, colorScheme, t),
             ],
           ),
         ),
@@ -37,8 +42,8 @@ class ProductTables extends StatelessWidget {
     );
   }
 
-  Widget _buildProductTable(List<dynamic> data, ColorScheme colorScheme) {
-    if (data.isEmpty) return Text('Нет данных', style: TextStyle(color: colorScheme.onSurfaceVariant));
+  Widget _buildProductTable(List<dynamic> data, ColorScheme colorScheme, AppLocalizations t) {
+    if (data.isEmpty) return Text(t.noData, style: TextStyle(color: colorScheme.onSurfaceVariant));
     double totalQuantity = 0;
     for (var item in data) totalQuantity += (item['quantity'] as num).toDouble();
     return SingleChildScrollView(
@@ -57,8 +62,8 @@ class ProductTables extends StatelessWidget {
             TableRow(
               decoration: BoxDecoration(color: colorScheme.primary),
               children: [
-                Padding(padding: const EdgeInsets.all(8), child: Text('Товар', style: TextStyle(color: colorScheme.onPrimary, fontWeight: FontWeight.bold))),
-                Padding(padding: const EdgeInsets.all(8), child: Text('Количество (шт)', style: TextStyle(color: colorScheme.onPrimary, fontWeight: FontWeight.bold))),
+                Padding(padding: const EdgeInsets.all(8), child: Text(t.productColumn, style: TextStyle(color: colorScheme.onPrimary, fontWeight: FontWeight.bold))),
+                Padding(padding: const EdgeInsets.all(8), child: Text(t.quantityPcsColumn, style: TextStyle(color: colorScheme.onPrimary, fontWeight: FontWeight.bold))),
               ],
             ),
             ...data.map((item) {
@@ -72,7 +77,7 @@ class ProductTables extends StatelessWidget {
             TableRow(
               decoration: BoxDecoration(color: colorScheme.surface),
               children: [
-                Padding(padding: const EdgeInsets.all(8), child: Text('Итого', style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface))),
+                Padding(padding: const EdgeInsets.all(8), child: Text(t.totalLabel, style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface))),
                 Padding(padding: const EdgeInsets.all(8), child: Text(totalQuantity.toStringAsFixed(2), style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface))),
               ],
             ),

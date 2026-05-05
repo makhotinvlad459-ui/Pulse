@@ -1,18 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../services/api_client.dart';
+import '../../providers/locale_provider.dart';
+import 'package:frontend/l10n/app_localizations.dart';
 
-class IncomeExpenseTab extends StatefulWidget {
+class IncomeExpenseTab extends ConsumerStatefulWidget {
   final int companyId;
   final List<dynamic> categories;
   const IncomeExpenseTab(
       {super.key, required this.companyId, required this.categories});
 
   @override
-  State<IncomeExpenseTab> createState() => _IncomeExpenseTabState();
+  ConsumerState<IncomeExpenseTab> createState() => _IncomeExpenseTabState();
 }
 
-class _IncomeExpenseTabState extends State<IncomeExpenseTab> {
+class _IncomeExpenseTabState extends ConsumerState<IncomeExpenseTab> {
   DateTime _startDate = DateTime(DateTime.now().year, DateTime.now().month, 1);
   DateTime _endDate =
       DateTime(DateTime.now().year, DateTime.now().month + 1, 0);
@@ -30,6 +33,7 @@ class _IncomeExpenseTabState extends State<IncomeExpenseTab> {
   Future<void> _loadData() async {
     setState(() => _loading = true);
     final api = ApiClient();
+    final t = AppLocalizations.of(context)!;
     try {
       final incomeStats = await api.get('/statistics/income', queryParameters: {
         'company_id': widget.companyId,
@@ -62,7 +66,7 @@ class _IncomeExpenseTabState extends State<IncomeExpenseTab> {
       setState(() => _loading = false);
       if (mounted)
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Ошибка загрузки: $e')));
+            .showSnackBar(SnackBar(content: Text('${t.error}: $e')));
     }
   }
 
@@ -101,6 +105,8 @@ class _IncomeExpenseTabState extends State<IncomeExpenseTab> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(localeProvider);
+    final t = AppLocalizations.of(context)!;
     if (_loading) return const Center(child: CircularProgressIndicator());
     return Column(
       children: [
@@ -112,8 +118,8 @@ class _IncomeExpenseTabState extends State<IncomeExpenseTab> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Баланс за период',
-                      style: TextStyle(fontSize: 12)),
+                  Text(t.balanceForPeriod,
+                      style: const TextStyle(fontSize: 12)),
                   Text('${_balance.toStringAsFixed(2)} ₽',
                       style: const TextStyle(
                           fontSize: 24, fontWeight: FontWeight.bold)),
@@ -134,7 +140,7 @@ class _IncomeExpenseTabState extends State<IncomeExpenseTab> {
             children: [
               Expanded(
                 child: _CategoryColumn(
-                  title: 'Приходы',
+                  title: t.incomeTitle,
                   data: _incomeByCategory,
                   color: Colors.green,
                   getIcon: _getIconForCategory,
@@ -158,7 +164,7 @@ class _IncomeExpenseTabState extends State<IncomeExpenseTab> {
               ),
               Expanded(
                 child: _CategoryColumn(
-                  title: 'Расходы',
+                  title: t.expenseTitle,
                   data: _expenseByCategory,
                   color: Colors.red,
                   getIcon: _getIconForCategory,
@@ -204,6 +210,7 @@ class _CategoryColumn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     if (data.isEmpty) {
       return Column(
         children: [
@@ -212,7 +219,7 @@ class _CategoryColumn extends StatelessWidget {
             child: Text(title,
                 style: TextStyle(fontWeight: FontWeight.bold, color: color)),
           ),
-          const Expanded(child: Center(child: Text('Нет данных'))),
+          const Expanded(child: Center(child: Text('Нет данных'))), // will be localized later
         ],
       );
     }
@@ -263,6 +270,7 @@ class TransactionsByCategoryScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     final queryParams = {
       'company_id': companyId,
       'type': type,
@@ -275,7 +283,7 @@ class TransactionsByCategoryScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
           title: Text(
-              '$categoryName (${type == 'income' ? 'Приход' : 'Расход'})')),
+              '$categoryName (${type == 'income' ? t.incomeTitle : t.expenseTitle})')),
       body: FutureBuilder(
         future: ApiClient().get('/transactions', queryParameters: queryParams),
         builder: (context, snapshot) {
@@ -283,22 +291,22 @@ class TransactionsByCategoryScreen extends StatelessWidget {
             return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError) {
-            return Center(child: Text('Ошибка: ${snapshot.error}'));
+            return Center(child: Text('${t.error}: ${snapshot.error}'));
           }
           final transactions = snapshot.data!.data;
           if (transactions.isEmpty) {
-            return const Center(child: Text('Нет операций'));
+            return Center(child: Text(t.noTransactions));
           }
           return ListView.builder(
             itemCount: transactions.length,
             itemBuilder: (context, index) {
-              final t = transactions[index];
+              final trans = transactions[index];
               return Card(
                 child: ListTile(
-                  title: Text('${t['amount']} ₽'),
-                  subtitle: Text(t['description'] ?? ''),
+                  title: Text('${trans['amount']} ₽'),
+                  subtitle: Text(trans['description'] ?? ''),
                   trailing: Text(DateFormat('dd.MM.yyyy')
-                      .format(DateTime.parse(t['date']))),
+                      .format(DateTime.parse(trans['date']))),
                 ),
               );
             },

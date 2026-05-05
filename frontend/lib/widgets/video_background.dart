@@ -27,13 +27,16 @@ class _VideoBackgroundState extends State<VideoBackground> {
   @override
   void initState() {
     super.initState();
-    _controller = VideoPlayerController.asset(widget.videoPath)
-      ..initialize().then((_) {
-        if (mounted) setState(() {});
-        if (widget.loop) _controller.setLooping(true);
-        _controller.setVolume(widget.muted ? 0 : 1);
-        _controller.play();
-      });
+    _initController();
+  }
+
+  Future<void> _initController() async {
+    _controller = VideoPlayerController.asset(widget.videoPath);
+    await _controller.initialize();
+    if (widget.loop) _controller.setLooping(true);
+    _controller.setVolume(widget.muted ? 0 : 1);
+    _controller.play();
+    if (mounted) setState(() {});
   }
 
   @override
@@ -44,21 +47,21 @@ class _VideoBackgroundState extends State<VideoBackground> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_controller.value.isInitialized) {
+      return Container(color: Colors.black);
+    }
     return Stack(
       children: [
-        if (_controller.value.isInitialized)
-          SizedBox.expand(
-            child: FittedBox(
-              fit: widget.fit,
-              child: SizedBox(
-                width: _controller.value.size.width,
-                height: _controller.value.size.height,
-                child: VideoPlayer(_controller),
-              ),
+        SizedBox.expand(
+          child: FittedBox(
+            fit: widget.fit,
+            child: SizedBox(
+              width: _controller.value.size.width,
+              height: _controller.value.size.height,
+              child: VideoPlayer(_controller),
             ),
-          )
-        else
-          Container(color: Colors.grey.shade200), // пока грузится
+          ),
+        ),
         widget.child,
       ],
     );

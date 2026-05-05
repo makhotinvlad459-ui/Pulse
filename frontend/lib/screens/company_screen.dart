@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../services/api_client.dart';
 import '../providers/auth_provider.dart';
+import '../providers/locale_provider.dart';
 import '../models/user.dart';
 import '../models/company.dart';
 import '../widgets/company/account_card.dart';
@@ -23,6 +24,7 @@ import '../widgets/matrix_rain.dart';
 import '../providers/theme_provider.dart';
 import '../widgets/company/orders_tab.dart';
 import '../widgets/company/counterparties_tab.dart';
+import 'package:frontend/l10n/app_localizations.dart';
 
 class RainTheme {
   final Color color;
@@ -202,8 +204,8 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
     } catch (e) {
       setState(() => _loading = false);
       if (mounted)
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Ошибка загрузки: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('${AppLocalizations.of(context)!.error}: $e')));
     }
   }
 
@@ -234,7 +236,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
   void _openArchive() {
     if (_archiveAccountId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Архивный счёт не найден.')),
+        SnackBar(content: Text(AppLocalizations.of(context)!.archiveNotFound)),
       );
       return;
     }
@@ -257,9 +259,12 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Подписываемся на смену языка для перерисовки
+    ref.watch(localeProvider);
     final authState = ref.watch(authProvider);
     final currentTheme = ref.watch(themeProvider);
     final colorScheme = Theme.of(context).colorScheme;
+    final t = AppLocalizations.of(context)!;
 
     final isFounder = authState.user?.role == UserRole.founder;
     final currentUserRole = widget.company.currentUserRole;
@@ -297,7 +302,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
     final List<Widget> tabWidgets = [];
 
     if (effectivePermissions.contains('view_operations')) {
-      tabs.add(const Tab(icon: Icon(Icons.receipt), text: 'Операции'));
+      tabs.add(Tab(icon: const Icon(Icons.receipt), text: t.tabOperations));
       tabWidgets.add(TransactionsTab(
         companyId: widget.company.id,
         onRefresh: _refresh,
@@ -308,7 +313,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
       ));
     }
     if (effectivePermissions.contains('view_showcase')) {
-      tabs.add(const Tab(icon: Icon(Icons.storefront), text: 'Витрина'));
+      tabs.add(Tab(icon: const Icon(Icons.storefront), text: t.tabShowcase));
       tabWidgets.add(ShowcaseTab(
         companyId: widget.company.id,
         onRefresh: _refresh,
@@ -316,7 +321,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
       ));
     }
     if (effectivePermissions.contains('view_chat') || effectivePermissions.contains('view_tasks')) {
-      tabs.add(const Tab(icon: Icon(Icons.chat_bubble), text: 'Чат/Задачи'));
+      tabs.add(Tab(icon: const Icon(Icons.chat_bubble), text: t.tabChatTasks));
       tabWidgets.add(ChatAndTasksTab(
         companyId: widget.company.id,
         isManager: isManager,
@@ -325,14 +330,14 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
       ));
     }
     if (effectivePermissions.contains('view_products')) {
-      tabs.add(const Tab(icon: Icon(Icons.inventory), text: 'Склад'));
+      tabs.add(Tab(icon: const Icon(Icons.inventory), text: t.tabStock));
       tabWidgets.add(StockTab(
         companyId: widget.company.id,
         permissions: effectivePermissions,
       ));
     }
     if (effectivePermissions.contains('view_reports')) {
-      tabs.add(const Tab(icon: Icon(Icons.bar_chart), text: 'Отчеты'));
+      tabs.add(Tab(icon: const Icon(Icons.bar_chart), text: t.tabReports));
       tabWidgets.add(ReportsTab(
         key: _reportsTabKey,
         companyId: widget.company.id,
@@ -340,7 +345,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
       ));
     }
     if (effectivePermissions.contains('view_orders')) {
-      tabs.add(const Tab(icon: Icon(Icons.assignment), text: 'Заказы'));
+      tabs.add(Tab(icon: const Icon(Icons.assignment), text: t.tabOrders));
       tabWidgets.add(OrdersTab(
         companyId: widget.company.id,
         permissions: effectivePermissions,
@@ -349,7 +354,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
       ));
     }
     if (effectivePermissions.contains('view_counterparties')) {
-      tabs.add(const Tab(icon: Icon(Icons.people), text: 'Контрагенты'));
+      tabs.add(Tab(icon: const Icon(Icons.people), text: t.tabCounterparties));
       tabWidgets.add(CounterpartiesTab(
         companyId: widget.company.id,
         permissions: effectivePermissions,
@@ -429,33 +434,33 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                           itemBuilder: (context) {
                             final items = <PopupMenuItem<String>>[];
                             if (showEditCompany) {
-                              items.add(const PopupMenuItem(
+                              items.add(PopupMenuItem(
                                   value: 'edit',
-                                  child: Text('Редактировать компанию')));
+                                  child: Text(t.editCompany)));
                             }
                             if (showAddAccount) {
-                              items.add(const PopupMenuItem(
+                              items.add(PopupMenuItem(
                                   value: 'add_account',
-                                  child: Text('Добавить счёт')));
+                                  child: Text(t.addAccount)));
                             }
                             if (showManageCategories) {
-                              items.add(const PopupMenuItem(
+                              items.add(PopupMenuItem(
                                   value: 'manage_categories',
-                                  child: Text('Управление категориями')));
+                                  child: Text(t.manageCategories)));
                             }
                             if (showManageEmployees) {
-                              items.add(const PopupMenuItem(
+                              items.add(PopupMenuItem(
                                   value: 'manage_employees',
-                                  child: Text('Управление сотрудниками')));
+                                  child: Text(t.manageEmployees)));
                             }
                             if (showArchive) {
-                              items.add(const PopupMenuItem(
-                                  value: 'archive', child: Text('Архив')));
+                              items.add(PopupMenuItem(
+                                  value: 'archive', child: Text(t.archive)));
                             }
                             if (showDeleteCompany) {
                               items.add(PopupMenuItem(
                                   value: 'delete',
-                                  child: Text('Удалить компанию',
+                                  child: Text(t.deleteCompany,
                                       style: TextStyle(color: colorScheme.error))));
                             }
                             return items;
@@ -499,7 +504,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Text(
-                              'Сообщения: $_unreadMessagesCount',
+                              '${t.messages}: $_unreadMessagesCount',
                               style: const TextStyle(color: Colors.white, fontSize: 12),
                             ),
                           ),
@@ -511,7 +516,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Text(
-                              'Задачи: $_pendingTasksCount',
+                              '${t.tasks}: $_pendingTasksCount',
                               style: const TextStyle(color: Colors.white, fontSize: 12),
                             ),
                           ),
@@ -541,7 +546,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                                         await _refresh();
                                       } catch (e) {
                                         ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(content: Text('Ошибка: $e')));
+                                            SnackBar(content: Text('${t.error}: $e')));
                                       }
                                     },
                                     isFounder: isFounder,
@@ -582,18 +587,19 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
   }
 
   Future<void> _confirmDeleteCompany() async {
+    final t = AppLocalizations.of(context)!;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Удалить компанию?'),
-        content: const Text('Все данные компании будут безвозвратно удалены.'),
+        title: Text(t.deleteCompanyConfirmTitle),
+        content: Text(t.deleteCompanyConfirmContent),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Отмена')),
+              child: Text(t.cancel)),
           TextButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Удалить', style: TextStyle(color: Colors.red))),
+              child: Text(t.delete, style: const TextStyle(color: Colors.red))),
         ],
       ),
     );
@@ -603,13 +609,13 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
         await api.delete('/companies/${widget.company.id}');
         if (mounted) {
           ScaffoldMessenger.of(context)
-              .showSnackBar(const SnackBar(content: Text('Компания удалена')));
+              .showSnackBar(SnackBar(content: Text(t.companyDeleted)));
           Navigator.pop(context, true);
         }
       } catch (e) {
         if (mounted)
           ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+              .showSnackBar(SnackBar(content: Text('${t.error}: $e')));
       }
     }
   }

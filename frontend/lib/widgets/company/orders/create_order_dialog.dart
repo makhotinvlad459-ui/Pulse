@@ -1,10 +1,13 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../services/api_client.dart';
+import '../../../providers/locale_provider.dart';
 import 'add_material_dialog.dart';
+import 'package:frontend/l10n/app_localizations.dart';
 
-class CreateOrderDialog extends StatefulWidget {
+class CreateOrderDialog extends ConsumerStatefulWidget {
   final int companyId;
   final List<Map<String, dynamic>> members;
   final VoidCallback onOrderCreated;
@@ -17,10 +20,10 @@ class CreateOrderDialog extends StatefulWidget {
   });
 
   @override
-  State<CreateOrderDialog> createState() => _CreateOrderDialogState();
+  ConsumerState<CreateOrderDialog> createState() => _CreateOrderDialogState();
 }
 
-class _CreateOrderDialogState extends State<CreateOrderDialog> {
+class _CreateOrderDialogState extends ConsumerState<CreateOrderDialog> {
   final _titleController = TextEditingController();
   final _descController = TextEditingController();
   final _workPriceController = TextEditingController();
@@ -33,6 +36,13 @@ class _CreateOrderDialogState extends State<CreateOrderDialog> {
   @override
   void initState() {
     super.initState();
+    // Не вызываем AppLocalizations.of(context) здесь
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Загружаем данные после того, как локализация стала доступна
     _loadProducts();
   }
 
@@ -40,19 +50,26 @@ class _CreateOrderDialogState extends State<CreateOrderDialog> {
     final api = ApiClient();
     try {
       final res = await api.get('/products/', queryParameters: {'company_id': widget.companyId});
-      setState(() {
-        _products = res.data;
-        _loadingProducts = false;
-      });
+      if (mounted) {
+        setState(() {
+          _products = res.data;
+          _loadingProducts = false;
+        });
+      }
     } catch (e) {
-      setState(() => _loadingProducts = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка загрузки товаров: $e')));
+      if (mounted) {
+        setState(() => _loadingProducts = false);
+        // Локализация здесь не вызывается, чтобы избежать ошибки. Можно использовать контекст, но он уже доступен.
+        final t = AppLocalizations.of(context)!;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+      }
     }
   }
 
   Future<void> _createOrder() async {
+    final t = AppLocalizations.of(context)!;
     if (_titleController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Введите название')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.enterTitle)));
       return;
     }
     final api = ApiClient();
@@ -72,17 +89,20 @@ class _CreateOrderDialogState extends State<CreateOrderDialog> {
         'items': orderItems,
       });
       widget.onOrderCreated();
-      Navigator.pop(context);
+      if (mounted) Navigator.pop(context);
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(localeProvider);
+    final t = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
+
     return AlertDialog(
-      title: Text('Новый заказ', style: TextStyle(color: colorScheme.onSurface)),
+      title: Text(t.newOrderTitle, style: TextStyle(color: colorScheme.onSurface)),
       content: SizedBox(
         width: double.maxFinite,
         child: SingleChildScrollView(
@@ -91,30 +111,30 @@ class _CreateOrderDialogState extends State<CreateOrderDialog> {
             children: [
               TextField(
                 controller: _titleController,
-                decoration: InputDecoration(labelText: 'Название*', labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+                decoration: InputDecoration(labelText: t.titleRequired, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
                 style: TextStyle(color: colorScheme.onSurface),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: _descController,
-                decoration: InputDecoration(labelText: 'Описание', labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+                decoration: InputDecoration(labelText: t.descriptionLabel, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
                 style: TextStyle(color: colorScheme.onSurface),
                 maxLines: 3,
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: _workPriceController,
-                decoration: InputDecoration(labelText: 'Цена работы', labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+                decoration: InputDecoration(labelText: t.workPrice, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
                 keyboardType: TextInputType.number,
                 style: TextStyle(color: colorScheme.onSurface),
               ),
               const SizedBox(height: 8),
               DropdownButtonFormField<int>(
-                decoration: InputDecoration(labelText: 'Назначить ответственного', labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+                decoration: InputDecoration(labelText: t.assignResponsible, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
                 dropdownColor: colorScheme.surface,
                 style: TextStyle(color: colorScheme.onSurface),
                 items: [
-                  const DropdownMenuItem(value: null, child: Text('Не назначен')),
+                  DropdownMenuItem(value: null, child: Text(t.notAssigned)),
                   ...widget.members.map((m) => DropdownMenuItem(
                     value: m['id'],
                     child: Text(m['full_name']),
@@ -124,8 +144,8 @@ class _CreateOrderDialogState extends State<CreateOrderDialog> {
               ),
               const SizedBox(height: 8),
               ListTile(
-                title: Text('Дедлайн', style: TextStyle(color: colorScheme.onSurface)),
-                trailing: Text(_deadline == null ? 'Не выбран' : DateFormat('dd.MM.yyyy').format(_deadline!),
+                title: Text(t.deadlineLabel, style: TextStyle(color: colorScheme.onSurface)),
+                trailing: Text(_deadline == null ? t.notSelected : DateFormat('dd.MM.yyyy').format(_deadline!),
                     style: TextStyle(color: colorScheme.onSurfaceVariant)),
                 onTap: () async {
                   final picked = await showDatePicker(
@@ -140,7 +160,7 @@ class _CreateOrderDialogState extends State<CreateOrderDialog> {
               const Divider(),
               Row(
                 children: [
-                  Text('Материалы', style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
+                  Text(t.materialsLabel, style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
                   const Spacer(),
                   if (!_loadingProducts)
                     IconButton(
@@ -173,7 +193,7 @@ class _CreateOrderDialogState extends State<CreateOrderDialog> {
                     return ListTile(
                       dense: true,
                       title: Text(it['product_name'], style: TextStyle(color: colorScheme.onSurface)),
-                      subtitle: Text('${it['quantity']} шт × ${it['unit_price']} ₽ = ${it['total']} ₽'),
+                      subtitle: Text('${it['quantity']} ${t.pcs} × ${it['unit_price']} ₽ = ${it['total']} ₽'),
                       trailing: IconButton(
                         icon: const Icon(Icons.delete, color: Colors.red),
                         onPressed: () => setState(() => _items.removeAt(idx)),
@@ -183,17 +203,21 @@ class _CreateOrderDialogState extends State<CreateOrderDialog> {
                 ),
               const SizedBox(height: 8),
               if (_items.isNotEmpty)
-                Text('Сумма материалов: ${_items.fold<double>(0, (s, i) => s + i['total']).toStringAsFixed(2)} ₽',
+                Text('${t.materialsTotal}: ${_items.fold<double>(0, (s, i) => s + i['total']).toStringAsFixed(2)} ₽',
                     style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
             ],
           ),
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: Text('Отмена', style: TextStyle(color: colorScheme.onSurfaceVariant))),
+        TextButton(onPressed: () => Navigator.pop(context), child: Text(t.cancel, style: TextStyle(color: colorScheme.onSurfaceVariant))),
         ElevatedButton(
           onPressed: _createOrder,
-          child: const Text('Создать'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: colorScheme.primary,
+            foregroundColor: colorScheme.onPrimary,
+          ),
+          child: Text(t.createButton),
         ),
       ],
     );

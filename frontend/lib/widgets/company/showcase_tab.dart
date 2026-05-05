@@ -5,14 +5,16 @@ import 'package:intl/intl.dart';
 import 'package:reorderable_grid/reorderable_grid.dart';
 import '../../services/api_client.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/locale_provider.dart';
 import '../../models/user.dart';
 import '../../models/showcase_item.dart';
 import 'recipe_editor.dart';
+import 'package:frontend/l10n/app_localizations.dart';
 
 class ShowcaseTab extends ConsumerStatefulWidget {
   final int companyId;
   final VoidCallback? onRefresh;
-  final Set<String> permissions;   // права текущего пользователя
+  final Set<String> permissions;
 
   const ShowcaseTab({
     super.key,
@@ -62,14 +64,12 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
     }
   }
 
-  // Проверка прав на редактирование витрины (добавление/удаление/изменение/порядок)
   bool get _canEdit {
     final authState = ref.read(authProvider);
     final isFounder = authState.user?.role == UserRole.founder;
     return isFounder || widget.permissions.contains('edit_showcase');
   }
 
-  // Проверка права на продажу
   bool get _canSell {
     final authState = ref.read(authProvider);
     final isFounder = authState.user?.role == UserRole.founder;
@@ -87,6 +87,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
 
   Future<void> _openReorderDialog() async {
     if (!_canEdit) return;
+    final t = AppLocalizations.of(context)!;
     List<ShowcaseItem> tempItems = List.from(_items);
     await showDialog(
       context: context,
@@ -94,7 +95,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
         builder: (context, setStateDialog) {
           final colorScheme = Theme.of(context).colorScheme;
           return AlertDialog(
-            title: Text('Изменить порядок', style: TextStyle(color: colorScheme.onSurface)),
+            title: Text(t.changeOrder, style: TextStyle(color: colorScheme.onSurface)),
             content: Container(
               width: double.maxFinite,
               height: 400,
@@ -117,7 +118,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
               ),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: Text('Отмена', style: TextStyle(color: colorScheme.onSurfaceVariant))),
+              TextButton(onPressed: () => Navigator.pop(context), child: Text(t.cancel, style: TextStyle(color: colorScheme.onSurfaceVariant))),
               ElevatedButton(
                 onPressed: () async {
                   await _saveOrder(tempItems);
@@ -126,7 +127,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                   });
                   Navigator.pop(context);
                 },
-                child: const Text('Сохранить'),
+                child: Text(t.save),
               ),
             ],
           );
@@ -137,6 +138,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
 
   Future<void> _addItem() async {
     if (!_canEdit) return;
+    final t = AppLocalizations.of(context)!;
     final nameController = TextEditingController();
     final priceController = TextEditingController();
     int? categoryId;
@@ -148,20 +150,20 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
         builder: (context, setStateDialog) {
           final colorScheme = Theme.of(context).colorScheme;
           return AlertDialog(
-            title: Text('Новый товар/услуга', style: TextStyle(color: colorScheme.onSurface)),
+            title: Text(t.newShowcaseItem, style: TextStyle(color: colorScheme.onSurface)),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   TextField(
                     controller: nameController,
-                    decoration: InputDecoration(labelText: 'Название', labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+                    decoration: InputDecoration(labelText: t.nameLabel, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
                     style: TextStyle(color: colorScheme.onSurface),
                   ),
                   const SizedBox(height: 8),
                   TextField(
                     controller: priceController,
-                    decoration: InputDecoration(labelText: 'Цена', labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+                    decoration: InputDecoration(labelText: t.priceLabel, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
                     keyboardType: TextInputType.number,
                     style: TextStyle(color: colorScheme.onSurface),
                   ),
@@ -173,7 +175,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                       ..._categories.map((c) => DropdownMenuItem(value: c['id'], child: Text('${c['icon'] ?? '📁'} ${c['name']}'))),
                     ],
                     onChanged: (v) => categoryId = v,
-                    decoration: InputDecoration(labelText: 'Категория (необязательно)', labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+                    decoration: InputDecoration(labelText: t.categoryOptional, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
                     dropdownColor: colorScheme.surface,
                     style: TextStyle(color: colorScheme.onSurface),
                   ),
@@ -190,7 +192,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
               ),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: Text('Отмена', style: TextStyle(color: colorScheme.onSurfaceVariant))),
+              TextButton(onPressed: () => Navigator.pop(context), child: Text(t.cancel, style: TextStyle(color: colorScheme.onSurfaceVariant))),
               ElevatedButton(
                 onPressed: () async {
                   final name = nameController.text.trim();
@@ -212,10 +214,10 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                     Navigator.pop(context);
                     _loadData();
                   } catch (e) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
                   }
                 },
-                child: const Text('Создать'),
+                child: Text(t.create),
               ),
             ],
           );
@@ -226,6 +228,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
 
   Future<void> _editItem(ShowcaseItem item) async {
     if (!_canEdit) return;
+    final t = AppLocalizations.of(context)!;
     final nameController = TextEditingController(text: item.name);
     final priceController = TextEditingController(text: item.price.toString());
     int? categoryId = item.categoryId;
@@ -250,20 +253,20 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
         builder: (context, setStateDialog) {
           final colorScheme = Theme.of(context).colorScheme;
           return AlertDialog(
-            title: Text('Редактировать', style: TextStyle(color: colorScheme.onSurface)),
+            title: Text(t.editShowcaseItem, style: TextStyle(color: colorScheme.onSurface)),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   TextField(
                     controller: nameController,
-                    decoration: InputDecoration(labelText: 'Название', labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+                    decoration: InputDecoration(labelText: t.nameLabel, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
                     style: TextStyle(color: colorScheme.onSurface),
                   ),
                   const SizedBox(height: 8),
                   TextField(
                     controller: priceController,
-                    decoration: InputDecoration(labelText: 'Цена', labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+                    decoration: InputDecoration(labelText: t.priceLabel, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
                     keyboardType: TextInputType.number,
                     style: TextStyle(color: colorScheme.onSurface),
                   ),
@@ -275,7 +278,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                       ..._categories.map((c) => DropdownMenuItem(value: c['id'], child: Text('${c['icon'] ?? '📁'} ${c['name']}'))),
                     ],
                     onChanged: (v) => categoryId = v,
-                    decoration: InputDecoration(labelText: 'Категория (необязательно)', labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+                    decoration: InputDecoration(labelText: t.categoryOptional, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
                     dropdownColor: colorScheme.surface,
                     style: TextStyle(color: colorScheme.onSurface),
                   ),
@@ -292,7 +295,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
               ),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: Text('Отмена', style: TextStyle(color: colorScheme.onSurfaceVariant))),
+              TextButton(onPressed: () => Navigator.pop(context), child: Text(t.cancel, style: TextStyle(color: colorScheme.onSurfaceVariant))),
               ElevatedButton(
                 onPressed: () async {
                   final name = nameController.text.trim();
@@ -314,10 +317,10 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                     Navigator.pop(context);
                     _loadData();
                   } catch (e) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
                   }
                 },
-                child: const Text('Сохранить'),
+                child: Text(t.save),
               ),
             ],
           );
@@ -328,14 +331,15 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
 
   Future<void> _deleteItem(ShowcaseItem item) async {
     if (!_canEdit) return;
+    final t = AppLocalizations.of(context)!;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Удалить элемент?'),
-        content: const Text('Действие необратимо.'),
+        title: Text(t.deleteShowcaseItemTitle),
+        content: Text(t.deleteShowcaseItemContent),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отмена')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Удалить', style: TextStyle(color: Colors.red))),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(t.cancel)),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: Text(t.delete, style: const TextStyle(color: Colors.red))),
         ],
       ),
     );
@@ -344,13 +348,13 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
       await _api.delete('/showcase/${item.id}', queryParameters: {'company_id': widget.companyId});
       _loadData();
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
     }
   }
 
-  // Продажа одного товара (из меню)
   Future<void> _sellItem(ShowcaseItem item) async {
     if (!_canSell) return;
+    final t = AppLocalizations.of(context)!;
     double quantity = 1.0;
     double salePrice = item.price;
     final quantityController = TextEditingController(text: quantity.toString());
@@ -369,7 +373,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
         builder: (context, setStateDialog) {
           final colorScheme = Theme.of(context).colorScheme;
           return AlertDialog(
-            title: Text('Продажа: ${item.name}', style: TextStyle(color: colorScheme.onSurface)),
+            title: Text('${t.sell}: ${item.name}', style: TextStyle(color: colorScheme.onSurface)),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -379,7 +383,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                       Expanded(
                         child: TextField(
                           controller: quantityController,
-                          decoration: InputDecoration(labelText: 'Количество', labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+                          decoration: InputDecoration(labelText: t.quantityLabel, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
                           keyboardType: TextInputType.number,
                           style: TextStyle(color: colorScheme.onSurface),
                           onChanged: (v) {
@@ -418,7 +422,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Text('Итого: ${salePrice.toStringAsFixed(2)} ₽', style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
+                  Text('${t.total}: ${salePrice.toStringAsFixed(2)} ₽', style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
                   const SizedBox(height: 8),
                   Row(
                     children: [
@@ -429,7 +433,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                             backgroundColor: selectedAccountId == cashAccountId ? colorScheme.primary.withOpacity(0.2) : colorScheme.surfaceContainerHighest,
                             foregroundColor: colorScheme.onSurface,
                           ),
-                          child: const Text('Наличные'),
+                          child: Text(t.cash),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -440,14 +444,14 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                             backgroundColor: selectedAccountId == bankAccountId ? colorScheme.primary.withOpacity(0.2) : colorScheme.surfaceContainerHighest,
                             foregroundColor: colorScheme.onSurface,
                           ),
-                          child: const Text('Банк'),
+                          child: Text(t.bank),
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 8),
                   ListTile(
-                    title: Text('Дата', style: TextStyle(color: colorScheme.onSurface)),
+                    title: Text(t.date, style: TextStyle(color: colorScheme.onSurface)),
                     trailing: Text(DateFormat('dd.MM.yyyy').format(date), style: TextStyle(color: colorScheme.onSurfaceVariant)),
                     onTap: () async {
                       final picked = await showDatePicker(context: context, initialDate: date, firstDate: DateTime(2000), lastDate: DateTime.now());
@@ -457,18 +461,18 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                   const SizedBox(height: 8),
                   TextField(
                     onChanged: (v) => counterparty = v,
-                    decoration: InputDecoration(labelText: 'Контрагент (необязательно)', labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+                    decoration: InputDecoration(labelText: t.counterpartyOptional, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
                     style: TextStyle(color: colorScheme.onSurface),
                   ),
                 ],
               ),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: Text('Отмена', style: TextStyle(color: colorScheme.onSurfaceVariant))),
+              TextButton(onPressed: () => Navigator.pop(context), child: Text(t.cancel, style: TextStyle(color: colorScheme.onSurfaceVariant))),
               ElevatedButton(
                 onPressed: () async {
                   if (selectedAccountId == null) {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Выберите способ оплаты')));
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.selectPaymentMethod)));
                     return;
                   }
                   List<Map<String, dynamic>> items = [];
@@ -494,7 +498,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                     'amount': salePrice,
                     'date': date.toIso8601String(),
                     'account_id': selectedAccountId,
-                    'description': 'Продажа с витрины: ${item.name} (${quantity.toStringAsFixed(2)} шт)',
+                    'description': '${t.saleFromShowcase}: ${item.name} (${quantity.toStringAsFixed(2)} ${t.pcs})',
                     'counterparty': counterparty.isNotEmpty ? counterparty : null,
                     'items': items,
                     'category_id': item.categoryId,
@@ -504,14 +508,14 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                   try {
                     await _api.post('/transactions/', queryParameters: {'company_id': widget.companyId}, data: data);
                     Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Продажа оформлена')));
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.saleCompleted)));
                     widget.onRefresh?.call();
                     _loadData();
                   } catch (e) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
                   }
                 },
-                child: const Text('Продать'),
+                child: Text(t.sell),
               ),
             ],
           );
@@ -522,6 +526,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
 
   Future<void> _openBulkSaleDialog() async {
     if (!_canSell) return;
+    final t = AppLocalizations.of(context)!;
     _bulkSaleItems = _items.map((item) => {
       'id': item.id,
       'name': item.name,
@@ -552,7 +557,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
         builder: (context, setStateDialog) {
           final colorScheme = Theme.of(context).colorScheme;
           return AlertDialog(
-            title: Text('Продажа списком', style: TextStyle(color: colorScheme.onSurface)),
+            title: Text(t.bulkSale, style: TextStyle(color: colorScheme.onSurface)),
             content: Container(
               width: double.maxFinite,
               height: MediaQuery.of(context).size.height * 0.6,
@@ -631,7 +636,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                             backgroundColor: selectedAccountId == cashAccountId ? colorScheme.primary.withOpacity(0.2) : colorScheme.surfaceContainerHighest,
                             foregroundColor: colorScheme.onSurface,
                           ),
-                          child: const Text('Наличные'),
+                          child: Text(t.cash),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -642,14 +647,14 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                             backgroundColor: selectedAccountId == bankAccountId ? colorScheme.primary.withOpacity(0.2) : colorScheme.surfaceContainerHighest,
                             foregroundColor: colorScheme.onSurface,
                           ),
-                          child: const Text('Банк'),
+                          child: Text(t.bank),
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 8),
                   ListTile(
-                    title: Text('Дата', style: TextStyle(color: colorScheme.onSurface)),
+                    title: Text(t.date, style: TextStyle(color: colorScheme.onSurface)),
                     trailing: Text(DateFormat('dd.MM.yyyy').format(date), style: TextStyle(color: colorScheme.onSurfaceVariant)),
                     onTap: () async {
                       final picked = await showDatePicker(context: context, initialDate: date, firstDate: DateTime(2000), lastDate: DateTime.now());
@@ -659,23 +664,23 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                   const SizedBox(height: 8),
                   TextField(
                     onChanged: (v) => counterparty = v,
-                    decoration: InputDecoration(labelText: 'Контрагент (необязательно)', labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+                    decoration: InputDecoration(labelText: t.counterpartyOptional, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
                     style: TextStyle(color: colorScheme.onSurface),
                   ),
                 ],
               ),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: Text('Отмена', style: TextStyle(color: colorScheme.onSurfaceVariant))),
+              TextButton(onPressed: () => Navigator.pop(context), child: Text(t.cancel, style: TextStyle(color: colorScheme.onSurfaceVariant))),
               ElevatedButton(
                 onPressed: () async {
                   final selectedItems = _bulkSaleItems.where((i) => i['quantity'] > 0).toList();
                   if (selectedItems.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Выберите хотя бы один товар')));
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.selectAtLeastOne)));
                     return;
                   }
                   if (selectedAccountId == null) {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Выберите способ оплаты')));
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.selectPaymentMethod)));
                     return;
                   }
                   for (var si in selectedItems) {
@@ -702,7 +707,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                       'amount': salePrice,
                       'date': date.toIso8601String(),
                       'account_id': selectedAccountId,
-                      'description': 'Продажа с витрины: ${si['name']} (${qty.toStringAsFixed(2)} шт)',
+                      'description': '${t.saleFromShowcase}: ${si['name']} (${qty.toStringAsFixed(2)} ${t.pcs})',
                       'counterparty': counterparty.isNotEmpty ? counterparty : null,
                       'items': items,
                       'category_id': si['category_id'],
@@ -712,11 +717,11 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                     await _api.post('/transactions/', queryParameters: {'company_id': widget.companyId}, data: data);
                   }
                   Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Продажа оформлена')));
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.saleCompleted)));
                   widget.onRefresh?.call();
                   _loadData();
                 },
-                child: const Text('Продать'),
+                child: Text(t.sell),
               ),
             ],
           );
@@ -726,6 +731,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
   }
 
   void _showMenu(ShowcaseItem item) {
+    final t = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
     showGeneralDialog(
       context: context,
@@ -758,7 +764,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                             _sellItem(item);
                           } : null,
                           icon: const Icon(Icons.sell),
-                          label: const Text('Продать'),
+                          label: Text(t.sell),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.green,
                             foregroundColor: Colors.white,
@@ -779,7 +785,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                                 _editItem(item);
                               },
                               icon: Icon(Icons.edit, size: 18, color: colorScheme.primary),
-                              label: Text('Редактировать', style: TextStyle(color: colorScheme.primary)),
+                              label: Text(t.edit, style: TextStyle(color: colorScheme.primary)),
                             ),
                             TextButton.icon(
                               onPressed: () {
@@ -787,7 +793,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                                 _deleteItem(item);
                               },
                               icon: const Icon(Icons.delete, size: 18, color: Colors.red),
-                              label: const Text('Удалить', style: TextStyle(color: Colors.red)),
+                              label: Text(t.delete, style: const TextStyle(color: Colors.red)),
                             ),
                           ],
                         ),
@@ -814,14 +820,14 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(localeProvider);
     final colorScheme = Theme.of(context).colorScheme;
+    final t = AppLocalizations.of(context)!;
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
 
     int crossAxisCount = MediaQuery.of(context).size.width > 900 ? 4 : (MediaQuery.of(context).size.width > 600 ? 3 : 2);
-
-    // Определяем, показывать ли панель управления (создание, продажа списком, порядок)
     final showManagementPanel = _canEdit || _canSell;
 
     return Column(
@@ -836,7 +842,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                     child: ElevatedButton.icon(
                       onPressed: _addItem,
                       icon: const Icon(Icons.add),
-                      label: const Text('Создать товар/услугу витрины'),
+                      label: Text(t.createShowcaseItem),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: colorScheme.primary,
                         foregroundColor: colorScheme.onPrimary,
@@ -851,7 +857,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                     child: ElevatedButton.icon(
                       onPressed: _openBulkSaleDialog,
                       icon: const Icon(Icons.shopping_cart),
-                      label: const Text('Продажа списком'),
+                      label: Text(t.bulkSale),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.green,
                         foregroundColor: Colors.white,
@@ -866,7 +872,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                   ElevatedButton.icon(
                     onPressed: _openReorderDialog,
                     icon: const Icon(Icons.swap_vert),
-                    label: const Text('Порядок'),
+                    label: Text(t.changeOrder),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: colorScheme.surfaceContainerHighest,
                       foregroundColor: colorScheme.onSurface,

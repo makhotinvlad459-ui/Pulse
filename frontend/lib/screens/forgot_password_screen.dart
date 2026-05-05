@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/api_client.dart';
+import '../providers/locale_provider.dart';
+import 'package:frontend/l10n/app_localizations.dart';
 
 class ForgotPasswordScreen extends ConsumerStatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -34,23 +36,42 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
       await api.post('/auth/forgot-password',
           data: {'email': _emailController.text.trim()});
       setState(() {
-        _message =
-            'Ссылка для сброса пароля отправлена на ваш email (в консоль сервера).';
+        _message = AppLocalizations.of(context)!.resetLinkSent;
         _loading = false;
       });
     } catch (e) {
       setState(() {
-        _message = 'Ошибка: ${e.toString()}';
+        _message = '${AppLocalizations.of(context)!.error}: ${e.toString()}';
         _loading = false;
       });
     }
+  }
+
+  void _setLanguage(Locale locale) {
+    ref.read(localeProvider.notifier).setLocale(locale);
   }
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('Восстановление пароля')),
+      appBar: AppBar(
+        title: Text(AppLocalizations.of(context)!.forgotPasswordTitle),
+        actions: [
+          Row(
+            children: [
+              IconButton(
+                icon: const Text('🇬🇧', style: TextStyle(fontSize: 28)),
+                onPressed: () => _setLanguage(const Locale('en')),
+              ),
+              IconButton(
+                icon: const Text('🇷🇺', style: TextStyle(fontSize: 28)),
+                onPressed: () => _setLanguage(const Locale('ru')),
+              ),
+            ],
+          ),
+        ],
+      ),
       body: Padding(
         padding: const EdgeInsets.all(24.0),
         child: Form(
@@ -60,22 +81,22 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
             children: [
               const SizedBox(height: 20),
               Text(
-                'Введите email, указанный при регистрации, и мы отправим ссылку для сброса пароля.',
+                AppLocalizations.of(context)!.forgotPasswordInstruction,
                 style: TextStyle(color: colorScheme.onSurfaceVariant),
               ),
               const SizedBox(height: 30),
               TextFormField(
                 controller: _emailController,
-                decoration: const InputDecoration(
-                  labelText: 'Email',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: AppLocalizations.of(context)!.emailLabel,
+                  border: const OutlineInputBorder(),
                 ),
                 validator: (value) {
                   if (value == null || value.isEmpty) {
-                    return 'Введите email';
+                    return AppLocalizations.of(context)!.enterEmail;
                   }
                   if (!value.contains('@') || !value.contains('.')) {
-                    return 'Введите корректный email';
+                    return AppLocalizations.of(context)!.invalidEmail;
                   }
                   return null;
                 },
@@ -89,7 +110,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                   child: Text(
                     _message!,
                     style: TextStyle(
-                      color: _message!.startsWith('Ошибка')
+                      color: _message!.startsWith(AppLocalizations.of(context)!.error)
                           ? Colors.red
                           : Colors.green,
                     ),
@@ -98,11 +119,11 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                 ),
               ElevatedButton(
                 onPressed: _loading ? null : _sendResetLink,
-                child: const Text('Отправить ссылку'),
+                child: Text(AppLocalizations.of(context)!.sendResetLink),
               ),
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Вернуться ко входу'),
+                child: Text(AppLocalizations.of(context)!.backToLogin),
               ),
             ],
           ),

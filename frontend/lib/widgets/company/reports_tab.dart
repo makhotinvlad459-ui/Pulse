@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../../services/api_client.dart';
+import '../../../providers/locale_provider.dart';
 import 'reports/period_selector.dart';
 import 'reports/summary_cards.dart';
 import 'reports/categories_column.dart';
@@ -12,8 +14,9 @@ import 'reports/sales_tables.dart';
 import 'reports/material_consumption_widget.dart';
 import 'reports/order_stats_widget.dart';
 import 'reports/counterparties_report_widget.dart';
+import 'package:frontend/l10n/app_localizations.dart';
 
-class ReportsTab extends StatefulWidget {
+class ReportsTab extends ConsumerStatefulWidget {
   final int companyId;
   final List<dynamic> categories;
   const ReportsTab({super.key, required this.companyId, required this.categories});
@@ -22,7 +25,7 @@ class ReportsTab extends StatefulWidget {
   ReportsTabState createState() => ReportsTabState();
 }
 
-class ReportsTabState extends State<ReportsTab> {
+class ReportsTabState extends ConsumerState<ReportsTab> {
   final ApiClient _api = ApiClient();
   late DateTime _startDate;
   late DateTime _endDate;
@@ -216,17 +219,13 @@ class ReportsTabState extends State<ReportsTab> {
       final data = res.data;
       List<dynamic> raw = data['by_category'] ?? [];
       List<Map<String, dynamic>> normalized = [];
-      double totalNoCat = 0;
       for (var item in raw) {
         final cat = item['category'];
         final total = (item['total'] as num).toDouble();
-        if (cat == null || cat.toString().isEmpty) {
-          totalNoCat += total;
-        } else {
+        if (cat != null && cat.toString().isNotEmpty) {
           normalized.add({'category_name': cat.toString(), 'total': total});
         }
       }
-      if (totalNoCat > 0) normalized.add({'category_name': 'Без категории', 'total': totalNoCat});
       _incomeByCategory = normalized;
     } catch (e) {}
   }
@@ -241,17 +240,13 @@ class ReportsTabState extends State<ReportsTab> {
       final data = res.data;
       List<dynamic> raw = data['by_category'] ?? [];
       List<Map<String, dynamic>> normalized = [];
-      double totalNoCat = 0;
       for (var item in raw) {
         final cat = item['category'];
         final total = (item['total'] as num).toDouble();
-        if (cat == null || cat.toString().isEmpty) {
-          totalNoCat += total;
-        } else {
+        if (cat != null && cat.toString().isNotEmpty) {
           normalized.add({'category_name': cat.toString(), 'total': total});
         }
       }
-      if (totalNoCat > 0) normalized.add({'category_name': 'Без категории', 'total': totalNoCat});
       _expenseByCategory = normalized;
     } catch (e) {}
   }
@@ -369,6 +364,8 @@ class ReportsTabState extends State<ReportsTab> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(localeProvider);
+    final t = AppLocalizations.of(context)!;
     if (_loading) return const Center(child: CircularProgressIndicator());
     final colorScheme = Theme.of(context).colorScheme;
 
@@ -392,8 +389,7 @@ class ReportsTabState extends State<ReportsTab> {
           SummaryCards(income: _totalIncome, expense: _totalExpense, profit: _totalProfit),
           const SizedBox(height: 24),
 
-          // ========== ВСЕГДА ВИДИМЫЕ БЛОКИ ==========
-          const Text('Динамика', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          Text(t.dynamics, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           DynamicsChart(
             incomeSpots: _incomeSpots,
@@ -403,15 +399,14 @@ class ReportsTabState extends State<ReportsTab> {
           ),
           const SizedBox(height: 24),
 
-          const Text('Наличные vs Безналичные', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          Text(t.cashVsNoncash, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           CashVsNoncashBar(cash: _cashVsNoncash['cash']!, noncash: _cashVsNoncash['noncash']!),
           const SizedBox(height: 24),
 
-          // ========== СВОРАЧИВАЕМЫЕ БЛОКИ ==========
           if (_incomeByCategory.isNotEmpty)
             ExpansionTile(
-              title: const Text('Доходы по категориям', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              title: Text(t.incomeByCategory, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               initiallyExpanded: false,
               children: [
                 CategoriesColumn(
@@ -429,7 +424,7 @@ class ReportsTabState extends State<ReportsTab> {
 
           if (_expenseByCategory.isNotEmpty)
             ExpansionTile(
-              title: const Text('Расходы по категориям', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              title: Text(t.expenseByCategory, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               initiallyExpanded: false,
               children: [
                 CategoriesColumn(
@@ -446,7 +441,7 @@ class ReportsTabState extends State<ReportsTab> {
             ),
 
           ExpansionTile(
-            title: const Text('Товары (приход/расход)', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            title: Text(t.productIncomeExpense, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             initiallyExpanded: false,
             children: [
               ProductTables(productIncome: _productIncome, productConsumption: _productConsumption),
@@ -454,7 +449,7 @@ class ReportsTabState extends State<ReportsTab> {
           ),
 
           ExpansionTile(
-            title: const Text('Продажи', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            title: Text(t.sales, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             initiallyExpanded: false,
             children: [
               SalesTables(
@@ -467,7 +462,7 @@ class ReportsTabState extends State<ReportsTab> {
           ),
 
           ExpansionTile(
-            title: const Text('Расход материалов в заказах', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            title: Text(t.materialConsumptionInOrders, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             initiallyExpanded: false,
             children: [
               MaterialConsumptionWidget(
@@ -479,7 +474,7 @@ class ReportsTabState extends State<ReportsTab> {
           ),
 
           ExpansionTile(
-            title: const Text('Статистика заказов', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            title: Text(t.orderStatistics, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             initiallyExpanded: false,
             children: [
               OrderStatsWidget(
@@ -491,7 +486,7 @@ class ReportsTabState extends State<ReportsTab> {
           ),
 
           ExpansionTile(
-            title: const Text('Контрагенты', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            title: Text(t.counterparties, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             initiallyExpanded: false,
             children: [
               CounterpartiesReportWidget(

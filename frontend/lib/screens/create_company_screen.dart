@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import '../services/api_client.dart';
+import '../providers/locale_provider.dart';
+import 'package:frontend/l10n/app_localizations.dart';
 
 class CreateCompanyScreen extends ConsumerStatefulWidget {
   const CreateCompanyScreen({super.key});
@@ -46,19 +48,20 @@ class _CreateCompanyScreenState extends ConsumerState<CreateCompanyScreen> {
       }
     } catch (e) {
       if (mounted)
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('${AppLocalizations.of(context)!.error}: $e')));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
   void _showCredentialsDialog(List<dynamic> credentials) {
+    final t = AppLocalizations.of(context)!;
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        title: const Text('Пароли сотрудников'),
+        title: Text(t.employeePasswords),
         content: SizedBox(
           width: 300,
           child: ListView.builder(
@@ -67,17 +70,16 @@ class _CreateCompanyScreenState extends ConsumerState<CreateCompanyScreen> {
             itemBuilder: (context, index) {
               final emp = credentials[index];
               final role = emp['role'] ?? 'employee';
-              final roleText = role == 'manager' ? 'Управляющий' : 'Сотрудник';
+              final roleText = role == 'manager' ? t.managerRole : t.employeeRole;
               return ListTile(
                 title: Text('${emp['full_name']} ($roleText)'),
-                subtitle: Text(
-                    'Телефон: ${emp['phone']}\nПароль: ${emp['password']}'),
+                subtitle: Text('${t.phoneLabel}: ${emp['phone']}\n${t.passwordLabel}: ${emp['password']}'),
                 trailing: IconButton(
                   icon: const Icon(Icons.copy),
                   onPressed: () {
                     Clipboard.setData(ClipboardData(text: emp['password']));
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Пароль скопирован')),
+                      SnackBar(content: Text(t.passwordCopied)),
                     );
                   },
                 ),
@@ -91,7 +93,7 @@ class _CreateCompanyScreenState extends ConsumerState<CreateCompanyScreen> {
               Navigator.pop(context);
               Navigator.pop(context, true);
             },
-            child: const Text('Закрыть'),
+            child: Text(t.close),
           ),
         ],
       ),
@@ -100,9 +102,15 @@ class _CreateCompanyScreenState extends ConsumerState<CreateCompanyScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Подписываемся на смену языка для перерисовки (опционально, но полезно)
+    ref.watch(localeProvider);
     final colorScheme = Theme.of(context).colorScheme;
+    final t = AppLocalizations.of(context)!;
     return Scaffold(
-      appBar: AppBar(title: const Text('Новая компания')),
+      appBar: AppBar(
+        title: Text(t.newCompany),
+     
+      ),
       body: Form(
         key: _formKey,
         child: ListView(
@@ -112,7 +120,7 @@ class _CreateCompanyScreenState extends ConsumerState<CreateCompanyScreen> {
                 controller: _nameController,
                 style: TextStyle(color: colorScheme.onSurface),
                 decoration: InputDecoration(
-                  labelText: 'Название*',
+                  labelText: t.companyName,
                   labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
                   border: OutlineInputBorder(
                     borderSide: BorderSide(color: colorScheme.outline),
@@ -124,13 +132,13 @@ class _CreateCompanyScreenState extends ConsumerState<CreateCompanyScreen> {
                     borderSide: BorderSide(color: colorScheme.primary),
                   ),
                 ),
-                validator: (v) => v!.isEmpty ? 'Введите название' : null),
+                validator: (v) => v!.isEmpty ? t.enterCompanyName : null),
             const SizedBox(height: 12),
             TextFormField(
                 controller: _managerNameController,
                 style: TextStyle(color: colorScheme.onSurface),
                 decoration: InputDecoration(
-                  labelText: 'Управляющий (ФИО)*',
+                  labelText: t.managerFullName,
                   labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
                   border: OutlineInputBorder(
                     borderSide: BorderSide(color: colorScheme.outline),
@@ -142,14 +150,14 @@ class _CreateCompanyScreenState extends ConsumerState<CreateCompanyScreen> {
                     borderSide: BorderSide(color: colorScheme.primary),
                   ),
                 ),
-                validator: (v) => v!.isEmpty ? 'Введите ФИО' : null),
+                validator: (v) => v!.isEmpty ? t.enterFullName : null),
             const SizedBox(height: 12),
             TextFormField(
                 controller: _managerPhoneController,
                 style: TextStyle(color: colorScheme.onSurface),
                 decoration: InputDecoration(
-                  labelText: 'Телефон управляющего (логин)*',
-                  helperText: 'Используется для входа, не менее 6 символов',
+                  labelText: t.managerPhoneLogin,
+                  helperText: t.phoneHelperText,
                   helperStyle: TextStyle(color: colorScheme.onSurfaceVariant),
                   labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
                   border: OutlineInputBorder(
@@ -163,12 +171,12 @@ class _CreateCompanyScreenState extends ConsumerState<CreateCompanyScreen> {
                   ),
                 ),
                 validator: (v) {
-                  if (v == null || v.isEmpty) return 'Введите телефон';
-                  if (v.length < 6) return 'Не менее 6 символов';
+                  if (v == null || v.isEmpty) return t.enterPhone;
+                  if (v.length < 6) return t.min6Chars;
                   return null;
                 }),
             const SizedBox(height: 20),
-            const Text('Сотрудники (необязательно):',
+            Text(t.employeesOptional,
                 style: TextStyle(fontWeight: FontWeight.bold)),
             ..._employees.asMap().entries.map((e) {
               int idx = e.key;
@@ -179,12 +187,12 @@ class _CreateCompanyScreenState extends ConsumerState<CreateCompanyScreen> {
                     children: [
                       TextFormField(
                         initialValue: e.value['full_name'],
-                        decoration: const InputDecoration(labelText: 'ФИО'),
+                        decoration: InputDecoration(labelText: t.fullName),
                         onChanged: (v) => _employees[idx]['full_name'] = v,
                       ),
                       TextFormField(
                         initialValue: e.value['phone'],
-                        decoration: const InputDecoration(labelText: 'Телефон (логин)'),
+                        decoration: InputDecoration(labelText: t.phoneLogin),
                         onChanged: (v) => _employees[idx]['phone'] = v,
                       ),
                       Align(
@@ -200,12 +208,12 @@ class _CreateCompanyScreenState extends ConsumerState<CreateCompanyScreen> {
             TextButton.icon(
                 onPressed: _addEmployee,
                 icon: const Icon(Icons.add),
-                label: const Text('Добавить сотрудника')),
+                label: Text(t.addEmployee)),
             const SizedBox(height: 20),
             _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : ElevatedButton(
-                    onPressed: _submit, child: const Text('Создать компанию')),
+                    onPressed: _submit, child: Text(t.createCompany)),
           ],
         ),
       ),
