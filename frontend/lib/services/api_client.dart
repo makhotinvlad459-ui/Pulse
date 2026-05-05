@@ -3,13 +3,13 @@ import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:flutter/widgets.dart';           // ← добавлено для WidgetsBinding
 import '../models/company.dart';
 import '../models/statistics.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'package:image_picker/image_picker.dart';
-import 'package:file_picker/file_picker.dart';
-
+import '../main.dart';                           // ← navigatorKey
 
 class ApiClient {
   static String get baseUrl {
@@ -18,21 +18,19 @@ class ApiClient {
     return 'http://localhost:8000';
   }
 
-  final Dio _dio = Dio(); // ← убрали BaseOptions из конструктора
+  final Dio _dio = Dio();
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
-  // Публичный геттер для доступа к Dio
   Dio get dio => _dio;
 
   ApiClient() {
-    // Устанавливаем опции с followRedirects и validateStatus
     _dio.options = BaseOptions(
       baseUrl: baseUrl,
       connectTimeout: const Duration(seconds: 30),
       receiveTimeout: const Duration(seconds: 30),
-      followRedirects: true,               // ← автоматом следовать редиректам
+      followRedirects: true,
       maxRedirects: 5,
-      validateStatus: (status) => status! < 500, // ← не считать 3xx ошибкой
+      validateStatus: (status) => status! < 500,
     );
 
     _dio.interceptors.add(InterceptorsWrapper(
@@ -43,9 +41,23 @@ class ApiClient {
         }
         return handler.next(options);
       },
+      onError: (DioException e, handler) async {
+        if (e.response?.statusCode == 401) {
+          await clearToken();
+          // Отложенный редирект на экран входа
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            navigatorKey.currentState?.pushNamedAndRemoveUntil(
+              '/login',
+              (route) => false,
+            );
+          });
+          return handler.reject(e);
+        }
+        return handler.next(e);
+      },
     ));
-    _dio.interceptors
-        .add(LogInterceptor(responseBody: true, requestBody: true));
+
+    _dio.interceptors.add(LogInterceptor(responseBody: true, requestBody: true));
   }
 
   // Базовые методы
@@ -73,7 +85,7 @@ class ApiClient {
           data: data,
           options: Options(contentType: Headers.formUrlEncodedContentType));
 
-  // Загрузка фото (для XFile)
+  // Загрузка фото (мобильное устройство)
   Future<void> uploadPhoto(String path, XFile photo,
       {Map<String, dynamic>? queryParameters}) async {
     final bytes = await photo.readAsBytes();
@@ -82,7 +94,7 @@ class ApiClient {
     await _dio.post(path, data: formData, queryParameters: queryParameters);
   }
 
-  // Загрузка байтов (для веб-файлов)
+  // Загрузка байтов (для веб‑файлов)
   Future<void> uploadPhotoBytes(String path, List<int> bytes, String filename,
       {Map<String, dynamic>? queryParameters}) async {
     final multipartFile = MultipartFile.fromBytes(bytes, filename: filename);
@@ -90,7 +102,7 @@ class ApiClient {
     await _dio.post(path, data: formData, queryParameters: queryParameters);
   }
 
-  // Получение файла (для просмотра)
+  // Получение файла
   Future<Response> getFile(String path,
       {Map<String, dynamic>? queryParameters}) async {
     return await _dio.get(path,
@@ -103,7 +115,7 @@ class ApiClient {
       await _storage.write(key: 'access_token', value: token);
   Future<void> clearToken() async => await _storage.delete(key: 'access_token');
 
-  // Методы для работы с API
+  // ========== Методы для работы с API ==========
   Future<List<Company>> getCompanies() async {
     final response = await get('/companies');
     final List<dynamic> data = response.data;
@@ -123,90 +135,91 @@ class ApiClient {
   Future<String?> getToken() async {
     return await _storage.read(key: 'access_token');
   }
+
   Future<dynamic> getDynamics(int companyId, DateTime startDate, DateTime endDate, String interval) async {
-  return await get('/statistics/dynamics', queryParameters: {
-    'company_id': companyId,
-    'start_date': startDate.toIso8601String(),
-    'end_date': endDate.toIso8601String(),
-    'interval': interval,
-  });
-}
-
-Future<dynamic> getIncomeByCategory(int companyId, DateTime startDate, DateTime endDate) async {
-  return await get('/statistics/income-by-category', queryParameters: {
-    'company_id': companyId,
-    'start_date': startDate.toIso8601String(),
-    'end_date': endDate.toIso8601String(),
-  });
-}
-
-Future<dynamic> getExpenseByCategory(int companyId, DateTime startDate, DateTime endDate) async {
-  return await get('/statistics/expense-by-category', queryParameters: {
-    'company_id': companyId,
-    'start_date': startDate.toIso8601String(),
-    'end_date': endDate.toIso8601String(),
-  });
-}
-
-Future<dynamic> getCashVsNoncash(int companyId, DateTime startDate, DateTime endDate) async {
-  return await get('/statistics/cash-vs-noncash', queryParameters: {
-    'company_id': companyId,
-    'start_date': startDate.toIso8601String(),
-    'end_date': endDate.toIso8601String(),
-  });
-}
-
-Future<dynamic> getProductSales(int companyId, DateTime startDate, DateTime endDate, String sortBy) async {
-  return await get('/statistics/product-sales', queryParameters: {
-    'company_id': companyId,
-    'start_date': startDate.toIso8601String(),
-    'end_date': endDate.toIso8601String(),
-    'sort_by': sortBy,
-  });
-}
-
-Future<dynamic> getShowcaseSales(int companyId, DateTime startDate, DateTime endDate, String sortBy) async {
-  return await get('/statistics/showcase-sales', queryParameters: {
-    'company_id': companyId,
-    'start_date': startDate.toIso8601String(),
-    'end_date': endDate.toIso8601String(),
-    'sort_by': sortBy,
-  });
-}
-
-Future<Map<String, dynamic>> uploadChatFile(
-  XFile? photo,
-  PlatformFile? webFile,
-  int companyId,
-) async {
-  final uri = Uri.parse('$baseUrl/chat/upload');
-  final request = http.MultipartRequest('POST', uri)
-    ..headers['Authorization'] = 'Bearer ${await getToken()}';
-  
-  if (photo != null) {
-    request.files.add(await http.MultipartFile.fromPath('file', photo.path));
-  } else if (webFile != null && webFile.bytes != null) {
-    request.files.add(http.MultipartFile.fromBytes(
-      'file',
-      webFile.bytes!,
-      filename: webFile.name,
-    ));
-  } else {
-    throw Exception('No file provided');
+    return await get('/statistics/dynamics', queryParameters: {
+      'company_id': companyId,
+      'start_date': startDate.toIso8601String(),
+      'end_date': endDate.toIso8601String(),
+      'interval': interval,
+    });
   }
-  
-  request.fields['company_id'] = companyId.toString();
-  final streamedResponse = await request.send();
-  final response = await http.Response.fromStream(streamedResponse);
-  
-  if (response.statusCode != 200) {
-    throw Exception('Failed to upload chat file: ${response.body}');
-  }
-  
-  return jsonDecode(response.body);
-}
 
-// ========== Методы для работы с правами (permissions) ==========
+  Future<dynamic> getIncomeByCategory(int companyId, DateTime startDate, DateTime endDate) async {
+    return await get('/statistics/income-by-category', queryParameters: {
+      'company_id': companyId,
+      'start_date': startDate.toIso8601String(),
+      'end_date': endDate.toIso8601String(),
+    });
+  }
+
+  Future<dynamic> getExpenseByCategory(int companyId, DateTime startDate, DateTime endDate) async {
+    return await get('/statistics/expense-by-category', queryParameters: {
+      'company_id': companyId,
+      'start_date': startDate.toIso8601String(),
+      'end_date': endDate.toIso8601String(),
+    });
+  }
+
+  Future<dynamic> getCashVsNoncash(int companyId, DateTime startDate, DateTime endDate) async {
+    return await get('/statistics/cash-vs-noncash', queryParameters: {
+      'company_id': companyId,
+      'start_date': startDate.toIso8601String(),
+      'end_date': endDate.toIso8601String(),
+    });
+  }
+
+  Future<dynamic> getProductSales(int companyId, DateTime startDate, DateTime endDate, String sortBy) async {
+    return await get('/statistics/product-sales', queryParameters: {
+      'company_id': companyId,
+      'start_date': startDate.toIso8601String(),
+      'end_date': endDate.toIso8601String(),
+      'sort_by': sortBy,
+    });
+  }
+
+  Future<dynamic> getShowcaseSales(int companyId, DateTime startDate, DateTime endDate, String sortBy) async {
+    return await get('/statistics/showcase-sales', queryParameters: {
+      'company_id': companyId,
+      'start_date': startDate.toIso8601String(),
+      'end_date': endDate.toIso8601String(),
+      'sort_by': sortBy,
+    });
+  }
+
+  Future<Map<String, dynamic>> uploadChatFile(
+    XFile? photo,
+    PlatformFile? webFile,
+    int companyId,
+  ) async {
+    final uri = Uri.parse('$baseUrl/chat/upload');
+    final request = http.MultipartRequest('POST', uri)
+      ..headers['Authorization'] = 'Bearer ${await getToken()}';
+    
+    if (photo != null) {
+      request.files.add(await http.MultipartFile.fromPath('file', photo.path));
+    } else if (webFile != null && webFile.bytes != null) {
+      request.files.add(http.MultipartFile.fromBytes(
+        'file',
+        webFile.bytes!,
+        filename: webFile.name,
+      ));
+    } else {
+      throw Exception('No file provided');
+    }
+    
+    request.fields['company_id'] = companyId.toString();
+    final streamedResponse = await request.send();
+    final response = await http.Response.fromStream(streamedResponse);
+    
+    if (response.statusCode != 200) {
+      throw Exception('Failed to upload chat file: ${response.body}');
+    }
+    
+    return jsonDecode(response.body);
+  }
+
+  // ========== Методы для работы с правами (permissions) ==========
   Future<List<dynamic>> getAllPermissions() async {
     final response = await get('/permissions/list');
     return response.data;

@@ -13,9 +13,7 @@ class CreateCompanyScreen extends ConsumerStatefulWidget {
 
 class _CreateCompanyScreenState extends ConsumerState<CreateCompanyScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _innController = TextEditingController();
   final _nameController = TextEditingController();
-  final _bankAccountController = TextEditingController();
   final _managerNameController = TextEditingController();
   final _managerPhoneController = TextEditingController();
   final List<Map<String, String>> _employees = [];
@@ -31,9 +29,7 @@ class _CreateCompanyScreenState extends ConsumerState<CreateCompanyScreen> {
     try {
       final api = ApiClient();
       final response = await api.post('/companies/', data: {
-        'inn': _innController.text,
         'name': _nameController.text,
-        'bank_account': _bankAccountController.text,
         'manager_full_name': _managerNameController.text,
         'manager_phone': _managerPhoneController.text,
         'employees': _employees
@@ -104,6 +100,7 @@ class _CreateCompanyScreenState extends ConsumerState<CreateCompanyScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(title: const Text('Новая компания')),
       body: Form(
@@ -112,31 +109,64 @@ class _CreateCompanyScreenState extends ConsumerState<CreateCompanyScreen> {
           padding: const EdgeInsets.all(16),
           children: [
             TextFormField(
-                controller: _innController,
-                decoration: const InputDecoration(labelText: 'ИНН'),
-                validator: (v) => v!.isEmpty ? 'Введите ИНН' : null),
-            const SizedBox(height: 12),
-            TextFormField(
                 controller: _nameController,
-                decoration: const InputDecoration(labelText: 'Название'),
+                style: TextStyle(color: colorScheme.onSurface),
+                decoration: InputDecoration(
+                  labelText: 'Название*',
+                  labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+                  border: OutlineInputBorder(
+                    borderSide: BorderSide(color: colorScheme.outline),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: colorScheme.outline),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: colorScheme.primary),
+                  ),
+                ),
                 validator: (v) => v!.isEmpty ? 'Введите название' : null),
             const SizedBox(height: 12),
             TextFormField(
-                controller: _bankAccountController,
-                decoration: const InputDecoration(labelText: 'Р/счёт'),
-                validator: (v) => v!.isEmpty ? 'Введите р/счёт' : null),
-            const SizedBox(height: 12),
-            TextFormField(
                 controller: _managerNameController,
-                decoration:
-                    const InputDecoration(labelText: 'Управляющий (ФИО)'),
+                style: TextStyle(color: colorScheme.onSurface),
+                decoration: InputDecoration(
+                  labelText: 'Управляющий (ФИО)*',
+                  labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+                  border: OutlineInputBorder(
+                    borderSide: BorderSide(color: colorScheme.outline),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: colorScheme.outline),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: colorScheme.primary),
+                  ),
+                ),
                 validator: (v) => v!.isEmpty ? 'Введите ФИО' : null),
             const SizedBox(height: 12),
             TextFormField(
                 controller: _managerPhoneController,
-                decoration:
-                    const InputDecoration(labelText: 'Телефон управляющего'),
-                validator: (v) => v!.isEmpty ? 'Введите телефон' : null),
+                style: TextStyle(color: colorScheme.onSurface),
+                decoration: InputDecoration(
+                  labelText: 'Телефон управляющего (логин)*',
+                  helperText: 'Используется для входа, не менее 6 символов',
+                  helperStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+                  labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+                  border: OutlineInputBorder(
+                    borderSide: BorderSide(color: colorScheme.outline),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: colorScheme.outline),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: colorScheme.primary),
+                  ),
+                ),
+                validator: (v) {
+                  if (v == null || v.isEmpty) return 'Введите телефон';
+                  if (v.length < 6) return 'Не менее 6 символов';
+                  return null;
+                }),
             const SizedBox(height: 20),
             const Text('Сотрудники (необязательно):',
                 style: TextStyle(fontWeight: FontWeight.bold)),
@@ -154,7 +184,7 @@ class _CreateCompanyScreenState extends ConsumerState<CreateCompanyScreen> {
                       ),
                       TextFormField(
                         initialValue: e.value['phone'],
-                        decoration: const InputDecoration(labelText: 'Телефон'),
+                        decoration: const InputDecoration(labelText: 'Телефон (логин)'),
                         onChanged: (v) => _employees[idx]['phone'] = v,
                       ),
                       Align(

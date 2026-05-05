@@ -12,6 +12,7 @@ import '../screens/create_company_screen.dart';
 import '../screens/company_screen.dart';
 import '../services/api_client.dart';
 import '../providers/theme_provider.dart';
+import '../models/user.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -92,7 +93,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         body: SafeArea(
           child: Column(
             children: [
-              // Верхняя панель: заголовок "Пульс" и кнопка "Настройки"
+              // Верхняя панель
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Row(
@@ -145,7 +146,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                 ),
               ),
-              // Основной список
+              // Список компаний
               Expanded(
                 child: RefreshIndicator(
                   onRefresh: () async {
@@ -160,15 +161,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       return ListView(
                         padding: const EdgeInsets.all(16),
                         children: [
-                          Row(
-                            children: [
-                              _StatCard(title: 'Суммарно', amount: overview.totalAll),
-                              const SizedBox(width: 8),
-                              _StatCard(title: 'Наличные', amount: overview.totalCash),
-                              const SizedBox(width: 8),
-                              _StatCard(title: 'Банк', amount: overview.totalBank),
-                            ],
-                          ),
+                          if (overview.hasAnyAccountsPermission)
+                            Row(
+                              children: [
+                                _StatCard(title: 'Суммарно', amount: overview.totalAll),
+                                const SizedBox(width: 8),
+                                _StatCard(title: 'Наличные', amount: overview.totalCash),
+                                const SizedBox(width: 8),
+                                _StatCard(title: 'Банк', amount: overview.totalBank),
+                              ],
+                            ),
                           const SizedBox(height: 16),
                           ...companies.map((company) {
                             final unread = counts[company.id.toString()]['unread_messages'] ?? 0;
@@ -178,6 +180,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               ref: ref,
                               unreadMessages: unread,
                               pendingTasks: pending,
+                              showBalance: overview.hasAnyAccountsPermission,
                             );
                           }),
                         ],
@@ -211,7 +214,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 }
 
-// ---------- Статистическая карточка ----------
 class _StatCard extends StatelessWidget {
   final String title;
   final double amount;
@@ -250,17 +252,19 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-// ---------- Карточка компании с анимированной рамкой----------
 class _CompanyCard extends StatefulWidget {
   final Company company;
   final WidgetRef ref;
   final int unreadMessages;
   final int pendingTasks;
+  final bool showBalance; // добавили
+
   const _CompanyCard({
     required this.company,
     required this.ref,
     required this.unreadMessages,
     required this.pendingTasks,
+    required this.showBalance, // добавили
   });
 
   @override
@@ -300,7 +304,6 @@ class _CompanyCardState extends State<_CompanyCard>
       animation: _animationController,
       builder: (context, _) {
         final double t = _animationController.value;
-        // Блик движется от левого верхнего угла к правому нижнему
         final start = Alignment(-1.0 + t * 2, -1.0 + t);
         final end = Alignment(1.0 - t, 1.0 - t);
 
@@ -404,11 +407,13 @@ class _CompanyCardState extends State<_CompanyCard>
                       Text('Тел: ${widget.company.managerPhone}',
                           style: TextStyle(color: colorScheme.onSurfaceVariant)),
                       const SizedBox(height: 4),
-                      Text(
+                      if (widget.showBalance)
+                        Text(
                           'Сумма: ${widget.company.totalBalance.toStringAsFixed(2)} ₽',
                           style: TextStyle(
                               color: colorScheme.onSurface,
-                              fontWeight: FontWeight.w500)),
+                              fontWeight: FontWeight.w500),
+                        ),
                     ],
                   ),
                 ),
@@ -421,7 +426,6 @@ class _CompanyCardState extends State<_CompanyCard>
   }
 }
 
-// Вспомогательный виджет для рисования градиентной обводки
 class _BorderGradient extends StatelessWidget {
   final Gradient gradient;
   final double borderRadius;
@@ -470,7 +474,6 @@ class _BorderGradientPainter extends CustomPainter {
   }
 }
 
-// ---------- Drawer настроек (адаптирован) ----------
 class SettingsDrawer extends StatelessWidget {
   const SettingsDrawer({super.key});
 

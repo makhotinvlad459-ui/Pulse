@@ -37,7 +37,7 @@ class _MemberPermissionsDialogState extends State<MemberPermissionsDialog> {
     'Склад': ['view_products', 'create_product', 'edit_product', 'view_materials', 'create_material', 'edit_material'],
     'Отчеты': ['view_reports'],
     'Управление': ['manage_employees', 'manage_permissions', 'view_accounts', 'create_account', 'manage_categories', 'edit_company', 'view_archive'],
-    'Документы': ['view_documents', 'create_documents', 'edit_documents'],
+    'Документы': ['view_documents', 'create_documents', 'edit_documents'],'Контрагенты': ['view_counterparties', 'edit_counterparties'],
     'Заказы': ['view_orders', 'edit_orders'],  // ← изменено: заявки → заказы
   };
 
@@ -83,6 +83,9 @@ class _MemberPermissionsDialogState extends State<MemberPermissionsDialog> {
       case 'view_operations': return 'Просмотр операций';
       case 'create_transaction': return 'Создание операций';
       case 'edit_transaction': return 'Редактирование операций';
+
+      case 'view_counterparties': return 'Просмотр контрагентов';
+      case 'edit_counterparties': return 'Редактирование контрагентов';
       // Витрина
       case 'view_showcase': return 'Просмотр витрины';
       case 'edit_showcase': return 'Редактирование витрины';

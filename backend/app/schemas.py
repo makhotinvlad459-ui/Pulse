@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from datetime import datetime
 from typing import Optional, List
 from enum import Enum
@@ -14,12 +14,18 @@ class TransactionType(str, Enum):
 
 # Company
 class CompanyCreate(BaseModel):
-    inn: str
     name: str
-    bank_account: str
     manager_full_name: str
     manager_phone: str
+    inn: str | None = None          
+    bank_account: str | None = None  
     employees: List[dict] = []
+
+    @field_validator('manager_phone')
+    def validate_phone_length(cls, v: str) -> str:
+        if len(v) < 6:
+            raise ValueError('Телефон должен содержать не менее 6 символов')
+        return v
     
 
 class CompanyResponse(BaseModel):

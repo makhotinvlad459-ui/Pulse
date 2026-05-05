@@ -11,7 +11,7 @@ from decimal import Decimal
 from app.models import OrderPayment 
 
 from app.database import get_db
-from app.models import User, Company, Account, Category, Transaction, TransactionType, CompanyMember, UserRole, Product, TransactionItem
+from app.models import User, Company, Counterparty, Account, Category, Transaction, TransactionType, CompanyMember, UserRole, Product, TransactionItem
 from app.schemas import TransactionCreate, TransactionResponse, TransactionItemResponse
 from app.deps import get_current_user
 
@@ -19,6 +19,22 @@ router = APIRouter(prefix="/transactions", tags=["transactions"])
 
 MAX_FILE_SIZE = 10 * 1024 * 1024
 ALLOWED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.pdf'}
+
+async def _normalize_counterparty(company_id: int, name: str | None, db: AsyncSession) -> str | None:
+    """Приводит имя контрагента к существующему в БД написанию (без учёта регистра).
+       Если контрагент не найден, возвращает исходное имя."""
+    if not name:
+        return None
+   
+    stmt = select(Transaction.counterparty).where(
+        Transaction.company_id == company_id,
+        func.lower(Transaction.counterparty) == name.lower(),
+        Transaction.counterparty.isnot(None),
+        Transaction.counterparty != ''
+    ).limit(1)
+    result = await db.execute(stmt)
+    existing = result.scalar_one_or_none()
+    return existing if existing else name
 
 async def recalc_account_balance(account_id: int, db: AsyncSession):
     income = await db.execute(
@@ -117,6 +133,31 @@ async def create_transaction(
             if not result.scalar_one_or_none():
                 raise HTTPException(status_code=404, detail="Category not found")
     
+    # НОРМАЛИЗАЦИЯ КОНТРАГЕНТА (теперь с проверкой Counterparty)
+    normalized_counterparty = await _normalize_counterparty(company_id, trans_data.counterparty, db)
+    
+    # ---- ДОБАВЛЯЕМ НОВОГО КОНТРАГЕНТА В ТАБЛИЦУ Counterparty, ЕСЛИ ЕГО ЕЩЁ НЕТ ----
+    from app.models import Counterparty
+    if normalized_counterparty:
+        # Проверяем, есть ли уже такой контрагент в таблице Counterparty
+        existing_cp = await db.execute(
+            select(Counterparty).where(
+                Counterparty.company_id == company_id,
+                func.lower(Counterparty.name) == normalized_counterparty.lower()
+            )
+        )
+        if not existing_cp.scalar_one_or_none():
+            new_cp = Counterparty(
+                company_id=company_id,
+                name=normalized_counterparty,
+                inn=None,
+                phone=None,
+                director=None
+            )
+            db.add(new_cp)
+            await db.flush()
+    # ------------------------------------------------------------------
+    
     # Генерация номера операции
     last_num_result = await db.execute(select(func.max(Transaction.number)).where(Transaction.company_id == company_id))
     last_num = last_num_result.scalar() or 0
@@ -138,7 +179,7 @@ async def create_transaction(
         created_by=current_user.id,
         transfer_to_account_id=trans_data.transfer_to_account_id if is_transfer else None,
         number=new_number,
-        counterparty=trans_data.counterparty,
+        counterparty=normalized_counterparty,
         showcase_item_id=trans_data.showcase_item_id,
         quantity=trans_data.quantity
     )
@@ -152,14 +193,10 @@ async def create_transaction(
             product = prod_result.scalar_one_or_none()
             if not product:
                 raise HTTPException(status_code=404, detail=f"Product {item.product_id} not found")
-            # Обновляем остаток на складе
             if trans_data.type.value == 'income':
-                # Приход (продажа) – списываем товар (разрешаем минус)
                 product.current_quantity -= Decimal(str(item.quantity))
-            else:  # expense
-                # Расход (покупка) – добавляем товар
+            else:
                 product.current_quantity += Decimal(str(item.quantity))
-            # Сохраняем запись в transaction_items с ценой за единицу
             trans_item = TransactionItem(
                 transaction_id=new_trans.id,
                 product_id=item.product_id,
@@ -383,6 +420,30 @@ async def update_transaction(
     if trans_data.date.tzinfo is not None:
         trans_data.date = trans_data.date.replace(tzinfo=None)
     
+    # НОРМАЛИЗАЦИЯ КОНТРАГЕНТА (теперь с проверкой Counterparty)
+    normalized_counterparty = await _normalize_counterparty(company_id, trans_data.counterparty, db)
+    
+    # ---- ДОБАВЛЯЕМ НОВОГО КОНТРАГЕНТА В ТАБЛИЦУ Counterparty, ЕСЛИ ЕГО ЕЩЁ НЕТ ----
+    from app.models import Counterparty
+    if normalized_counterparty:
+        existing_cp = await db.execute(
+            select(Counterparty).where(
+                Counterparty.company_id == company_id,
+                func.lower(Counterparty.name) == normalized_counterparty.lower()
+            )
+        )
+        if not existing_cp.scalar_one_or_none():
+            new_cp = Counterparty(
+                company_id=company_id,
+                name=normalized_counterparty,
+                inn=None,
+                phone=None,
+                director=None
+            )
+            db.add(new_cp)
+            await db.flush()
+    # ------------------------------------------------------------------
+    
     # Обновляем основные поля
     transaction.account_id = trans_data.account_id
     transaction.type = trans_data.type.value
@@ -391,7 +452,7 @@ async def update_transaction(
     transaction.category_id = trans_data.category_id
     transaction.description = trans_data.description
     transaction.updated_by = current_user.id
-    transaction.counterparty = trans_data.counterparty
+    transaction.counterparty = normalized_counterparty
     transaction.showcase_item_id = trans_data.showcase_item_id
     
     is_transfer = (trans_data.type.value == 'transfer')
@@ -688,3 +749,29 @@ async def get_transaction_photo(
         raise HTTPException(status_code=404, detail="File not found")
     
     return FileResponse(file_path)
+
+async def _sync_counterparty(company_id: int, name: str | None, db: AsyncSession, user_id: int) -> None:
+    """Создаёт запись в таблице counterparties, если контрагент ещё не существует (без учёта регистра)."""
+    if not name:
+        return
+    # Приводим к нижнему регистру для сравнения
+    from sqlalchemy import func
+    existing = await db.execute(
+        select(Counterparty).where(
+            Counterparty.company_id == company_id,
+            func.lower(Counterparty.name) == name.lower()
+        )
+    )
+    cp = existing.scalar_one_or_none()
+    if not cp:
+        new_cp = Counterparty(
+            company_id=company_id,
+            name=name,
+            inn=None,
+            phone=None,
+            director=None,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+        db.add(new_cp)
+        await db.flush()

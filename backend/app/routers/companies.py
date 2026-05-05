@@ -76,13 +76,16 @@ async def create_company(
         raise HTTPException(status_code=403, detail="Subscription expired")
     
     # Создаём компанию
+    inn = company_data.inn or ""
+    bank_account = company_data.bank_account or ""
+
     new_company = Company(
-        founder_id=current_user.id,
-        inn=company_data.inn,
-        name=company_data.name,
-        bank_account=company_data.bank_account,
-        manager_full_name=company_data.manager_full_name,
-        manager_phone=company_data.manager_phone,
+    founder_id=current_user.id,
+    inn=inn,
+    name=company_data.name,
+    bank_account=bank_account,
+    manager_full_name=company_data.manager_full_name,
+    manager_phone=company_data.manager_phone,
     )
     db.add(new_company)
     await db.flush()

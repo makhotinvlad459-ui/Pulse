@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from app.auth import router as auth_router
-from app.routers import companies, accounts, categories, transactions, statistics, admin, showcase, chat, tasks, websocket, notifications, products, permissions, orders
+from app.routers import counterparties, companies, accounts, categories, transactions, statistics, admin, showcase, chat, tasks, websocket, notifications, products, permissions, orders
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
@@ -23,6 +23,7 @@ app.include_router(products.router)
 app.include_router(showcase.router)
 app.include_router(permissions.router)
 app.include_router(orders.router)
+app.include_router(counterparties.router)
 
 # Статика
 UPLOAD_DIR = "uploads"

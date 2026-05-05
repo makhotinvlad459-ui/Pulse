@@ -22,6 +22,7 @@ import '../widgets/company/showcase_tab.dart';
 import '../widgets/matrix_rain.dart';
 import '../providers/theme_provider.dart';
 import '../widgets/company/orders_tab.dart';
+import '../widgets/company/counterparties_tab.dart';
 
 class RainTheme {
   final Color color;
@@ -248,11 +249,9 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
     );
   }
 
-  // Общая функция обновления: перезагружает и заказы (через OrdersTab) и счета
   Future<void> _updateAll() async {
-    await _loadData();                // обновляет счета, транзакции
-    await _refreshCounters();         // обновляет непрочитанное
-    // Принудительно обновляем вкладку заказов (если она активна)
+    await _loadData();
+    await _refreshCounters();
     setState(() {});
   }
 
@@ -282,7 +281,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
       effectivePermissions = {
         'view_operations', 'view_showcase', 'view_chat', 'view_tasks',
         'view_products', 'view_reports', 'view_documents', 'view_requests',
-        'view_orders', 'edit_orders'
+        'view_orders', 'edit_orders', 'view_accounts', 'view_counterparties', 'edit_counterparties'
       };
     }
 
@@ -340,24 +339,22 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
         categories: _categories,
       ));
     }
-    tabs.add(const Tab(icon: Icon(Icons.assignment), text: 'Заказы'));
-    tabWidgets.add(OrdersTab(
-      companyId: widget.company.id,
-      permissions: effectivePermissions,
-      isFounder: isFounder,
-      onDataChanged: _updateAll,   // передаём функцию, которая обновит счета и заказы
-    ));
-    tabs.add(const Tab(icon: Icon(Icons.folder), text: 'Документы'));
-    tabWidgets.add(const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.folder, size: 64),
-          SizedBox(height: 16),
-          Text('Документы — в разработке'),
-        ],
-      ),
-    ));
+    if (effectivePermissions.contains('view_orders')) {
+      tabs.add(const Tab(icon: Icon(Icons.assignment), text: 'Заказы'));
+      tabWidgets.add(OrdersTab(
+        companyId: widget.company.id,
+        permissions: effectivePermissions,
+        isFounder: isFounder,
+        onDataChanged: _updateAll,
+      ));
+    }
+    if (effectivePermissions.contains('view_counterparties')) {
+      tabs.add(const Tab(icon: Icon(Icons.people), text: 'Контрагенты'));
+      tabWidgets.add(CounterpartiesTab(
+        companyId: widget.company.id,
+        permissions: effectivePermissions,
+      ));
+    }
 
     _initTabController(tabs.length);
 
@@ -463,7 +460,14 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                             }
                             return items;
                           },
-                          icon: Icon(Icons.more_vert, color: colorScheme.onSurface),
+                          icon: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: colorScheme.primary.withOpacity(0.2),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(Icons.menu, color: colorScheme.onSurface),
+                          ),
                         ),
                     ],
                   ),
@@ -514,37 +518,39 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                       ],
                     ),
                   ),
-                SizedBox(
-                  height: 100,
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                      children: _accounts
-                          .map((acc) => Padding(
-                                padding: const EdgeInsets.only(right: 12),
-                                child: AccountCard(
-                                  account: acc,
-                                  onDelete: () async {
-                                    final api = ApiClient();
-                                    try {
-                                      await api.delete('/accounts/${acc['id']}',
-                                          queryParameters: {
-                                            'company_id': widget.company.id
-                                          });
-                                      await _refresh();
-                                    } catch (e) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(content: Text('Ошибка: $e')));
-                                    }
-                                  },
-                                  isFounder: isFounder,
-                                ),
-                              ))
-                          .toList(),
+                // Карточки счетов (показываются только при наличии права view_accounts)
+                if (effectivePermissions.contains('view_accounts'))
+                  SizedBox(
+                    height: 100,
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Row(
+                        children: _accounts
+                            .map((acc) => Padding(
+                                  padding: const EdgeInsets.only(right: 12),
+                                  child: AccountCard(
+                                    account: acc,
+                                    onDelete: () async {
+                                      final api = ApiClient();
+                                      try {
+                                        await api.delete('/accounts/${acc['id']}',
+                                            queryParameters: {
+                                              'company_id': widget.company.id
+                                            });
+                                        await _refresh();
+                                      } catch (e) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(content: Text('Ошибка: $e')));
+                                      }
+                                    },
+                                    isFounder: isFounder,
+                                  ),
+                                ))
+                            .toList(),
+                      ),
                     ),
                   ),
-                ),
                 Expanded(
                   child: Column(
                     children: [

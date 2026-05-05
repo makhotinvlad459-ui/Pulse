@@ -462,19 +462,25 @@ async def update_order_status(
         raise HTTPException(404, "Order not found")
     if status_value not in ['accepted', 'completed', 'failed']:
         raise HTTPException(400, "Invalid status")
-    if status_value == 'accepted' and not await _has_permission(company_id, current_user, db, "edit_orders"):
-        raise HTTPException(403, "No permission to accept")
-    if status_value == 'completed' and not await _has_permission(company_id, current_user, db, "edit_orders"):
-        raise HTTPException(403, "No permission to complete")
-    if status_value == 'failed' and not await _has_permission(company_id, current_user, db, "edit_orders"):
-        raise HTTPException(403, "No permission to fail")
+    
+    # Проверка прав
+    if not await _has_permission(company_id, current_user, db, "edit_orders"):
+        raise HTTPException(403, "No permission")
+    
+    # Валидация переходов
     if status_value == 'accepted' and order.status != OrderStatus.PENDING:
         raise HTTPException(400, "Only pending can be accepted")
     if status_value == 'completed' and order.status != OrderStatus.ACCEPTED:
         raise HTTPException(400, "Only accepted can be completed")
     if status_value == 'failed' and order.status not in (OrderStatus.PENDING, OrderStatus.ACCEPTED):
         raise HTTPException(400, "Only pending/accepted can be failed")
+    
+    # Обработка выполнения заказа (списание со склада, создание транзакции)
     if status_value == 'completed':
+        # Установка даты выполнения
+        order.completed_at = datetime.utcnow()
+        
+        # ... остальной код (списание, транзакция) ...
         cash_acc = await db.execute(select(Account).where(Account.company_id == company_id, Account.type == 'cash'))
         cash_acc = cash_acc.scalar_one_or_none()
         if not cash_acc:
@@ -509,7 +515,15 @@ async def update_order_status(
             number=new_number
         )
         db.add(tx)
-    order.status = OrderStatus(status_value)
+    
+    # Присваиваем новый статус (напрямую из перечисления, чтобы избежать проблем с регистром)
+    if status_value == 'accepted':
+        order.status = OrderStatus.ACCEPTED
+    elif status_value == 'completed':
+        order.status = OrderStatus.COMPLETED
+    elif status_value == 'failed':
+        order.status = OrderStatus.FAILED
+    
     order.updated_at = datetime.utcnow()
     await db.commit()
     return {"detail": f"Order status updated to {status_value}"}

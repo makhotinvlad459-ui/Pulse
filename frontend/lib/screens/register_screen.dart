@@ -12,27 +12,43 @@ class RegisterScreen extends ConsumerStatefulWidget {
 }
 
 class _RegisterScreenState extends ConsumerState<RegisterScreen> {
-  final TextEditingController _loginController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _nameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmController = TextEditingController();
+
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
 
   @override
   void dispose() {
-    _loginController.dispose();
+    _emailController.dispose();
+    _phoneController.dispose();
+    _nameController.dispose();
     _passwordController.dispose();
     _confirmController.dispose();
     super.dispose();
   }
 
   Future<void> _register() async {
-    final login = _loginController.text.trim();
+    final email = _emailController.text.trim();
+    final phone = _phoneController.text.trim();
+    final fullName = _nameController.text.trim();
     final password = _passwordController.text.trim();
     final confirm = _confirmController.text.trim();
 
-    if (login.length < 4) {
-      _showSnackBar('Логин должен содержать не менее 4 символов');
+    // Валидация
+    if (!email.contains('@') || !email.contains('.')) {
+      _showSnackBar('Введите корректный email');
+      return;
+    }
+    if (phone.isNotEmpty && phone.length < 6) {
+      _showSnackBar('Телефон должен содержать не менее 6 символов');
+      return;
+    }
+    if (fullName.isEmpty) {
+      _showSnackBar('Введите имя');
       return;
     }
     if (password.length < 8) {
@@ -45,11 +61,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     }
 
     final authNotifier = ref.read(authProvider.notifier);
-    final email = '$login@temp.pulse';
-    final fullName = 'Пользователь $login';
-
-    final success =
-        await authNotifier.register(email, login, fullName, password);
+    final success = await authNotifier.register(
+      email,
+      phone.isNotEmpty ? phone : null,
+      fullName,
+      password,
+    );
     if (success && mounted) {
       Navigator.pushReplacementNamed(context, '/home');
     } else if (mounted) {
@@ -58,13 +75,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   }
 
   void _showSnackBar(String message) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
+    final colorScheme = Theme.of(context).colorScheme;
+
     return VideoBackground(
       videoPath: 'assets/videos/city.mp4',
       fit: BoxFit.cover,
@@ -78,7 +96,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Заголовок без кардиограммы
                 TweenAnimationBuilder(
                   tween: Tween<double>(begin: 0.9, end: 1.0),
                   duration: const Duration(milliseconds: 800),
@@ -119,7 +136,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   },
                 ),
                 const SizedBox(height: 40),
-                // Полупрозрачная карточка
                 Card(
                   elevation: 0,
                   color: Colors.white.withOpacity(0.5),
@@ -132,12 +148,55 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     child: Column(
                       children: [
                         TextField(
-                          controller: _loginController,
+                          controller: _emailController,
                           style: const TextStyle(color: Colors.black87),
                           decoration: InputDecoration(
-                            labelText: 'Логин (телефон)',
+                            labelText: 'Email*',
+                            labelStyle: TextStyle(color: Colors.grey.shade600),
+                            prefixIcon: Icon(Icons.email, color: Colors.grey.shade700),
+                            filled: true,
+                            fillColor: Colors.white,
+                            border: const OutlineInputBorder(
+                              borderRadius: BorderRadius.all(Radius.circular(8)),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderSide: BorderSide(color: Colors.grey.shade400),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderSide: BorderSide(color: Colors.grey.shade700, width: 2),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: _phoneController,
+                          style: const TextStyle(color: Colors.black87),
+                          decoration: InputDecoration(
+                            labelText: 'Телефон (необязательно)',
+                            hintText: 'Минимум 6 символов',
                             labelStyle: TextStyle(color: Colors.grey.shade600),
                             prefixIcon: Icon(Icons.phone, color: Colors.grey.shade700),
+                            filled: true,
+                            fillColor: Colors.white,
+                            border: const OutlineInputBorder(
+                              borderRadius: BorderRadius.all(Radius.circular(8)),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderSide: BorderSide(color: Colors.grey.shade400),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderSide: BorderSide(color: Colors.grey.shade700, width: 2),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: _nameController,
+                          style: const TextStyle(color: Colors.black87),
+                          decoration: InputDecoration(
+                            labelText: 'Имя*',
+                            labelStyle: TextStyle(color: Colors.grey.shade600),
+                            prefixIcon: Icon(Icons.person, color: Colors.grey.shade700),
                             filled: true,
                             fillColor: Colors.white,
                             border: const OutlineInputBorder(
@@ -157,13 +216,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           obscureText: _obscurePassword,
                           style: const TextStyle(color: Colors.black87),
                           decoration: InputDecoration(
-                            labelText: 'Пароль (мин. 8 символов)',
+                            labelText: 'Пароль (мин. 8 символов)*',
                             labelStyle: TextStyle(color: Colors.grey.shade600),
                             prefixIcon: Icon(Icons.lock, color: Colors.grey.shade700),
                             suffixIcon: IconButton(
-                              icon: Icon(_obscurePassword
-                                  ? Icons.visibility_off
-                                  : Icons.visibility),
+                              icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
                               onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                             ),
                             filled: true,
@@ -185,13 +242,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           obscureText: _obscureConfirm,
                           style: const TextStyle(color: Colors.black87),
                           decoration: InputDecoration(
-                            labelText: 'Подтвердите пароль',
+                            labelText: 'Подтвердите пароль*',
                             labelStyle: TextStyle(color: Colors.grey.shade600),
                             prefixIcon: Icon(Icons.lock_outline, color: Colors.grey.shade700),
                             suffixIcon: IconButton(
-                              icon: Icon(_obscureConfirm
-                                  ? Icons.visibility_off
-                                  : Icons.visibility),
+                              icon: Icon(_obscureConfirm ? Icons.visibility_off : Icons.visibility),
                               onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
                             ),
                             filled: true,
@@ -245,7 +300,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          '⚠️ При утере данных для входа восстановление будет невозможным.\n'
+                          '⚠️ При утере пароля вы сможете восстановить его через email.\n'
                           'Сохраните пароль в надёжном месте.',
                           textAlign: TextAlign.center,
                           style: TextStyle(

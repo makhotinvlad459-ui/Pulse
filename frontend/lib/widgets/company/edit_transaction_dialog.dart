@@ -36,6 +36,9 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
   late int? _transferToAccountId;
   late String _description;
   late String _counterparty;
+  final TextEditingController _counterpartyController = TextEditingController();
+  List<String> _existingCounterparties = [];
+  bool _loadingCounterparties = false;
   List<Map<String, dynamic>> _selectedProducts = [];
   bool _loading = false;
   XFile? _photo;
@@ -53,6 +56,7 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
     _transferToAccountId = widget.transaction['transfer_to_account_id'];
     _description = widget.transaction['description'] ?? '';
     _counterparty = widget.transaction['counterparty'] ?? '';
+    _counterpartyController.text = _counterparty;
     _hasExistingAttachment = widget.transaction['attachment_url'] != null;
 
     final items = widget.transaction['items'] as List?;
@@ -79,45 +83,67 @@ class _EditTransactionDialogState extends State<EditTransactionDialog> {
     if (_transferToAccountId != null && !accountIds.contains(_transferToAccountId)) {
       _transferToAccountId = null;
     }
+
+    _loadCounterparties();
+  }
+
+  double _parseAmount(String text) {
+    final normalized = text.replaceFirst(',', '.');
+    return double.tryParse(normalized) ?? 0;
+  }
+
+  Future<void> _loadCounterparties() async {
+    setState(() => _loadingCounterparties = true);
+    final api = ApiClient();
+    try {
+      final res = await api.get('/statistics/counterparties', queryParameters: {'company_id': widget.companyId});
+      setState(() {
+        _existingCounterparties = List<String>.from(res.data);
+        _loadingCounterparties = false;
+      });
+    } catch (e) {
+      setState(() => _loadingCounterparties = false);
+      print('Error loading counterparties: $e');
+    }
   }
 
   Future<void> _pickFile() async {
-  if (kIsWeb) {
-    final result = await FilePicker.platform.pickFiles();
-    if (result != null) {
-      setState(() {
-        _webFile = result.files.first;
-        _hasExistingAttachment = false;
-      });
-    }
-  } else {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery);
-    if (picked != null) {
-      final compressed = await ImageCompression.compressImage(picked);
-      setState(() {
-        _photo = compressed;
-        _hasExistingAttachment = false;
-      });
+    if (kIsWeb) {
+      final result = await FilePicker.platform.pickFiles();
+      if (result != null) {
+        setState(() {
+          _webFile = result.files.first;
+          _hasExistingAttachment = false;
+        });
+      }
+    } else {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(source: ImageSource.gallery);
+      if (picked != null) {
+        final compressed = await ImageCompression.compressImage(picked);
+        setState(() {
+          _photo = compressed;
+          _hasExistingAttachment = false;
+        });
+      }
     }
   }
-}
 
-Future<void> _takePhoto() async {
-  if (kIsWeb) {
-    await _pickFile();
-  } else {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.camera);
-    if (picked != null) {
-      final compressed = await ImageCompression.compressImage(picked);
-      setState(() {
-        _photo = compressed;
-        _hasExistingAttachment = false;
-      });
+  Future<void> _takePhoto() async {
+    if (kIsWeb) {
+      await _pickFile();
+    } else {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(source: ImageSource.camera);
+      if (picked != null) {
+        final compressed = await ImageCompression.compressImage(picked);
+        setState(() {
+          _photo = compressed;
+          _hasExistingAttachment = false;
+        });
+      }
     }
   }
-}
 
   Future<void> _deleteAttachment() async {
     setState(() {
@@ -174,12 +200,14 @@ Future<void> _takePhoto() async {
                   controller: quantityController,
                   decoration: const InputDecoration(labelText: 'Количество'),
                   keyboardType: TextInputType.number,
+                  onChanged: (v) => quantity = _parseAmount(v),
                 ),
                 const SizedBox(height: 8),
                 TextField(
                   controller: totalController,
                   decoration: const InputDecoration(labelText: 'Сумма (₽)'),
                   keyboardType: TextInputType.number,
+                  onChanged: (v) => total = _parseAmount(v),
                 ),
               ],
             ),
@@ -187,10 +215,11 @@ Future<void> _takePhoto() async {
               TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
               ElevatedButton(
                 onPressed: () {
-                  final q = double.tryParse(quantityController.text);
-                  final t = double.tryParse(totalController.text);
-                  if (selectedProductId == null || q == null || t == null || q <= 0 || t <= 0) {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Заполните все поля корректно')));
+                  final q = quantity;
+                  final t = total;
+                  if (selectedProductId == null || q <= 0 || t <= 0) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Заполните все поля корректно')));
                     return;
                   }
                   final pricePerUnit = t / q;
@@ -218,6 +247,8 @@ Future<void> _takePhoto() async {
     final product = _selectedProducts[index];
     final quantityController = TextEditingController(text: product['quantity'].toString());
     final totalController = TextEditingController(text: product['total'].toString());
+    double quantity = product['quantity'];
+    double total = product['total'];
     await showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -229,12 +260,14 @@ Future<void> _takePhoto() async {
               controller: quantityController,
               decoration: const InputDecoration(labelText: 'Количество'),
               keyboardType: TextInputType.number,
+              onChanged: (v) => quantity = _parseAmount(v),
             ),
             const SizedBox(height: 8),
             TextField(
               controller: totalController,
               decoration: const InputDecoration(labelText: 'Сумма (₽)'),
               keyboardType: TextInputType.number,
+              onChanged: (v) => total = _parseAmount(v),
             ),
           ],
         ),
@@ -242,15 +275,13 @@ Future<void> _takePhoto() async {
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
           ElevatedButton(
             onPressed: () {
-              final q = double.tryParse(quantityController.text);
-              final t = double.tryParse(totalController.text);
-              if (q == null || t == null || q <= 0 || t <= 0) return;
-              final pricePerUnit = t / q;
+              if (quantity <= 0 || total <= 0) return;
+              final pricePerUnit = total / quantity;
               setState(() {
                 _selectedProducts[index] = {
                   ...product,
-                  'quantity': q,
-                  'total': t,
+                  'quantity': quantity,
+                  'total': total,
                   'price_per_unit': pricePerUnit,
                 };
               });
@@ -274,7 +305,7 @@ Future<void> _takePhoto() async {
     final api = ApiClient();
     Map<String, dynamic> data = {
       'type': _type,
-      'amount': _amount, // всегда используем _amount, не пересчитываем из товаров
+      'amount': _amount,
       'date': _date.toIso8601String(),
       'account_id': _accountId,
       'description': _description,
@@ -314,7 +345,8 @@ Future<void> _takePhoto() async {
         if (errorMessage.contains('Insufficient stock')) {
           errorMessage = 'Недостаточно товара на складе для продажи';
         }
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $errorMessage')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Ошибка: $errorMessage')));
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -367,8 +399,6 @@ Future<void> _takePhoto() async {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final isSmallScreen = MediaQuery.of(context).size.width < 500;
-    // Всегда показываем поле суммы, не зависим от _selectedProducts
-    final alwaysShowAmountField = true;
 
     if (widget.accounts.isEmpty) {
       return AlertDialog(
@@ -445,17 +475,61 @@ Future<void> _takePhoto() async {
                 ],
               ),
               const SizedBox(height: 12),
-              TextFormField(
-                initialValue: _counterparty,
-                decoration: InputDecoration(
-                  labelText: 'Контрагент (необязательно)',
-                  labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
-                  border: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
-                  enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
-                  focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.primary)),
-                ),
-                style: TextStyle(color: colorScheme.onSurface),
-                onChanged: (v) => _counterparty = v,
+              Autocomplete<String>(
+                optionsBuilder: (TextEditingValue textEditingValue) {
+                  if (textEditingValue.text.isEmpty) {
+                    return const Iterable<String>.empty();
+                  }
+                  final lower = textEditingValue.text.toLowerCase();
+                  return _existingCounterparties.where((c) => c.toLowerCase().contains(lower));
+                },
+                onSelected: (String selection) {
+                  setState(() {
+                    _counterparty = selection;
+                  });
+                },
+                fieldViewBuilder: (context, textController, focusNode, onFieldSubmitted) {
+                  textController.addListener(() {
+                    _counterparty = textController.text;
+                  });
+                  return TextFormField(
+                    controller: textController,
+                    focusNode: focusNode,
+                    decoration: InputDecoration(
+                      labelText: 'Контрагент (необязательно)',
+                      border: const OutlineInputBorder(),
+                      suffixIcon: _loadingCounterparties
+                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                          : IconButton(
+                              icon: const Icon(Icons.refresh),
+                              onPressed: _loadCounterparties,
+                              tooltip: 'Обновить список',
+                            ),
+                    ),
+                  );
+                },
+                optionsViewBuilder: (context, onSelected, options) {
+                  return Align(
+                    alignment: Alignment.topLeft,
+                    child: Material(
+                      elevation: 4,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 200),
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: options.length,
+                          itemBuilder: (context, index) {
+                            final option = options.elementAt(index);
+                            return ListTile(
+                              title: Text(option),
+                              onTap: () => onSelected(option),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  );
+                },
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<int>(
@@ -485,7 +559,6 @@ Future<void> _takePhoto() async {
                 style: TextStyle(color: colorScheme.onSurface),
               ),
               const SizedBox(height: 12),
-              // Поле суммы всегда показываем
               TextFormField(
                 initialValue: _amount.toString(),
                 keyboardType: TextInputType.number,
@@ -497,7 +570,7 @@ Future<void> _takePhoto() async {
                   focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.primary)),
                 ),
                 style: TextStyle(color: colorScheme.onSurface),
-                onChanged: (v) => _amount = double.tryParse(v) ?? 0,
+                onChanged: (v) => _amount = _parseAmount(v),
               ),
               const SizedBox(height: 12),
               ListTile(

@@ -1,7 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
-import '../../services/api_client.dart';
+import '../../../services/api_client.dart';
+import 'reports/period_selector.dart';
+import 'reports/summary_cards.dart';
+import 'reports/categories_column.dart';
+import 'reports/dynamics_chart.dart';
+import 'reports/cash_vs_noncash_bar.dart';
+import 'reports/product_tables.dart';
+import 'reports/sales_tables.dart';
+import 'reports/material_consumption_widget.dart';
+import 'reports/order_stats_widget.dart';
+import 'reports/counterparties_report_widget.dart';
 
 class ReportsTab extends StatefulWidget {
   final int companyId;
@@ -357,18 +367,6 @@ class ReportsTabState extends State<ReportsTab> {
     await _loadData();
   }
 
-  String _getIconForCategory(String categoryName) {
-    if (categoryName == 'Без категории') return '📁';
-    final cat = widget.categories.firstWhere((c) => c['name'] == categoryName, orElse: () => null);
-    return cat != null ? (cat['icon'] ?? '📁') : '📁';
-  }
-
-  int? _getCategoryId(String categoryName) {
-    if (categoryName == 'Без категории') return null;
-    final cat = widget.categories.firstWhere((c) => c['name'] == categoryName, orElse: () => null);
-    return cat?['id'];
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_loading) return const Center(child: CircularProgressIndicator());
@@ -379,506 +377,131 @@ class ReportsTabState extends State<ReportsTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              if (_periodMode != 'custom')
-                Row(
-                  children: [
-                    _buildShiftButton(Icons.arrow_back_ios, -1, colorScheme),
-                    const SizedBox(width: 8),
-                    _buildShiftButton(Icons.arrow_forward_ios, 1, colorScheme),
-                    const SizedBox(width: 16),
-                  ],
-                ),
-              Expanded(
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _buildPeriodButton('День', 'day', colorScheme),
-                    _buildPeriodButton('Неделя', 'week', colorScheme),
-                    _buildPeriodButton('Месяц', 'month', colorScheme),
-                    _buildPeriodButton('Год', 'year', colorScheme),
-                    ElevatedButton(
-                      onPressed: _selectCustomPeriod,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: colorScheme.surfaceContainerHighest,
-                        foregroundColor: colorScheme.onSurface,
-                      ),
-                      child: const Text('Выбрать'),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+          PeriodSelector(
+            periodMode: _periodMode,
+            onDay: () => _setPeriodForMode('day'),
+            onWeek: () => _setPeriodForMode('week'),
+            onMonth: () => _setPeriodForMode('month'),
+            onYear: () => _setPeriodForMode('year'),
+            onCustom: _selectCustomPeriod,
+            onPrevious: () => _shiftPeriod(-1),
+            onNext: () => _shiftPeriod(1),
+            showArrows: _periodMode != 'custom',
           ),
           const SizedBox(height: 16),
-          Row(
-            children: [
-              _SummaryCard(title: 'Доход', amount: _totalIncome, color: Colors.green, colorScheme: colorScheme),
-              const SizedBox(width: 8),
-              _SummaryCard(title: 'Расход', amount: _totalExpense, color: Colors.red, colorScheme: colorScheme),
-              const SizedBox(width: 8),
-              _SummaryCard(title: 'Прибыль', amount: _totalProfit, color: Colors.blue, colorScheme: colorScheme),
-            ],
-          ),
+          SummaryCards(income: _totalIncome, expense: _totalExpense, profit: _totalProfit),
           const SizedBox(height: 24),
-          if (_incomeByCategory.isNotEmpty) ...[
-            const Text('Доходы по категориям', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            _buildCategoryColumn(_incomeByCategory, total: _totalIncome, color: Colors.green, colorScheme: colorScheme),
-            const SizedBox(height: 24),
-          ],
-          if (_expenseByCategory.isNotEmpty) ...[
-            const Text('Расходы по категориям', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            _buildCategoryColumn(_expenseByCategory, total: _totalExpense, color: Colors.red, colorScheme: colorScheme),
-            const SizedBox(height: 24),
-          ],
+
+          // ========== ВСЕГДА ВИДИМЫЕ БЛОКИ ==========
           const Text('Динамика', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          _buildLineChart(colorScheme),
+          DynamicsChart(
+            incomeSpots: _incomeSpots,
+            expenseSpots: _expenseSpots,
+            xLabels: _xLabels,
+            onSpotTapped: _onSpotTapped,
+          ),
           const SizedBox(height: 24),
+
           const Text('Наличные vs Безналичные', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          _buildCashBar(colorScheme),
+          CashVsNoncashBar(cash: _cashVsNoncash['cash']!, noncash: _cashVsNoncash['noncash']!),
           const SizedBox(height: 24),
-          // Две таблицы горизонтально
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Общий расход товара (склад+витрина)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    _buildProductConsumptionTable(_productConsumption, colorScheme),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Общий приход товара (склад)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    _buildProductConsumptionTable(_productIncome, colorScheme),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          Row(
-            children: [
-              const Text('Продажи', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              const SizedBox(width: 8),
-              Tooltip(
-                message: 'Продажи со склада (не включают товары, проданные через витрину)',
-                child: const Icon(Icons.help_outline, size: 18),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          SegmentedButton<int>(
-            style: ButtonStyle(
-              foregroundColor: MaterialStateProperty.resolveWith((states) {
-                if (states.contains(MaterialState.selected)) return colorScheme.onPrimary;
-                return colorScheme.onSurface;
-              }),
-              backgroundColor: MaterialStateProperty.resolveWith((states) {
-                if (states.contains(MaterialState.selected)) return colorScheme.primary;
-                return colorScheme.surfaceContainerHighest;
-              }),
-            ),
-            segments: const [
-              ButtonSegment(value: 0, label: Text('Товары со склада')),
-              ButtonSegment(value: 1, label: Text('Товары с витрины')),
-            ],
-            selected: {_activeSalesTab},
-            onSelectionChanged: (Set<int> newSelection) {
-              setState(() => _activeSalesTab = newSelection.first);
-            },
-          ),
-          const SizedBox(height: 12),
-          _activeSalesTab == 0
-              ? _buildSalesTable(_productSales, isProduct: true, colorScheme: colorScheme)
-              : _buildSalesTable(_showcaseSales, isProduct: false, colorScheme: colorScheme),
-        ],
-      ),
-    );
-  }
 
-  Widget _buildShiftButton(IconData icon, int delta, ColorScheme colorScheme) {
-    return GestureDetector(
-      onTap: () => _shiftPeriod(delta),
-      child: Container(
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: colorScheme.primaryContainer,
-        ),
-        padding: const EdgeInsets.all(8),
-        child: Icon(icon, size: 20, color: colorScheme.onPrimaryContainer),
-      ),
-    );
-  }
-
-  Widget _buildPeriodButton(String label, String mode, ColorScheme colorScheme) {
-    final isSelected = _periodMode == mode;
-    return ElevatedButton(
-      onPressed: () => _setPeriodForMode(mode),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: isSelected ? colorScheme.primary : colorScheme.surfaceContainerHighest,
-        foregroundColor: isSelected ? colorScheme.onPrimary : colorScheme.onSurface,
-      ),
-      child: Text(label),
-    );
-  }
-
-  Widget _SummaryCard({required String title, required double amount, required Color color, required ColorScheme colorScheme}) {
-    return Expanded(
-      child: Card(
-        elevation: 2,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        color: colorScheme.surface,
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            children: [
-              Text(title, style: TextStyle(color: color, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 4),
-              Text('${amount.toStringAsFixed(2)} ₽', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLineChart(ColorScheme colorScheme) {
-    if (_incomeSpots.isEmpty || _incomeSpots.length <= 2) return const Center(child: Text('Нет данных для графика'));
-    return Container(
-      padding: const EdgeInsets.only(right: 40),
-      height: 300,
-      child: LineChart(
-        LineChartData(
-          gridData: FlGridData(show: true),
-          titlesData: FlTitlesData(
-            leftTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                reservedSize: 40,
-                getTitlesWidget: (value, meta) => Text(NumberFormat.compact().format(value), style: TextStyle(color: colorScheme.onSurface)),
-              ),
-            ),
-            bottomTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                reservedSize: 70,
-                getTitlesWidget: (value, meta) {
-                  final index = value.toInt();
-                  if (index < 0 || index >= _xLabels.length) return const Text('');
-                  return Transform.rotate(
-                    angle: -0.5,
-                    child: Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: Text(_xLabels[index], style: TextStyle(fontSize: 10, color: colorScheme.onSurface)),
-                    ),
-                  );
-                },
-              ),
-            ),
-            rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          ),
-          borderData: FlBorderData(show: true),
-          lineBarsData: [
-            LineChartBarData(
-              spots: _incomeSpots,
-              isCurved: true,
-              color: Colors.green,
-              barWidth: 3,
-              dotData: FlDotData(show: true),
-              belowBarData: BarAreaData(show: true, color: Colors.green.withOpacity(0.2)),
-            ),
-            LineChartBarData(
-              spots: _expenseSpots,
-              isCurved: true,
-              color: Colors.red,
-              barWidth: 3,
-              dotData: FlDotData(show: true),
-              belowBarData: BarAreaData(show: true, color: Colors.red.withOpacity(0.2)),
-            ),
-          ],
-          lineTouchData: LineTouchData(
-            touchTooltipData: LineTouchTooltipData(
-              getTooltipItems: (touchedSpots) {
-                return touchedSpots.map((spot) => LineTooltipItem(
-                  '${spot.barIndex == 0 ? 'Доход' : 'Расход'}: ${spot.y.toStringAsFixed(2)} ₽',
-                  const TextStyle(color: Colors.white),
-                )).toList();
-              },
-            ),
-            handleBuiltInTouches: true,
-            touchCallback: (FlTouchEvent event, response) {
-              if (event is FlTapUpEvent && response != null && response.lineBarSpots != null && response.lineBarSpots!.isNotEmpty) {
-                _onSpotTapped(response.lineBarSpots!.first.x.toInt());
-              }
-            },
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCategoryColumn(List<Map<String, dynamic>> data, {required double total, required Color color, required ColorScheme colorScheme}) {
-    if (data.isEmpty) return Text('Нет данных', style: TextStyle(color: colorScheme.onSurfaceVariant));
-    final totalAmount = total == 0 ? data.fold(0.0, (sum, item) => sum + (item['total'] as double)) : total;
-    return Card(
-      color: colorScheme.surface,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          children: data.map((item) {
-            final categoryName = item['category_name'];
-            final amount = item['total'] as double;
-            final percent = totalAmount == 0 ? 0 : (amount / totalAmount * 100);
-            final icon = _getIconForCategory(categoryName);
-            return ListTile(
-              leading: Text(icon, style: const TextStyle(fontSize: 20)),
-              title: Text(categoryName, style: TextStyle(color: colorScheme.onSurface)),
-              trailing: Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text('${amount.toStringAsFixed(2)} ₽', style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
-                  Text('(${percent.toStringAsFixed(1)}%)', style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant)),
-                ],
-              ),
-              onTap: () {
-                final categoryId = _getCategoryId(categoryName);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => TransactionsByCategoryScreen(
-                      companyId: widget.companyId,
-                      categoryId: categoryId,
-                      categoryName: categoryName,
-                      type: color == Colors.green ? 'income' : 'expense',
-                      startDate: _startDate,
-                      endDate: _endDate,
-                    ),
-                  ),
-                );
-              },
-            );
-          }).toList(),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCashBar(ColorScheme colorScheme) {
-    final cash = _cashVsNoncash['cash']!;
-    final noncash = _cashVsNoncash['noncash']!;
-    final total = cash + noncash;
-    if (total == 0) return Text('Нет данных', style: TextStyle(color: colorScheme.onSurfaceVariant));
-    final cashPercent = (cash / total * 100).clamp(0, 100);
-    final noncashPercent = (noncash / total * 100).clamp(0, 100);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          height: 30,
-          child: Row(
-            children: [
-              Expanded(
-                flex: cashPercent.toInt(),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.orange,
-                    borderRadius: BorderRadius.only(topLeft: Radius.circular(8), bottomLeft: Radius.circular(8)),
-                  ),
-                  child: Center(child: Text('${cashPercent.toStringAsFixed(1)}%', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
-                ),
-              ),
-              Expanded(
-                flex: noncashPercent.toInt(),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.blue,
-                    borderRadius: BorderRadius.only(topRight: Radius.circular(8), bottomRight: Radius.circular(8)),
-                  ),
-                  child: Center(child: Text('${noncashPercent.toStringAsFixed(1)}%', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Row(children: [Container(width: 12, height: 12, color: Colors.orange), const SizedBox(width: 4), Text('Наличные: ${cash.toStringAsFixed(2)} ₽', style: TextStyle(color: colorScheme.onSurfaceVariant))]),
-            Row(children: [Container(width: 12, height: 12, color: Colors.blue), const SizedBox(width: 4), Text('Безналичные: ${noncash.toStringAsFixed(2)} ₽', style: TextStyle(color: colorScheme.onSurfaceVariant))]),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildProductConsumptionTable(List<dynamic> data, ColorScheme colorScheme) {
-    if (data.isEmpty) return Text('Нет данных', style: TextStyle(color: colorScheme.onSurfaceVariant));
-    double totalQuantity = 0;
-    for (var item in data) totalQuantity += (item['quantity'] as num).toDouble();
-
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        child: Table(
-          columnWidths: const {
-            0: IntrinsicColumnWidth(),
-            1: FixedColumnWidth(100), // фиксированная ширина для колонки Количество (шт)
-          },
-          border: TableBorder(
-            horizontalInside: BorderSide(color: colorScheme.outline.withOpacity(0.5)),
-          ),
-          children: [
-            TableRow(
-              decoration: BoxDecoration(color: colorScheme.primary),
+          // ========== СВОРАЧИВАЕМЫЕ БЛОКИ ==========
+          if (_incomeByCategory.isNotEmpty)
+            ExpansionTile(
+              title: const Text('Доходы по категориям', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              initiallyExpanded: false,
               children: [
-                Padding(
-                  padding: const EdgeInsets.all(8),
-                  child: Text('Товар', style: TextStyle(color: colorScheme.onPrimary, fontWeight: FontWeight.bold)),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(8),
-                  child: Text('Количество (шт)', style: TextStyle(color: colorScheme.onPrimary, fontWeight: FontWeight.bold)),
+                CategoriesColumn(
+                  data: _incomeByCategory,
+                  total: _totalIncome,
+                  color: Colors.green,
+                  companyId: widget.companyId,
+                  startDate: _startDate,
+                  endDate: _endDate,
+                  type: 'income',
+                  categories: widget.categories,
                 ),
               ],
             ),
-            ...data.map((item) {
-              return TableRow(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(8),
-                    child: Text(item['product_name'], style: TextStyle(color: colorScheme.onSurface)),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(8),
-                    child: Text((item['quantity'] as num).toStringAsFixed(2), style: TextStyle(color: colorScheme.onSurface)),
-                  ),
-                ],
-              );
-            }).toList(),
-            TableRow(
-              decoration: BoxDecoration(color: colorScheme.surface),
+
+          if (_expenseByCategory.isNotEmpty)
+            ExpansionTile(
+              title: const Text('Расходы по категориям', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              initiallyExpanded: false,
               children: [
-                Padding(
-                  padding: const EdgeInsets.all(8),
-                  child: Text('Итого', style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(8),
-                  child: Text(totalQuantity.toStringAsFixed(2), style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
+                CategoriesColumn(
+                  data: _expenseByCategory,
+                  total: _totalExpense,
+                  color: Colors.red,
+                  companyId: widget.companyId,
+                  startDate: _startDate,
+                  endDate: _endDate,
+                  type: 'expense',
+                  categories: widget.categories,
                 ),
               ],
             ),
-          ],
-        ),
-      ),
-    );
-  }
 
-  Widget _buildSalesTable(List<dynamic> data, {required bool isProduct, required ColorScheme colorScheme}) {
-    if (data.isEmpty) return Center(child: Text('Нет продаж', style: TextStyle(color: colorScheme.onSurfaceVariant)));
-    double totalAmount = 0, totalQuantity = 0;
-    for (var item in data) {
-      totalAmount += (item['amount'] as num).toDouble();
-      totalQuantity += (item['quantity'] as num).toDouble();
-    }
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: DataTable(
-        headingRowColor: MaterialStateProperty.all(colorScheme.primary),
-        headingTextStyle: TextStyle(color: colorScheme.onPrimary, fontWeight: FontWeight.bold),
-        dataRowColor: MaterialStateProperty.all(colorScheme.surface),
-        columns: const [
-          DataColumn(label: Text('Название')),
-          DataColumn(label: Text('Количество')),
-          DataColumn(label: Text('Сумма')),
-        ],
-        rows: [
-          ...data.map((item) {
-            return DataRow(cells: [
-              DataCell(Text(item[isProduct ? 'product_name' : 'name'], style: TextStyle(color: colorScheme.onSurface))),
-              DataCell(Text((item['quantity'] as num).toStringAsFixed(2), style: TextStyle(color: colorScheme.onSurface))),
-              DataCell(Text('${(item['amount'] as num).toStringAsFixed(2)} ₽', style: TextStyle(color: colorScheme.onSurface))),
-            ]);
-          }).toList(),
-          DataRow(
-            cells: [
-              const DataCell(Text('Итого', style: TextStyle(fontWeight: FontWeight.bold))),
-              DataCell(Text(totalQuantity.toStringAsFixed(2), style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface))),
-              DataCell(Text('${totalAmount.toStringAsFixed(2)} ₽', style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface))),
+          ExpansionTile(
+            title: const Text('Товары (приход/расход)', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            initiallyExpanded: false,
+            children: [
+              ProductTables(productIncome: _productIncome, productConsumption: _productConsumption),
+            ],
+          ),
+
+          ExpansionTile(
+            title: const Text('Продажи', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            initiallyExpanded: false,
+            children: [
+              SalesTables(
+                productSales: _productSales,
+                showcaseSales: _showcaseSales,
+                activeTab: _activeSalesTab,
+                onTabChanged: (value) => setState(() => _activeSalesTab = value),
+              ),
+            ],
+          ),
+
+          ExpansionTile(
+            title: const Text('Расход материалов в заказах', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            initiallyExpanded: false,
+            children: [
+              MaterialConsumptionWidget(
+                companyId: widget.companyId,
+                startDate: _startDate,
+                endDate: _endDate,
+              ),
+            ],
+          ),
+
+          ExpansionTile(
+            title: const Text('Статистика заказов', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            initiallyExpanded: false,
+            children: [
+              OrderStatsWidget(
+                companyId: widget.companyId,
+                startDate: _startDate,
+                endDate: _endDate,
+              ),
+            ],
+          ),
+
+          ExpansionTile(
+            title: const Text('Контрагенты', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            initiallyExpanded: false,
+            children: [
+              CounterpartiesReportWidget(
+                companyId: widget.companyId,
+                startDate: _startDate,
+                endDate: _endDate,
+              ),
             ],
           ),
         ],
-      ),
-    );
-  }
-}
-
-class TransactionsByCategoryScreen extends StatelessWidget {
-  final int companyId;
-  final int? categoryId;
-  final String categoryName;
-  final String type;
-  final DateTime startDate;
-  final DateTime endDate;
-  const TransactionsByCategoryScreen({
-    required this.companyId,
-    this.categoryId,
-    required this.categoryName,
-    required this.type,
-    required this.startDate,
-    required this.endDate,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final queryParams = {
-      'company_id': companyId,
-      'type': type,
-      'start_date': startDate.toIso8601String(),
-      'end_date': endDate.toIso8601String(),
-    };
-    if (categoryId != null) queryParams['category_id'] = categoryId!;
-    return Scaffold(
-      appBar: AppBar(title: Text('$categoryName (${type == 'income' ? 'Приход' : 'Расход'})')),
-      body: FutureBuilder(
-        future: ApiClient().get('/transactions', queryParameters: queryParams),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-          if (snapshot.hasError) return Center(child: Text('Ошибка: ${snapshot.error}'));
-          final transactions = snapshot.data!.data;
-          if (transactions.isEmpty) return const Center(child: Text('Нет операций'));
-          return ListView.builder(
-            itemCount: transactions.length,
-            itemBuilder: (context, index) {
-              final t = transactions[index];
-              return Card(
-                child: ListTile(
-                  title: Text('${t['amount']} ₽'),
-                  subtitle: Text(t['description'] ?? ''),
-                  trailing: Text(DateFormat('dd.MM.yyyy').format(DateTime.parse(t['date']))),
-                ),
-              );
-            },
-          );
-        },
       ),
     );
   }

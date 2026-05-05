@@ -15,8 +15,6 @@ class EditCompanyDialog extends StatefulWidget {
 class _EditCompanyDialogState extends State<EditCompanyDialog> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _nameController;
-  late TextEditingController _innController;
-  late TextEditingController _bankAccountController;
   late TextEditingController _managerNameController;
   late TextEditingController _managerPhoneController;
   bool _saving = false;
@@ -25,9 +23,6 @@ class _EditCompanyDialogState extends State<EditCompanyDialog> {
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.company.name);
-    _innController = TextEditingController(text: widget.company.inn);
-    _bankAccountController =
-        TextEditingController(text: widget.company.bankAccount);
     _managerNameController =
         TextEditingController(text: widget.company.managerFullName);
     _managerPhoneController =
@@ -41,8 +36,6 @@ class _EditCompanyDialogState extends State<EditCompanyDialog> {
     try {
       await api.put('/companies/${widget.company.id}', data: {
         'name': _nameController.text,
-        'inn': _innController.text,
-        'bank_account': _bankAccountController.text,
         'manager_full_name': _managerNameController.text,
         'manager_phone': _managerPhoneController.text,
       });
@@ -88,40 +81,6 @@ class _EditCompanyDialogState extends State<EditCompanyDialog> {
                   ),
                   validator: (v) => v!.isEmpty ? 'Введите название' : null),
               TextFormField(
-                  controller: _innController,
-                  style: TextStyle(color: colorScheme.onSurface),
-                  decoration: InputDecoration(
-                    labelText: 'ИНН',
-                    labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
-                    border: OutlineInputBorder(
-                      borderSide: BorderSide(color: colorScheme.outline),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: colorScheme.outline),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: colorScheme.primary),
-                    ),
-                  ),
-                  validator: (v) => v!.isEmpty ? 'Введите ИНН' : null),
-              TextFormField(
-                  controller: _bankAccountController,
-                  style: TextStyle(color: colorScheme.onSurface),
-                  decoration: InputDecoration(
-                    labelText: 'Р/счёт',
-                    labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
-                    border: OutlineInputBorder(
-                      borderSide: BorderSide(color: colorScheme.outline),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: colorScheme.outline),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: colorScheme.primary),
-                    ),
-                  ),
-                  validator: (v) => v!.isEmpty ? 'Введите р/счёт' : null),
-              TextFormField(
                   controller: _managerNameController,
                   style: TextStyle(color: colorScheme.onSurface),
                   decoration: InputDecoration(
@@ -142,7 +101,8 @@ class _EditCompanyDialogState extends State<EditCompanyDialog> {
                   controller: _managerPhoneController,
                   style: TextStyle(color: colorScheme.onSurface),
                   decoration: InputDecoration(
-                    labelText: 'Телефон',
+                    labelText: 'Телефон (логин)',
+                    hintText: 'Не менее 6 символов',
                     labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
                     border: OutlineInputBorder(
                       borderSide: BorderSide(color: colorScheme.outline),
@@ -154,7 +114,11 @@ class _EditCompanyDialogState extends State<EditCompanyDialog> {
                       borderSide: BorderSide(color: colorScheme.primary),
                     ),
                   ),
-                  validator: (v) => v!.isEmpty ? 'Введите телефон' : null),
+                  validator: (v) {
+                    if (v == null || v.isEmpty) return 'Введите телефон';
+                    if (v.length < 6) return 'Не менее 6 символов';
+                    return null;
+                  }),
             ],
           ),
         ),

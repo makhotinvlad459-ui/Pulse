@@ -7,10 +7,18 @@ from fastapi.responses import FileResponse
 import os
 
 from app.database import get_db
-from app.models import User, Company, Transaction, Category, CompanyMember, UserRole, Account, ShowcaseItem, TransactionItem, Product
+from app.models import User, Company, Permission, CompanyMemberPermission, Counterparty, Transaction, Category, CompanyMember, UserRole, Account, ShowcaseItem, TransactionItem, Product, Order, OrderItem, OrderStatus
 from app.deps import get_current_user
 
 router = APIRouter(prefix="/statistics", tags=["statistics"])
+
+async def _check_company_access(company_id: int, current_user: User, db: AsyncSession) -> bool:
+    if current_user.role == UserRole.FOUNDER:
+        result = await db.execute(select(Company).where(Company.id == company_id, Company.founder_id == current_user.id))
+        if result.scalar_one_or_none():
+            return True
+    result = await db.execute(select(CompanyMember).where(CompanyMember.company_id == company_id, CompanyMember.user_id == current_user.id))
+    return result.scalar_one_or_none() is not None
 
 @router.get("/income")
 async def get_income_statistics(
@@ -303,31 +311,53 @@ async def get_user_overview(
     # Получаем все компании, доступные пользователю
     if current_user.role == UserRole.FOUNDER:
         result = await db.execute(select(Company).where(Company.founder_id == current_user.id))
+        companies = result.scalars().all()
+        has_any_accounts_permission = True  # основатель всегда имеет доступ
     else:
-        # Сотрудник: компании через CompanyMember
         result = await db.execute(
             select(Company).join(CompanyMember).where(CompanyMember.user_id == current_user.id)
         )
-    companies = result.scalars().all()
-    
+        companies = result.scalars().all()
+        has_any_accounts_permission = False
+
     total_cash = 0.0
     total_bank = 0.0
-    
+
     for company in companies:
-        # Суммируем балансы счетов компании
-        acc_result = await db.execute(select(Account).where(Account.company_id == company.id))
-        accounts = acc_result.scalars().all()
-        for acc in accounts:
-            if acc.type == 'cash':
-                total_cash += float(acc.balance)
-            elif acc.type == 'bank':
-                total_bank += float(acc.balance)
-    
+        if current_user.role == UserRole.FOUNDER:
+            has_permission = True
+        else:
+            member_res = await db.execute(
+                select(CompanyMember).where(CompanyMember.company_id == company.id, CompanyMember.user_id == current_user.id)
+            )
+            member = member_res.scalar_one_or_none()
+            if member:
+                perm_res = await db.execute(
+                    select(CompanyMemberPermission).join(Permission).where(
+                        CompanyMemberPermission.member_id == member.id,
+                        Permission.name == 'view_accounts'
+                    )
+                )
+                has_permission = perm_res.scalar_one_or_none() is not None
+            else:
+                has_permission = False
+
+        if has_permission:
+            has_any_accounts_permission = True
+            acc_result = await db.execute(select(Account).where(Account.company_id == company.id))
+            accounts = acc_result.scalars().all()
+            for acc in accounts:
+                if acc.type == 'cash':
+                    total_cash += float(acc.balance)
+                elif acc.type == 'bank':
+                    total_bank += float(acc.balance)
+
     total_all = total_cash + total_bank
     return {
         "total_cash": total_cash,
         "total_bank": total_bank,
-        "total_all": total_all
+        "total_all": total_all,
+        "has_any_accounts_permission": has_any_accounts_permission
     }
 
 @router.get("/{transaction_id}/photo")
@@ -733,3 +763,198 @@ async def get_product_consumption(
         }
         for r in rows
     ]
+
+@router.get("/order-materials-consumption")
+async def get_order_materials_consumption(
+    company_id: int,
+    start_date: datetime,
+    end_date: datetime,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if not await _check_company_access(company_id, current_user, db):
+        raise HTTPException(403, "Access denied")
+    
+    stmt = (
+        select(
+            Product.name,
+            Product.unit,
+            func.sum(OrderItem.quantity).label('total_quantity'),
+            func.sum(OrderItem.total).label('total_cost')
+        )
+        .join(OrderItem, OrderItem.product_id == Product.id)
+        .join(Order, Order.id == OrderItem.order_id)
+        .where(Order.company_id == company_id)
+        .where(Order.status == OrderStatus.COMPLETED)
+        .where(Order.completed_at >= start_date)
+        .where(Order.completed_at <= end_date)
+        .group_by(Product.id)
+    )
+    result = await db.execute(stmt)
+    return result.mappings().all()
+
+@router.get("/order-stats")
+async def get_order_stats(
+    company_id: int,
+    start_date: datetime,
+    end_date: datetime,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if not await _check_company_access(company_id, current_user, db):
+        raise HTTPException(403, "Access denied")
+    
+    stats = {}
+    for status in OrderStatus:
+        stmt = select(
+            func.count(Order.id).label('count'),
+            func.sum(Order.total_amount).label('total_sum')
+        ).where(
+            Order.company_id == company_id,
+            Order.status == status,
+            Order.created_at.between(start_date, end_date)
+        )
+        row = (await db.execute(stmt)).one()
+        stats[status.value] = {
+            'count': row.count or 0,
+            'total_sum': float(row.total_sum or 0) if row.total_sum else 0.0
+        }
+    return stats
+
+@router.get("/counterparties")
+async def get_counterparties(
+    company_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if not await _check_company_access(company_id, current_user, db):
+        raise HTTPException(403, "Access denied")
+    
+    # Имена из таблицы Counterparty
+    cp_result = await db.execute(select(Counterparty.name).where(Counterparty.company_id == company_id))
+    cp_names = [row[0] for row in cp_result.all()]
+    
+    # Имена из транзакций
+    tx_result = await db.execute(
+        select(Transaction.counterparty).distinct().where(
+            Transaction.company_id == company_id,
+            Transaction.counterparty.isnot(None),
+            Transaction.counterparty != ''
+        )
+    )
+    tx_names = [row[0] for row in tx_result.all()]
+    
+    # Объединяем и убираем дубликаты
+    all_names = sorted(set(cp_names + tx_names))
+    return all_names
+
+@router.get("/counterparty-stats")
+async def get_counterparty_stats(
+    company_id: int,
+    counterparty: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if not await _check_company_access(company_id, current_user, db):
+        raise HTTPException(403, "Access denied")
+    
+    # Ищем все транзакции с этим контрагентом без учёта регистра
+    from sqlalchemy import func
+    counterparty_lower = counterparty.lower()
+    
+    income_result = await db.execute(
+        select(func.sum(Transaction.amount)).where(
+            Transaction.company_id == company_id,
+            func.lower(Transaction.counterparty) == counterparty_lower,
+            Transaction.type == 'income',
+            Transaction.is_deleted == False
+        )
+    )
+    total_income = income_result.scalar_one_or_none() or 0
+    
+    expense_result = await db.execute(
+        select(func.sum(Transaction.amount)).where(
+            Transaction.company_id == company_id,
+            func.lower(Transaction.counterparty) == counterparty_lower,
+            Transaction.type == 'expense',
+            Transaction.is_deleted == False
+        )
+    )
+    total_expense = expense_result.scalar_one_or_none() or 0
+    
+    transactions_result = await db.execute(
+        select(Transaction).where(
+            Transaction.company_id == company_id,
+            func.lower(Transaction.counterparty) == counterparty_lower,
+            Transaction.is_deleted == False
+        ).order_by(Transaction.date.desc()).limit(50)
+    )
+    transactions = transactions_result.scalars().all()
+    
+    return {
+        "counterparty": counterparty,  # возвращаем то, что ввели
+        "total_income": float(total_income),
+        "total_expense": float(total_expense),
+        "balance": float(total_income) - float(total_expense),
+        "transactions": [
+            {
+                "id": t.id,
+                "type": t.type,
+                "amount": float(t.amount),
+                "date": t.date.isoformat(),
+                "description": t.description
+            } for t in transactions
+        ]
+    }
+
+@router.get("/counterparties-report")
+async def get_counterparties_report(
+    company_id: int,
+    start_date: datetime,
+    end_date: datetime,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if not await _check_company_access(company_id, current_user, db):
+        raise HTTPException(403, "Access denied")
+    
+    income_stmt = select(
+        Transaction.counterparty,
+        func.sum(Transaction.amount).label('total_income')
+    ).where(
+        Transaction.company_id == company_id,
+        Transaction.counterparty.isnot(None),
+        Transaction.counterparty != '',
+        Transaction.type == 'income',
+        Transaction.is_deleted == False,
+        Transaction.date >= start_date,
+        Transaction.date <= end_date
+    ).group_by(Transaction.counterparty)
+    expense_stmt = select(
+        Transaction.counterparty,
+        func.sum(Transaction.amount).label('total_expense')
+    ).where(
+        Transaction.company_id == company_id,
+        Transaction.counterparty.isnot(None),
+        Transaction.counterparty != '',
+        Transaction.type == 'expense',
+        Transaction.is_deleted == False,
+        Transaction.date >= start_date,
+        Transaction.date <= end_date
+    ).group_by(Transaction.counterparty)
+    income_rows = (await db.execute(income_stmt)).all()
+    expense_rows = (await db.execute(expense_stmt)).all()
+    data = {}
+    for row in income_rows:
+        data[row.counterparty] = {"name": row.counterparty, "total_income": float(row.total_income), "total_expense": 0.0}
+    for row in expense_rows:
+        if row.counterparty in data:
+            data[row.counterparty]["total_expense"] = float(row.total_expense)
+        else:
+            data[row.counterparty] = {"name": row.counterparty, "total_income": 0.0, "total_expense": float(row.total_expense)}
+    result = []
+    for item in data.values():
+        item["balance"] = item["total_income"] - item["total_expense"]
+        result.append(item)
+    result.sort(key=lambda x: x["name"])
+    return result
