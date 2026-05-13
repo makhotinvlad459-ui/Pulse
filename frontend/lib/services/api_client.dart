@@ -12,10 +12,10 @@ import '../models/statistics.dart';
 import '../main.dart';                           // ← navigatorKey
 
 class ApiClient {
-  static String get baseUrl {
-    if (kIsWeb) return 'http://localhost:8000';
-    if (Platform.isAndroid) return 'http://192.168.0.115:8000';
-    return 'http://localhost:8000';
+  sstatic String get baseUrl {
+    if (kIsWeb) return '/api';  
+    if (Platform.isAndroid) return 'http://93.115.19.96:8000'; 
+    return 'http://93.115.19.96:8000'; 
   }
 
   final Dio _dio = Dio();
