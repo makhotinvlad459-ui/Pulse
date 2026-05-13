@@ -61,7 +61,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final user = User(
         id: data['id'] as int,
         email: data['email'] as String,
-        phone: data['phone'] as String?,
+        phone: data['phone'] as String? ?? '',
         fullName: data['full_name'] as String,
         role: _stringToRole(data['role'] as String),
         subscriptionUntil: data['subscription_until'] != null
