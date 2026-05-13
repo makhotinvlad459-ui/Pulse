@@ -3,20 +3,22 @@ enum UserRole { founder, employee, superadmin }
 class User {
   final int id;
   final String email;
-  final String phone;
+  final String? phone;  // теперь может быть null
   final String fullName;
   final UserRole role;
   final DateTime? subscriptionUntil;
   final DateTime? lastLogin;
 
-  User(
-      {required this.id,
-      required this.email,
-      required this.phone,
-      required this.fullName,
-      required this.role,
-      this.subscriptionUntil,
-      this.lastLogin});
+  User({
+    required this.id,
+    required this.email,
+    this.phone,           // не required, может быть null
+    required this.fullName,
+    required this.role,
+    this.subscriptionUntil,
+    this.lastLogin,
+  });
+
 
   factory User.fromJson(Map<String, dynamic> json) => User(
         id: json['id'],

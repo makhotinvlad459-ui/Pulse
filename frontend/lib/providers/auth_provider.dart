@@ -63,39 +63,37 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<bool> _loadUserProfile() async {
-    try {
-      print('🔄 Loading user profile...');
-      final response = await _api.get('/auth/me');
-      final data = response.data;
-      print('📦 Profile data: $data');
-      if (data == null) throw Exception('No data');
-      // Проверяем наличие полей (без приведения к null)
-      final userId = data['id'] as int?;
-      final email = data['email'] as String?;
-      final fullName = data['full_name'] as String?;
-      final roleStr = data['role'] as String?;
-      if (userId == null || email == null || fullName == null || roleStr == null) {
-        throw Exception('Incomplete user data');
-      }
-      final user = User(
-        id: userId,
-        email: email,
-        phone: data['phone'] as String? ?? '',
-        fullName: fullName,
-        role: _stringToRole(roleStr),
-        subscriptionUntil: data['subscription_until'] != null
-            ? DateTime.parse(data['subscription_until'] as String)
-            : null,
-      );
-      state = AuthState(user: user);
-      print('✅ Profile loaded, user: ${user.email}');
-      return true;
-    } catch (e) {
-      print('❌ Load profile error: $e');
-      state = AuthState(error: 'Failed to load profile: $e');
-      return false;
+  try {
+    final response = await _api.get('/auth/me');
+    final data = response.data;
+    print('Profile data: $data');
+    
+    final id = data['id'] as int?;
+    final email = data['email'] as String?;
+    final fullName = data['full_name'] as String?;
+    final roleStr = data['role'] as String?;
+    final phoneStr = data['phone']?.toString() ?? '';   // гарантированно строка
+    final subUntilStr = data['subscription_until'] as String?;
+    
+    if (id == null || email == null || fullName == null || roleStr == null) {
+      throw Exception('Incomplete data');
     }
+    
+    final user = User(
+      id: id,
+      email: email,
+      phone: phoneStr,   // всегда строка
+      fullName: fullName,
+      role: _stringToRole(roleStr),
+      subscriptionUntil: subUntilStr != null ? DateTime.tryParse(subUntilStr) : null,
+    );
+    state = AuthState(user: user);
+    return true;
+  } catch (e) {
+    state = AuthState(error: e.toString());
+    return false;
   }
+}
 
   UserRole _stringToRole(String role) {
     switch (role) {
