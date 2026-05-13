@@ -43,6 +43,11 @@ class RegisterRequest(BaseModel):
     full_name: str
     password: str
 
+    @validator('phone', pre=True)
+    def empty_phone_to_none(cls, v):
+        # Если передана пустая строка, превращаем её в None
+        return None if v == '' else v
+
     @validator('password')
     def validate_password(cls, v):
         if len(v) < 8:
