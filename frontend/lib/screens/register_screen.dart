@@ -55,14 +55,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     }
 
     final authNotifier = ref.read(authProvider.notifier);
-    final success = await authNotifier.register(
-      email,
-      null,
-      fullName,
-      password,
-    );
+    final success = await authNotifier.register(email, null, fullName, password);
     if (success && mounted) {
-      // Профиль уже загружен внутри register, переходим на главный экран
+      // Через небольшую задержку, чтобы профиль успел загрузиться
+      await Future.delayed(const Duration(milliseconds: 500));
       Navigator.pushReplacementNamed(context, '/home');
     } else if (mounted) {
       _showSnackBar(ref.read(authProvider).error ?? AppLocalizations.of(context)!.registrationError);

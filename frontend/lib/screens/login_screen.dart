@@ -1,4 +1,3 @@
-import 'dart:async'; // <-- добавить
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -98,7 +97,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   Future<void> _performLogin(String login, String password) async {
     final authNotifier = ref.read(authProvider.notifier);
-    // Запускаем логин (он сам загрузит профиль)
     await authNotifier.login(login, password);
     if (mounted) {
       // Сохраняем/удаляем пароль
@@ -111,8 +109,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         await _storage.write(key: 'saved_login', value: login);
         await _storage.write(key: 'remember_me', value: 'false');
       }
-      // Проверяем, что пользователь загружен, но даже если нет — HomeScreen покажет лоадер
-      Navigator.pushReplacementNamed(context, '/home');
+      // Даём время загрузиться профилю и переходим
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (mounted) {
+        Navigator.pushReplacementNamed(context, '/home');
+      }
     }
   }
 

@@ -30,10 +30,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
         'password': password,
       });
       final token = response.data['access_token'];
+      print('✅ Register token: $token');
       await _api.setToken(token);
       await _loadUserProfile();
       return true;
     } catch (e) {
+      print('❌ Register error: $e');
       state = AuthState(error: e.toString());
       return false;
     }
@@ -47,17 +49,21 @@ class AuthNotifier extends StateNotifier<AuthState> {
         'password': password,
       });
       final token = response.data['access_token'];
+      print('✅ Login token: $token');
       await _api.setToken(token);
       await _loadUserProfile();
     } catch (e) {
+      print('❌ Login error: $e');
       state = AuthState(error: e.toString());
     }
   }
 
   Future<void> _loadUserProfile() async {
     try {
+      print('🔄 Loading user profile...');
       final response = await _api.get('/auth/me');
       final data = response.data;
+      print('📦 Profile data: $data');
       final user = User(
         id: data['id'] as int,
         email: data['email'] as String,
@@ -69,7 +75,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
             : null,
       );
       state = AuthState(user: user);
+      print('✅ Profile loaded, user: ${user.email}');
     } catch (e) {
+      print('❌ Load profile error: $e');
       state = AuthState(error: 'Failed to load profile: $e');
     }
   }
