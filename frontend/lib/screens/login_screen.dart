@@ -1,3 +1,4 @@
+import 'dart:async'; // <-- добавить
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -97,29 +98,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   Future<void> _performLogin(String login, String password) async {
     final authNotifier = ref.read(authProvider.notifier);
-    // Запускаем логин
+    // Запускаем логин (он сам загрузит профиль)
     await authNotifier.login(login, password);
-    // Подписываемся на изменения состояния, чтобы дождаться загрузки профиля
-    final completer = Completer<bool>();
-    late void Function() listener;
-    listener = () {
-      final user = ref.read(authProvider).user;
-      if (user != null) {
-        completer.complete(true);
-      } else if (ref.read(authProvider).error != null) {
-        completer.complete(false);
-      }
-      // отписываться будем после завершения
-    };
-    ref.listenManual(authProvider, (previous, next) {
-      if (next.user != null) {
-        completer.complete(true);
-      } else if (next.error != null) {
-        completer.complete(false);
-      }
-    });
-    final success = await completer.future.timeout(const Duration(seconds: 5), onTimeout: () => false);
-    if (success && mounted) {
+    if (mounted) {
+      // Сохраняем/удаляем пароль
       if (_rememberMe) {
         await _storage.write(key: 'saved_login', value: login);
         await _storage.write(key: 'saved_password', value: password);
@@ -129,11 +111,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         await _storage.write(key: 'saved_login', value: login);
         await _storage.write(key: 'remember_me', value: 'false');
       }
+      // Проверяем, что пользователь загружен, но даже если нет — HomeScreen покажет лоадер
       Navigator.pushReplacementNamed(context, '/home');
-    } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(ref.read(authProvider).error ?? AppLocalizations.of(context)!.unknownError)),
-      );
     }
   }
 
