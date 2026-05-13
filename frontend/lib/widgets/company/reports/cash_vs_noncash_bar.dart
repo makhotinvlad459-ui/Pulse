@@ -14,6 +14,7 @@ class CashVsNoncashBar extends ConsumerWidget {
     ref.watch(localeProvider);
     final t = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
+    final currency = t.currencySymbol;
     final total = cash + noncash;
     if (total == 0) return Text(t.noData, style: TextStyle(color: colorScheme.onSurfaceVariant));
     final cashPercent = (cash / total * 100).clamp(0, 100);
@@ -52,8 +53,8 @@ class CashVsNoncashBar extends ConsumerWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Row(children: [Container(width: 12, height: 12, color: Colors.orange), const SizedBox(width: 4), Text('${t.cash}: ${cash.toStringAsFixed(2)} ₽', style: TextStyle(color: colorScheme.onSurfaceVariant))]),
-            Row(children: [Container(width: 12, height: 12, color: Colors.blue), const SizedBox(width: 4), Text('${t.nonCash}: ${noncash.toStringAsFixed(2)} ₽', style: TextStyle(color: colorScheme.onSurfaceVariant))]),
+            Row(children: [Container(width: 12, height: 12, color: Colors.orange), const SizedBox(width: 4), Text('${t.cash}: ${cash.toStringAsFixed(2)}$currency', style: TextStyle(color: colorScheme.onSurfaceVariant))]),
+            Row(children: [Container(width: 12, height: 12, color: Colors.blue), const SizedBox(width: 4), Text('${t.nonCash}: ${noncash.toStringAsFixed(2)}$currency', style: TextStyle(color: colorScheme.onSurfaceVariant))]),
           ],
         ),
       ],

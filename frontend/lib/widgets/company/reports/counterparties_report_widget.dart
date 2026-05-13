@@ -56,6 +56,7 @@ class _CounterpartiesReportWidgetState extends ConsumerState<CounterpartiesRepor
     ref.watch(localeProvider);
     final t = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
+    final currency = t.currencySymbol;
     if (_loading) return const CircularProgressIndicator();
     if (_data.isEmpty) return Text(t.noCounterpartiesPeriod, style: TextStyle(color: colorScheme.onSurfaceVariant));
     return SingleChildScrollView(
@@ -65,9 +66,9 @@ class _CounterpartiesReportWidgetState extends ConsumerState<CounterpartiesRepor
         headingTextStyle: TextStyle(color: colorScheme.onPrimary, fontWeight: FontWeight.bold),
         columns: [
           DataColumn(label: Text(t.counterpartyLabel)),
-          DataColumn(label: Text('${t.income}, ₽')),
-          DataColumn(label: Text('${t.expense}, ₽')),
-          DataColumn(label: Text('${t.balance}, ₽')),
+          DataColumn(label: Text('${t.income}$currency')),
+          DataColumn(label: Text('${t.expense}$currency')),
+          DataColumn(label: Text('${t.balance}$currency')),
         ],
         rows: _data.map((row) {
           final balance = row['balance'] as double;

@@ -26,14 +26,35 @@ class CategoriesColumn extends ConsumerWidget {
     required this.categories,
   });
 
+  String _translateCategoryName(String name, AppLocalizations t) {
+    switch (name) {
+      case 'Зарплата': return t.catSalary;
+      case 'Аренда': return t.catRent;
+      case 'Транспортные': return t.catTransport;
+      case 'Продукты': return t.catFood;
+      case 'Связь': return t.catCommunication;
+      case 'Реклама': return t.catAdvertising;
+      case 'Налоги': return t.catTaxes;
+      case 'Прочее': return t.catOther;
+      case 'Реализация': return t.catSales;
+      case 'Продажи': return t.catSales;
+      case 'Касса': return t.catCashbox;
+      case 'Офис': return t.catOffice;
+      case 'Магазин': return t.catShop;
+      case 'Без категории': return t.withoutCategory;
+      case 'Подрядчики': return t.catContractors;
+      default: return name;
+    }
+  }
+
   String _getIconForCategory(String categoryName, AppLocalizations t) {
     if (categoryName == t.withoutCategory) return '📁';
     final cat = categories.firstWhere((c) => c['name'] == categoryName, orElse: () => null);
     return cat != null ? (cat['icon'] ?? '📁') : '📁';
   }
 
-  int? _getCategoryId(String categoryName) {
-    if (categoryName == 'Без категории') return null;
+  int? _getCategoryId(String categoryName, AppLocalizations t) {
+    if (categoryName == t.withoutCategory) return null;
     final cat = categories.firstWhere((c) => c['name'] == categoryName, orElse: () => null);
     return cat?['id'];
   }
@@ -43,6 +64,7 @@ class CategoriesColumn extends ConsumerWidget {
     ref.watch(localeProvider);
     final t = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
+    final currency = t.currencySymbol;
     if (data.isEmpty) {
       return Text(t.noData, style: TextStyle(color: colorScheme.onSurfaceVariant));
     }
@@ -53,29 +75,30 @@ class CategoriesColumn extends ConsumerWidget {
         padding: const EdgeInsets.all(12),
         child: Column(
           children: data.map((item) {
-            final categoryName = item['category_name'];
+            final originalCategoryName = item['category_name'];
+            final categoryName = _translateCategoryName(originalCategoryName, t);
             final amount = item['total'] as double;
             final percent = totalAmount == 0 ? 0 : (amount / totalAmount * 100);
-            final icon = _getIconForCategory(categoryName, t);
+            final icon = _getIconForCategory(originalCategoryName, t);
             return ListTile(
               leading: Text(icon, style: const TextStyle(fontSize: 20)),
               title: Text(categoryName, style: TextStyle(color: colorScheme.onSurface)),
               trailing: Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text('${amount.toStringAsFixed(2)} ₽', style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
+                  Text('${amount.toStringAsFixed(2)}$currency', style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
                   Text('(${percent.toStringAsFixed(1)}%)', style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant)),
                 ],
               ),
               onTap: () {
-                final categoryId = _getCategoryId(categoryName);
+                final categoryId = _getCategoryId(originalCategoryName, t);
                 Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (_) => TransactionsByCategoryScreen(
                       companyId: companyId,
                       categoryId: categoryId,
-                      categoryName: categoryName,
+                      categoryName: originalCategoryName,
                       type: type,
                       startDate: startDate,
                       endDate: endDate,

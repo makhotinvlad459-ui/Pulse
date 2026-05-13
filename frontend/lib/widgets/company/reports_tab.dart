@@ -15,6 +15,12 @@ import 'reports/material_consumption_widget.dart';
 import 'reports/order_stats_widget.dart';
 import 'reports/counterparties_report_widget.dart';
 import 'package:frontend/l10n/app_localizations.dart';
+import 'reports/product_movement_report.dart';
+import 'reports/operations_export_widget.dart';
+import 'reports/counterparty_movement_report.dart';
+import 'reports/cash_movement_report.dart';
+import 'reports/bank_movement_report.dart';
+
 
 class ReportsTab extends ConsumerStatefulWidget {
   final int companyId;
@@ -129,7 +135,7 @@ class ReportsTabState extends ConsumerState<ReportsTab> {
       firstDate: DateTime(2000),
       lastDate: now,
       initialDateRange: DateTimeRange(start: _startDate, end: _endDate),
-      locale: const Locale('ru', 'RU'),
+      locale: Localizations.localeOf(context),
     );
     if (picked != null) {
       setState(() {
@@ -178,31 +184,32 @@ class ReportsTabState extends ConsumerState<ReportsTab> {
     _incomeSpots = [];
     _expenseSpots = [];
     _xLabels = [];
+    final locale = Localizations.localeOf(context);
     for (int i = 0; i < _dynamicsRaw.length; i++) {
       final item = _dynamicsRaw[i];
       _incomeSpots.add(FlSpot(i.toDouble(), (item['income'] as num?)?.toDouble() ?? 0));
       _expenseSpots.add(FlSpot(i.toDouble(), (item['expense'] as num?)?.toDouble() ?? 0));
-      _xLabels.add(_formatPeriodLabel(item['period'], _chartInterval));
+      _xLabels.add(_formatPeriodLabel(item['period'], _chartInterval, locale));
     }
   }
 
-  String _formatPeriodLabel(String period, String interval) {
+  String _formatPeriodLabel(String period, String interval, Locale locale) {
     if (interval == 'day') {
       final parts = period.split('-');
       if (parts.length == 3) {
         final date = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
-        return DateFormat('d MMM', 'ru').format(date);
+        return DateFormat('d MMM', locale.toString()).format(date);
       }
       return period;
     } else if (interval == 'week') {
       final parts = period.split('-');
-      if (parts.length == 2) return '${parts[0]}, нед.${parts[1]}';
+      if (parts.length == 2) return '${parts[0]}, ${AppLocalizations.of(context)!.weekAbbr}${parts[1]}';
       return period;
     } else if (interval == 'month') {
       final parts = period.split('-');
       if (parts.length == 2) {
         final date = DateTime(int.parse(parts[0]), int.parse(parts[1]), 1);
-        return DateFormat('MMM', 'ru').format(date);
+        return DateFormat('MMM', locale.toString()).format(date);
       }
       return period;
     }
@@ -219,12 +226,19 @@ class ReportsTabState extends ConsumerState<ReportsTab> {
       final data = res.data;
       List<dynamic> raw = data['by_category'] ?? [];
       List<Map<String, dynamic>> normalized = [];
+      double totalNoCat = 0;
       for (var item in raw) {
         final cat = item['category'];
         final total = (item['total'] as num).toDouble();
         if (cat != null && cat.toString().isNotEmpty) {
           normalized.add({'category_name': cat.toString(), 'total': total});
+        } else {
+          totalNoCat += total;
         }
+      }
+      if (totalNoCat > 0) {
+        final t = AppLocalizations.of(context)!;
+        normalized.add({'category_name': t.withoutCategory, 'total': totalNoCat});
       }
       _incomeByCategory = normalized;
     } catch (e) {}
@@ -240,12 +254,19 @@ class ReportsTabState extends ConsumerState<ReportsTab> {
       final data = res.data;
       List<dynamic> raw = data['by_category'] ?? [];
       List<Map<String, dynamic>> normalized = [];
+      double totalNoCat = 0;
       for (var item in raw) {
         final cat = item['category'];
         final total = (item['total'] as num).toDouble();
         if (cat != null && cat.toString().isNotEmpty) {
           normalized.add({'category_name': cat.toString(), 'total': total});
+        } else {
+          totalNoCat += total;
         }
+      }
+      if (totalNoCat > 0) {
+        final t = AppLocalizations.of(context)!;
+        normalized.add({'category_name': t.withoutCategory, 'total': totalNoCat});
       }
       _expenseByCategory = normalized;
     } catch (e) {}
@@ -362,7 +383,7 @@ class ReportsTabState extends ConsumerState<ReportsTab> {
     await _loadData();
   }
 
-  @override
+   @override
   Widget build(BuildContext context) {
     ref.watch(localeProvider);
     final t = AppLocalizations.of(context)!;
@@ -449,6 +470,14 @@ class ReportsTabState extends ConsumerState<ReportsTab> {
           ),
 
           ExpansionTile(
+            title: Text(t.productMovementTitle, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            initiallyExpanded: false,
+            children: [
+              ProductMovementReport(companyId: widget.companyId),
+            ],
+          ),
+
+          ExpansionTile(
             title: Text(t.sales, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             initiallyExpanded: false,
             children: [
@@ -496,6 +525,40 @@ class ReportsTabState extends ConsumerState<ReportsTab> {
               ),
             ],
           ),
+          ExpansionTile(
+  title: Text(t.exportToExcel),
+  leading: const Icon(Icons.download),
+  initiallyExpanded: false,
+  children: [
+    ExpansionTile(
+      leading: const Icon(Icons.receipt),
+      title: Text(t.operationsExportTitle),
+      children: [OperationsExportWidget(companyId: widget.companyId)],
+    ),
+    ExpansionTile(
+      leading: const Icon(Icons.inventory),
+      title: Text(t.productMovementTitle),
+      children: [ProductMovementReport(companyId: widget.companyId)],
+    ),
+    ExpansionTile(
+      leading: const Icon(Icons.people),
+      title: Text(t.counterpartyMovementTitle),
+      children: [CounterpartyMovementReport(companyId: widget.companyId)],
+    ),
+    ExpansionTile(
+      leading: const Icon(Icons.money),
+      title: Text(t.cashMovementTitle),
+      children: [CashAccountMovementReport(companyId: widget.companyId)],
+    ),
+    ExpansionTile(
+      leading: const Icon(Icons.account_balance),
+      title: Text(t.bankMovementTitle),
+      children: [BankAccountMovementReport(companyId: widget.companyId)],
+    ),
+  ],
+),
+
+          
         ],
       ),
     );

@@ -156,6 +156,27 @@ class _EditTransactionDialogState extends ConsumerState<EditTransactionDialog> {
     });
   }
 
+  String _translateCategoryName(String name, AppLocalizations t) {
+    switch (name) {
+      case 'Зарплата': return t.catSalary;
+      case 'Аренда': return t.catRent;
+      case 'Транспортные': return t.catTransport;
+      case 'Продукты': return t.catFood;
+      case 'Связь': return t.catCommunication;
+      case 'Реклама': return t.catAdvertising;
+      case 'Налоги': return t.catTaxes;
+      case 'Прочее': return t.catOther;
+      case 'Реализация': return t.catSales;
+      case 'Продажи': return t.catSales;
+      case 'Касса': return t.catCashbox;
+      case 'Офис': return t.catOffice;
+      case 'Магазин': return t.catShop;
+      case 'Подрядчики': return t.catContractors;
+      case 'Без категории': return t.withoutCategory;
+      default: return name;
+    }
+  }
+
   Future<void> _addProduct() async {
     final t = AppLocalizations.of(context)!;
     final api = ApiClient();
@@ -407,6 +428,7 @@ class _EditTransactionDialogState extends ConsumerState<EditTransactionDialog> {
     final t = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
     final isSmallScreen = MediaQuery.of(context).size.width < 500;
+    final currency = t.currencySymbol;
 
     if (widget.accounts.isEmpty) {
       return AlertDialog(
@@ -583,14 +605,14 @@ class _EditTransactionDialogState extends ConsumerState<EditTransactionDialog> {
               const SizedBox(height: 12),
               ListTile(
                 title: Text(t.dateLabel, style: TextStyle(color: colorScheme.onSurface)),
-                trailing: Text(DateFormat('dd.MM.yyyy', 'ru').format(_date), style: TextStyle(color: colorScheme.onSurfaceVariant)),
+                trailing: Text(DateFormat('dd.MM.yyyy', Localizations.localeOf(context).toString()).format(_date), style: TextStyle(color: colorScheme.onSurfaceVariant)),
                 onTap: () async {
                   final picked = await showDatePicker(
                     context: context,
                     initialDate: _date,
                     firstDate: DateTime(2000),
                     lastDate: DateTime.now(),
-                    locale: const Locale('ru', 'RU'),
+                    locale: Localizations.localeOf(context),
                   );
                   if (picked != null) setState(() => _date = picked);
                 },
@@ -601,7 +623,7 @@ class _EditTransactionDialogState extends ConsumerState<EditTransactionDialog> {
                   value: _categoryId,
                   items: widget.categories.map<DropdownMenuItem<int>>((c) => DropdownMenuItem<int>(
                         value: c['id'],
-                        child: Text('${c['icon'] ?? '📁'} ${c['name']}', style: TextStyle(color: colorScheme.onSurface)),
+                        child: Text('${c['icon'] ?? '📁'} ${_translateCategoryName(c['name'], t)}', style: TextStyle(color: colorScheme.onSurface)),
                       )).toList(),
                   onChanged: (v) => setState(() => _categoryId = v),
                   decoration: InputDecoration(
@@ -679,7 +701,7 @@ class _EditTransactionDialogState extends ConsumerState<EditTransactionDialog> {
                         return ListTile(
                           dense: true,
                           title: Text(productName, style: TextStyle(color: colorScheme.onSurface)),
-                          subtitle: Text('$quantity ${t.pcs} — ${total.toStringAsFixed(2)} ₽', style: TextStyle(color: colorScheme.onSurfaceVariant)),
+                          subtitle: Text('$quantity ${t.pcs} — ${total.toStringAsFixed(2)}$currency', style: TextStyle(color: colorScheme.onSurfaceVariant)),
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [

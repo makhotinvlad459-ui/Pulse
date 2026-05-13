@@ -33,7 +33,6 @@ class _MemberPermissionsDialogState extends ConsumerState<MemberPermissionsDialo
   List<dynamic> _allPermissions = [];
   bool _loading = true;
 
-  // Группы прав (ключи – идентификаторы, значения – списки прав)
   final Map<String, List<String>> _groupKeys = {
     'operations': ['view_operations', 'create_transaction', 'edit_transaction'],
     'showcase': ['view_showcase', 'edit_showcase', 'sell_from_showcase'],
@@ -85,39 +84,26 @@ class _MemberPermissionsDialogState extends ConsumerState<MemberPermissionsDialo
 
   String _translatePermissionName(String name, AppLocalizations t) {
     switch (name) {
-      // Operations
       case 'view_operations': return t.permViewOperations;
       case 'create_transaction': return t.permCreateTransaction;
       case 'edit_transaction': return t.permEditTransaction;
-
-      // Counterparties
       case 'view_counterparties': return t.permViewCounterparties;
       case 'edit_counterparties': return t.permEditCounterparties;
-
-      // Showcase
       case 'view_showcase': return t.permViewShowcase;
       case 'edit_showcase': return t.permEditShowcase;
       case 'sell_from_showcase': return t.permSellFromShowcase;
-
-      // Chat & Tasks
       case 'view_chat': return t.permViewChat;
       case 'send_messages': return t.permSendMessages;
       case 'view_tasks': return t.permViewTasks;
       case 'create_task': return t.permCreateTask;
       case 'edit_task': return t.permEditTask;
-
-      // Stock
       case 'view_products': return t.permViewProducts;
       case 'create_product': return t.permCreateProduct;
       case 'edit_product': return t.permEditProduct;
       case 'view_materials': return t.permViewMaterials;
       case 'create_material': return t.permCreateMaterial;
       case 'edit_material': return t.permEditMaterial;
-
-      // Reports
       case 'view_reports': return t.permViewReports;
-
-      // Management
       case 'manage_employees': return t.permManageEmployees;
       case 'manage_permissions': return t.permManagePermissions;
       case 'view_accounts': return t.permViewAccounts;
@@ -125,16 +111,11 @@ class _MemberPermissionsDialogState extends ConsumerState<MemberPermissionsDialo
       case 'manage_categories': return t.permManageCategories;
       case 'edit_company': return t.permEditCompany;
       case 'view_archive': return t.permViewArchive;
-
-      // Documents
       case 'view_documents': return t.permViewDocuments;
       case 'create_documents': return t.permCreateDocuments;
       case 'edit_documents': return t.permEditDocuments;
-
-      // Orders
       case 'view_orders': return t.permViewOrders;
       case 'edit_orders': return t.permEditOrders;
-
       default: return name;
     }
   }
@@ -164,7 +145,6 @@ class _MemberPermissionsDialogState extends ConsumerState<MemberPermissionsDialo
         ? _groupKeys.values.expand((list) => list).toSet()
         : widget.currentUserPermissions;
 
-    // Фильтруем группы по доступным правам
     final filteredGroups = _groupKeys.entries.where((entry) {
       return entry.value.any((perm) => allowedPermissions.contains(perm));
     }).toList();
@@ -189,11 +169,10 @@ class _MemberPermissionsDialogState extends ConsumerState<MemberPermissionsDialo
                       title: Text(_getGroupTitle(groupKey, t), style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
                       children: groupPerms.map((p) {
                         final name = p['name'] as String;
-                        final description = p['description'] as String?;
                         final enabled = true;
                         return CheckboxListTile(
                           title: Text(_translatePermissionName(name, t), style: TextStyle(color: colorScheme.onSurface)),
-                          subtitle: description != null ? Text(description, style: TextStyle(color: colorScheme.onSurfaceVariant)) : null,
+                          // subtitle убран, чтобы избежать дублирования
                           value: _permissionsState[name],
                           onChanged: enabled ? (val) => setState(() => _permissionsState[name] = val ?? false) : null,
                           activeColor: colorScheme.primary,

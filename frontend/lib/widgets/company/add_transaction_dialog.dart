@@ -141,6 +141,27 @@ class _AddTransactionDialogState extends ConsumerState<AddTransactionDialog> {
     }
   }
 
+  String _translateCategoryName(String name, AppLocalizations t) {
+    switch (name) {
+      case 'Зарплата': return t.catSalary;
+      case 'Аренда': return t.catRent;
+      case 'Транспортные': return t.catTransport;
+      case 'Продукты': return t.catFood;
+      case 'Связь': return t.catCommunication;
+      case 'Реклама': return t.catAdvertising;
+      case 'Налоги': return t.catTaxes;
+      case 'Прочее': return t.catOther;
+      case 'Реализация': return t.catSales;
+      case 'Продажи': return t.catSales;
+      case 'Касса': return t.catCashbox;
+      case 'Офис': return t.catOffice;
+      case 'Магазин': return t.catShop;
+      case 'Подрядчики': return t.catContractors;
+      case 'Без категории': return t.withoutCategory;
+      default: return name;
+    }
+  }
+
   Future<void> _addProduct() async {
     final t = AppLocalizations.of(context)!;
     final api = ApiClient();
@@ -314,6 +335,7 @@ class _AddTransactionDialogState extends ConsumerState<AddTransactionDialog> {
     final isSmallScreen = MediaQuery.of(context).size.width < 500;
     final showAmountField = _selectedProducts.isEmpty;
     final effectiveAmount = showAmountField ? _amount : _calculatedAmount;
+    final currency = t.currencySymbol;
 
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -502,7 +524,7 @@ class _AddTransactionDialogState extends ConsumerState<AddTransactionDialog> {
                           return ListTile(
                             dense: true,
                             title: Text(productName),
-                            subtitle: Text('$quantity ${t.pcs} — ${total.toStringAsFixed(2)} ₽'),
+                            subtitle: Text('$quantity ${t.pcs} — ${total.toStringAsFixed(2)}$currency'),
                             trailing: IconButton(
                               icon: const Icon(Icons.delete, color: Colors.red),
                               onPressed: () => _removeProduct(idx),
@@ -512,20 +534,20 @@ class _AddTransactionDialogState extends ConsumerState<AddTransactionDialog> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    Text('${t.totalLabel}: ${effectiveAmount.toStringAsFixed(2)} ₽', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    Text('${t.totalLabel}: ${effectiveAmount.toStringAsFixed(2)}$currency', style: const TextStyle(fontWeight: FontWeight.bold)),
                   ],
                 ],
                 const SizedBox(height: 12),
                 ListTile(
                   title: Text(t.dateLabel),
-                  trailing: Text(DateFormat('dd.MM.yyyy', 'ru').format(_date)),
+                  trailing: Text(DateFormat('dd.MM.yyyy', Localizations.localeOf(context).toString()).format(_date)),
                   onTap: () async {
                     final picked = await showDatePicker(
                       context: context,
                       initialDate: _date,
                       firstDate: DateTime(2000),
                       lastDate: DateTime.now(),
-                      locale: const Locale('ru', 'RU'),
+                      locale: Localizations.localeOf(context),
                     );
                     if (picked != null) setState(() => _date = picked);
                   },
@@ -536,7 +558,7 @@ class _AddTransactionDialogState extends ConsumerState<AddTransactionDialog> {
                     value: _categoryId,
                     items: widget.categories.map<DropdownMenuItem<int>>((c) => DropdownMenuItem<int>(
                           value: c['id'],
-                          child: Text('${c['icon'] ?? '📁'} ${c['name']}'),
+                          child: Text('${c['icon'] ?? '📁'} ${_translateCategoryName(c['name'], t)}'),
                         )).toList(),
                     onChanged: (v) => setState(() => _categoryId = v),
                     decoration: InputDecoration(labelText: t.categoryOptional, border: const OutlineInputBorder()),

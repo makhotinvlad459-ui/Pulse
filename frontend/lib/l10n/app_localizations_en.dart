@@ -410,7 +410,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get nonCash => 'Non-cash';
 
   @override
-  String get transactionNumber => 'Transaction';
+  String get transactionNumber => '№';
 
   @override
   String get counterpartyLabel => 'Counterparty';
@@ -1471,4 +1471,240 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get enterTitle => 'Enter title';
+
+  @override
+  String get currencySymbol => '';
+
+  @override
+  String get unitPcs => 'pcs';
+
+  @override
+  String get unitKg => 'kg';
+
+  @override
+  String get unitG => 'g';
+
+  @override
+  String get unitL => 'L';
+
+  @override
+  String get unitMl => 'ml';
+
+  @override
+  String get unitM => 'm';
+
+  @override
+  String get unitCm => 'cm';
+
+  @override
+  String get unitInch => 'inch';
+
+  @override
+  String get unitPackage => 'pack';
+
+  @override
+  String get accountTypeCash => 'Cash';
+
+  @override
+  String get accountTypeBank => 'Bank';
+
+  @override
+  String get accountTypeCustom => 'Custom';
+
+  @override
+  String get roleManager => 'Manager';
+
+  @override
+  String get roleEmployee => 'Employee';
+
+  @override
+  String get roleFounder => 'Founder';
+
+  @override
+  String get unitGram => 'g';
+
+  @override
+  String get unitLiter => 'L';
+
+  @override
+  String get unitMeter => 'm';
+
+  @override
+  String get unitPack => 'pack';
+
+  @override
+  String get categoryTransport => 'Transportation';
+
+  @override
+  String get catSalary => 'Salary';
+
+  @override
+  String get catRent => 'Rent';
+
+  @override
+  String get catTransport => 'Transport';
+
+  @override
+  String get catFood => 'Food';
+
+  @override
+  String get catCommunication => 'Communication';
+
+  @override
+  String get catAdvertising => 'Advertising';
+
+  @override
+  String get catTaxes => 'Taxes';
+
+  @override
+  String get catOther => 'Other';
+
+  @override
+  String get catImplementation => 'Sales';
+
+  @override
+  String get catRevenue => 'Revenue';
+
+  @override
+  String get catOffice => 'Office';
+
+  @override
+  String get catShop => 'Store';
+
+  @override
+  String get catCashbox => 'Cashbox';
+
+  @override
+  String get catContractors => 'Contractors';
+
+  @override
+  String get founderRole => 'Founder';
+
+  @override
+  String get catSales => 'Sales';
+
+  @override
+  String get catCashDesk => 'Cash desk';
+
+  @override
+  String get paymentForOrder => 'Payment for order';
+
+  @override
+  String get orderCompletion => 'Order completion';
+
+  @override
+  String get productMovementTitle => 'Product movement';
+
+  @override
+  String get selectProduct => 'Select product';
+
+  @override
+  String get exportToExcel => 'Export to Excel';
+
+  @override
+  String get selectProductHint => 'Select a product to view its transactions';
+
+  @override
+  String get noTransactionsForProduct => 'No transactions for this product';
+
+  @override
+  String get typeLabel => 'Type';
+
+  @override
+  String get exportReport => 'Export report';
+
+  @override
+  String get noDataToExport => 'No data to export';
+
+  @override
+  String get errorExcelGenerate => 'Failed to generate Excel file';
+
+  @override
+  String get incomeType => 'Income';
+
+  @override
+  String get expenseType => 'Expense';
+
+  @override
+  String get operationsExportTitle => 'Operations export';
+
+  @override
+  String get categoryLabel => 'Category';
+
+  @override
+  String get selectCounterparty => 'Select counterparty';
+
+  @override
+  String get selectCounterpartyHint =>
+      'Select a counterparty to view transactions';
+
+  @override
+  String get noTransactionsForCounterparty =>
+      'No transactions for this counterparty';
+
+  @override
+  String get counterpartyMovementTitle => 'Counterparty movement';
+
+  @override
+  String get cashMovementTitle => 'Cash movement';
+
+  @override
+  String get bankMovementTitle => 'Bank movement';
+
+  @override
+  String get userGuide => 'User Guide';
+
+  @override
+  String get userGuideText =>
+      '🚀 **Pulse of your finances** — financial accounting for business\n\n✅ **All‑in‑one tool** – no need for separate programs for accounting, chat, tasks, and orders.\n✅ **Owner’s overview across all companies** – see finances of each company and the overall situation. Employees only see what you allow.\n✅ **Simple** – anyone who can use a smartphone can figure it out.\n✅ **Time saving** – reports are built in seconds, no manual calculations.\n✅ **Mobile** – work from home, office, on the road. Everything syncs.\n✅ **Support** – we are always in touch.\n\n🌍 **Works anywhere**\n💻 Web version – open in a browser on a computer or laptop.\n📱 Mobile apps for Android and iOS – download from stores (Google Play, App Store) and work from your phone or tablet.\nData syncs automatically – start on computer, continue on phone.\n\n**Why this app?**\nManage money, orders, goods, and employees – all in one place.\nBusiness owner can keep a finger on the pulse of several companies at once: see income, expenses, account balances, debts, orders, and stock.\nEmployees work only with the companies and sections you assign.\n\n**How to get started**\n1. **Sign up** – provide email, phone (optional), name, and password (min 8 characters).\n2. **Create a company** (owner only) – tap the green ‘+’ button. Fill in: company name, manager name, manager phone (login). Optionally add employees – the app generates a password for each. ⚠️ Password is NOT sent by email – copy it and give to the employee personally.\n3. **Roles & permissions** – owner has full access. Manager and employees see only what you allow. To change permissions later: Company → menu (three dots) → “Manage employees”.\n\n**Main screen (after entering a company)**\n- Account cards – “Cash” and “Bank” (and any extra accounts). Balance updates automatically.\n- Tabs (depending on role):\n  - **Transactions** – record income/expense. Attach photo, add products, specify counterparty. Products can be deducted from stock automatically.\n  - **Showcase** – fixed‑price products/services. Attach a recipe (tech card) – when sold, materials are deducted automatically.\n  - **Chat & Tasks** – communicate and assign tasks. Employees see only their tasks. Attach files.\n  - **Stock** – product and material balances. Add, edit, set units (pcs, kg, m, pack…). Materials in orders can be deducted or not – you choose.\n  - **Reports** – dynamics, income/expense by category, sales, material consumption in orders, order statistics, counterparties, **Export to Excel** (transactions, product movement, counterparty movement, cash/bank movement).\n  - **Orders** – create orders, assign responsible, set deadline, track payments, attach files, change status (pending → accepted → completed / failed).\n  - **Counterparties** – list of suppliers and customers, automatic stats (income, expense, balance). Add/edit.\n\n**Features for owners of multiple companies**\n- Create any number of companies, switch between them on the main screen.\n- Each company has separate accounts, employees, transactions, categories.\n- Financial overview of all companies – you see the total cash and bank balances of each company.\nThis is real management accounting – you always know where the money is, what expenses, what profit per business area. No confusion.\n\n**Switch language**\nTap ☰ (menu) in the top‑left corner, then choose 🇬🇧 or 🇷🇺. System strings (buttons, tab names, categories) translate automatically. Your personal data (company names, account names, product names) remain in the language you entered.\n\n**Try it – it’s easier than it looks. All data at hand, reports build themselves.** 😊';
+
+  @override
+  String get reorderTabs => 'Reorder tabs';
+
+  @override
+  String get activeSubscription => 'Active subscription';
+
+  @override
+  String get noActiveSubscription => 'No active subscription';
+
+  @override
+  String get expiresAt => 'Expires at';
+
+  @override
+  String get companiesCount => 'Companies';
+
+  @override
+  String get remainingFreeCompanies => 'Remaining free companies';
+
+  @override
+  String get chooseTariff => 'Choose tariff';
+
+  @override
+  String get monthly => 'Monthly (30 days)';
+
+  @override
+  String get halfYear => '6 months';
+
+  @override
+  String get yearly => 'Year';
+
+  @override
+  String get extraCompany => 'Extra company slot';
+
+  @override
+  String get payment => 'Payment';
+
+  @override
+  String get paymentNote =>
+      'Payment is processed via secure gateway. After payment, the status will update automatically.';
+
+  @override
+  String get companyLimitReached => 'Company limit reached';
+
+  @override
+  String get companyLimitMessage =>
+      'You have reached the limit of free companies. Please buy a subscription or an extra company slot to continue.';
+
+  @override
+  String get buySubscription => 'Buy subscription';
 }

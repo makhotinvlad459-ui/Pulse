@@ -409,7 +409,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get nonCash => 'Безналичные';
 
   @override
-  String get transactionNumber => 'Операция';
+  String get transactionNumber => '№';
 
   @override
   String get counterpartyLabel => 'Контрагент';
@@ -1382,16 +1382,16 @@ class AppLocalizationsRu extends AppLocalizations {
   String get statusLabel => 'Статус';
 
   @override
-  String get orderStatusPending => 'Ожидает';
+  String get orderStatusPending => 'Ожидают';
 
   @override
-  String get orderStatusAccepted => 'Принят';
+  String get orderStatusAccepted => 'Приняты';
 
   @override
-  String get orderStatusCompleted => 'Выполнен';
+  String get orderStatusCompleted => 'Выполнены';
 
   @override
-  String get orderStatusFailed => 'Провален';
+  String get orderStatusFailed => 'Провалены';
 
   @override
   String get materialsPaid => 'Оплачено материалов';
@@ -1469,4 +1469,240 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get enterTitle => 'Введите название';
+
+  @override
+  String get currencySymbol => ' ₽';
+
+  @override
+  String get unitPcs => 'шт';
+
+  @override
+  String get unitKg => 'кг';
+
+  @override
+  String get unitG => 'г';
+
+  @override
+  String get unitL => 'л';
+
+  @override
+  String get unitMl => 'мл';
+
+  @override
+  String get unitM => 'м';
+
+  @override
+  String get unitCm => 'см';
+
+  @override
+  String get unitInch => 'дюймы';
+
+  @override
+  String get unitPackage => 'упаковка';
+
+  @override
+  String get accountTypeCash => 'Наличные';
+
+  @override
+  String get accountTypeBank => 'Банк';
+
+  @override
+  String get accountTypeCustom => 'Пользовательский';
+
+  @override
+  String get roleManager => 'Управляющий';
+
+  @override
+  String get roleEmployee => 'Сотрудник';
+
+  @override
+  String get roleFounder => 'Основатель';
+
+  @override
+  String get unitGram => 'г';
+
+  @override
+  String get unitLiter => 'л';
+
+  @override
+  String get unitMeter => 'м';
+
+  @override
+  String get unitPack => 'упаковка';
+
+  @override
+  String get categoryTransport => 'Транспортные';
+
+  @override
+  String get catSalary => 'Зарплата';
+
+  @override
+  String get catRent => 'Аренда';
+
+  @override
+  String get catTransport => 'Транспортные';
+
+  @override
+  String get catFood => 'Продукты';
+
+  @override
+  String get catCommunication => 'Связь';
+
+  @override
+  String get catAdvertising => 'Реклама';
+
+  @override
+  String get catTaxes => 'Налоги';
+
+  @override
+  String get catOther => 'Прочее';
+
+  @override
+  String get catImplementation => 'Реализация';
+
+  @override
+  String get catRevenue => 'Продажи';
+
+  @override
+  String get catOffice => 'Офис';
+
+  @override
+  String get catShop => 'Магазин';
+
+  @override
+  String get catCashbox => 'Касса';
+
+  @override
+  String get catContractors => 'Подрядчики';
+
+  @override
+  String get founderRole => 'Основатель';
+
+  @override
+  String get catSales => 'Продажи';
+
+  @override
+  String get catCashDesk => 'Касса';
+
+  @override
+  String get paymentForOrder => 'Оплата по заказу';
+
+  @override
+  String get orderCompletion => 'Выполнение заказа';
+
+  @override
+  String get productMovementTitle => 'Движение товара';
+
+  @override
+  String get selectProduct => 'Выберите товар';
+
+  @override
+  String get exportToExcel => 'Экспорт в Excel';
+
+  @override
+  String get selectProductHint => 'Выберите товар, чтобы увидеть операции';
+
+  @override
+  String get noTransactionsForProduct => 'Нет операций по этому товару';
+
+  @override
+  String get typeLabel => 'Тип';
+
+  @override
+  String get exportReport => 'Экспорт отчёта';
+
+  @override
+  String get noDataToExport => 'Нет данных для экспорта';
+
+  @override
+  String get errorExcelGenerate => 'Не удалось создать Excel-файл';
+
+  @override
+  String get incomeType => 'Приход';
+
+  @override
+  String get expenseType => 'Расход';
+
+  @override
+  String get operationsExportTitle => 'Выгрузка операций';
+
+  @override
+  String get categoryLabel => 'Категория';
+
+  @override
+  String get selectCounterparty => 'Выберите контрагента';
+
+  @override
+  String get selectCounterpartyHint =>
+      'Выберите контрагента, чтобы увидеть операции';
+
+  @override
+  String get noTransactionsForCounterparty =>
+      'Нет операций по этому контрагенту';
+
+  @override
+  String get counterpartyMovementTitle => 'Движение по контрагенту';
+
+  @override
+  String get cashMovementTitle => 'Движение по наличным';
+
+  @override
+  String get bankMovementTitle => 'Движение по банку';
+
+  @override
+  String get userGuide => 'Руководство пользователя';
+
+  @override
+  String get userGuideText =>
+      '🚀 **«Пульс ваших финансов»** — финансовый учёт для бизнеса\n\n✅ **Один инструмент вместо кучи** – не нужно отдельных программ для учёта, чатов, задач и заказов.\n✅ **Владельцу – полная картина по всем компаниям** – видите финансы каждой компании и общую ситуацию. Сотрудники видят только то, что вы разрешили.\n✅ **Простота** – разберётся любой, кто умеет пользоваться смартфоном.\n✅ **Экономия времени** – отчёты строятся за секунды, не нужно ничего считать вручную.\n✅ **Мобильность** – работайте из дома, из офиса, в дороге. Всё синхронизируется.\n✅ **Поддержка** – если что-то непонятно, мы всегда на связи.\n\n🌍 **Работает где угодно**\n💻 **Веб-версия** – открываете в браузере на компьютере или ноутбуке.\n📱 **Мобильные приложения** для Android и iOS – скачиваете из магазинов (Google Play, App Store) и работаете с телефона или планшета.\nВсе данные синхронизируются автоматически – начали на компьютере, продолжили на телефоне.\n\n**Для чего это приложение?**\nУправлять деньгами, заказами, товарами и сотрудниками – всё в одном месте.\nВладелец бизнеса может держать руку на пульсе сразу нескольких компаний: видеть доходы, расходы, балансы счетов, задолженности, заказы и склад.\nСотрудники работают только с теми компаниями и разделами, куда вы их назначили.\n\n**Как начать работать**\n1. **Регистрация** – укажите email, телефон (необязательно), имя и пароль (не менее 8 символов).\n2. **Создание компании** (только владельцем): нажмите на зелёную кнопку «+». Заполните: название компании, ФИО управляющего, телефон управляющего (логин). При желании добавьте сотрудников – приложение сгенерирует пароль для каждого. ⚠️ **Важно:** пароль НЕ приходит на почту. Скопируйте его и передайте сотруднику лично.\n3. **Роли и права**: владелец – полный доступ. Управляющий и сотрудники видят только то, что вы разрешили. Для изменения прав: компания → меню (три точки) → «Управление сотрудниками».\n\n**Главный экран (после входа в компанию)**\n- **Карточки счетов** – «Наличные» и «Банк» (и любые дополнительные). Баланс обновляется автоматически.\n- **Вкладки** (в зависимости от роли):\n  - **Операции** – учёт приходов и расходов. Можно прикрепить фото, добавить товары (списываются со склада), указать контрагента.\n  - **Витрина** – товары/услуги с фиксированной ценой. Можно привязать технологическую карту (рецепт) – при продаже материалы списываются автоматически.\n  - **Чат и задачи** – общение, постановка задач, обмен файлами. Сотрудники видят свои задачи.\n  - **Склад** – остатки товаров и материалов. Можно добавлять позиции, редактировать количество, указывать единицы измерения (шт, кг, м, упаковка…).\n  - **Отчёты** – динамика, доходы/расходы по категориям, продажи, расход материалов в заказах, статистика заказов, контрагенты, **Экспорт в Excel** (операции, движение по товару, по контрагенту, по наличным/банку).\n  - **Заказы** – создание заказов, назначение ответственного, дедлайн, отслеживание оплат, прикрепление файлов, смена статуса (ожидает → принят → выполнен / провален).\n  - **Контрагенты** – список поставщиков и покупателей, автоматическая статистика (доход, расход, баланс). Добавление/редактирование.\n\n**Особенности для владельца нескольких компаний**\n- Создавайте любое количество компаний, переключайтесь между ними на главном экране.\n- У каждой компании свой учёт: счета, сотрудники, операции, категории.\n- Финансовая картина по всем компаниям – сразу на главном экране: видите суммарные остатки наличных и банковских счетов каждой компании.\nЭто настоящий управленческий учёт – вы всегда знаете, где деньги, какие расходы, какая прибыль по каждому направлению бизнеса. Никакой путаницы.\n\n**Переключение языка**\nНажмите на иконку ☰ (меню) в левом верхнем углу главного экрана. Выберите флаг 🇬🇧 (английский) или 🇷🇺 (русский) – интерфейс мгновенно переключится. Системные строки (кнопки, названия вкладок, категории) переведутся автоматически. Ваши личные данные (названия компаний, счетов, товаров) останутся на том языке, на котором вы их ввели.\n\n**Попробуйте – это проще, чем кажется. Все данные под рукой, а отчёты строятся сами.** 😊';
+
+  @override
+  String get reorderTabs => 'Изменить порядок вкладок';
+
+  @override
+  String get activeSubscription => 'Активная подписка';
+
+  @override
+  String get noActiveSubscription => 'Нет активной подписки';
+
+  @override
+  String get expiresAt => 'Действует до';
+
+  @override
+  String get companiesCount => 'Компаний';
+
+  @override
+  String get remainingFreeCompanies => 'Осталось бесплатных компаний';
+
+  @override
+  String get chooseTariff => 'Выберите тариф';
+
+  @override
+  String get monthly => 'Месяц (30 дней)';
+
+  @override
+  String get halfYear => '6 месяцев';
+
+  @override
+  String get yearly => 'Год';
+
+  @override
+  String get extraCompany => 'Дополнительная компания';
+
+  @override
+  String get payment => 'Оплата';
+
+  @override
+  String get paymentNote =>
+      'Оплата проходит через защищённый шлюз. После оплаты статус обновится автоматически.';
+
+  @override
+  String get companyLimitReached => 'Достигнут лимит компаний';
+
+  @override
+  String get companyLimitMessage =>
+      'Вы достигли лимита бесплатных компаний. Пожалуйста, купите подписку или дополнительный слот, чтобы продолжить.';
+
+  @override
+  String get buySubscription => 'Купить подписку';
 }

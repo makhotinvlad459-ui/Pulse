@@ -119,11 +119,11 @@ class _OrderDetailsDialogState extends ConsumerState<OrderDetailsDialog> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, ImageSource.camera),
-            child: const Text('Камера'), // будет переведено через t.camera, но чтобы не усложнять, можно тоже локализовать
+            child: Text(t.camera),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, ImageSource.gallery),
-            child: const Text('Галерея'),
+            child: Text(t.gallery),
           ),
         ],
       ),
@@ -220,6 +220,7 @@ class _OrderDetailsDialogState extends ConsumerState<OrderDetailsDialog> {
     final t = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
     final orderId = widget.order['id'];
+    final currency = t.currencySymbol;
 
     double calculatedMaterialsTotal = 0;
     double materialsPaid = 0;
@@ -290,17 +291,17 @@ class _OrderDetailsDialogState extends ConsumerState<OrderDetailsDialog> {
                   ],
                 ),
               const SizedBox(height: 8),
-              Text('${t.workPrice}: ${_fullOrder['work_price']} ₽',
+              Text('${t.workPrice}: ${_fullOrder['work_price']}$currency',
                   style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
-              Text('${t.materialsTotal}: ${calculatedMaterialsTotal.toStringAsFixed(2)} ₽',
+              Text('${t.materialsTotal}: ${calculatedMaterialsTotal.toStringAsFixed(2)}$currency',
                   style: TextStyle(color: colorScheme.onSurface)),
-              Text('${t.materialsPaid}: ${materialsPaid.toStringAsFixed(2)} ₽',
+              Text('${t.materialsPaid}: ${materialsPaid.toStringAsFixed(2)}$currency',
                   style: TextStyle(color: Colors.green)),
-              Text('${t.orderTotal}: ${_fullOrder['total_amount']} ₽',
+              Text('${t.orderTotal}: ${_fullOrder['total_amount']}$currency',
                   style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
-              Text('${t.totalPaid}: ${_fullOrder['paid_amount']} ₽',
+              Text('${t.totalPaid}: ${_fullOrder['paid_amount']}$currency',
                   style: TextStyle(color: colorScheme.onSurface)),
-              Text('${t.remainingToPay}: ${(_fullOrder['total_amount'] - _fullOrder['paid_amount']).toStringAsFixed(2)} ₽',
+              Text('${t.remainingToPay}: ${(_fullOrder['total_amount'] - _fullOrder['paid_amount']).toStringAsFixed(2)}$currency',
                   style: TextStyle(
                       fontWeight: FontWeight.bold,
                       color: (_fullOrder['total_amount'] - _fullOrder['paid_amount']) > 0
@@ -358,7 +359,7 @@ class _OrderDetailsDialogState extends ConsumerState<OrderDetailsDialog> {
                       title: Text(productName,
                           style: TextStyle(color: colorScheme.onSurface)),
                       subtitle: Text(
-                        '$quantity × ${item['unit_price']} ₽ = $total ₽',
+                        '$quantity × ${item['unit_price']}$currency = $total$currency',
                         softWrap: true,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -483,7 +484,7 @@ class _OrderDetailsDialogState extends ConsumerState<OrderDetailsDialog> {
                   children: (_fullOrder['payments'] as List).map((payment) {
                     return ListTile(
                       dense: true,
-                      title: Text('${payment['amount']} ₽',
+                      title: Text('${payment['amount']}$currency',
                           style: TextStyle(color: colorScheme.onSurface)),
                       subtitle: Text(DateFormat('dd.MM.yyyy')
                           .format(DateTime.parse(payment['payment_date']))),
@@ -617,6 +618,7 @@ class _OrderDetailsDialogState extends ConsumerState<OrderDetailsDialog> {
   void _showAddPaymentDialog() async {
     final t = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
+    final currency = t.currencySymbol;
     double amount = 0;
     DateTime paymentDate = DateTime.now();
     String comment = '';
@@ -669,7 +671,7 @@ class _OrderDetailsDialogState extends ConsumerState<OrderDetailsDialog> {
                     value: selectedAccountId,
                     items: accounts.map((acc) => DropdownMenuItem<int>(
                       value: acc['id'],
-                      child: Text('${acc['name']} (${acc['balance']} ₽)'),
+                      child: Text('${acc['name']} (${acc['balance']}$currency)'),
                     )).toList(),
                     onChanged: (v) => selectedAccountId = v,
                     decoration: InputDecoration(labelText: t.receivingAccountRequired),

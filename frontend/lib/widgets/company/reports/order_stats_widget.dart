@@ -76,6 +76,7 @@ class _OrderStatsWidgetState extends ConsumerState<OrderStatsWidget> {
     ref.watch(localeProvider);
     final t = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
+    final currency = t.currencySymbol;
     if (_loading) return const CircularProgressIndicator();
     if (_stats.isEmpty) return Text(t.noOrderData, style: TextStyle(color: colorScheme.onSurfaceVariant));
     return Column(
@@ -109,7 +110,7 @@ class _OrderStatsWidgetState extends ConsumerState<OrderStatsWidget> {
                     ),
                     const SizedBox(height: 8),
                     Text('${t.quantityLabelLower}: $count', style: TextStyle(color: colorScheme.onSurfaceVariant)),
-                    Text('${t.amountLabelLower}: ${totalSum.toStringAsFixed(2)} ₽', style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
+                    Text('${t.amountLabelLower}: ${totalSum.toStringAsFixed(2)}$currency', style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
                   ],
                 ),
               ),

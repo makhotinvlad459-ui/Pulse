@@ -34,6 +34,21 @@ class _RecipeEditorState extends ConsumerState<RecipeEditor> {
     widget.onChanged(_items);
   }
 
+  String _translateUnit(String unit, AppLocalizations t) {
+    switch (unit) {
+      case 'шт': return t.unitPcs;
+      case 'кг': return t.unitKg;
+      case 'г': return t.unitGram;
+      case 'л': return t.unitLiter;
+      case 'мл': return t.unitMl;
+      case 'м': return t.unitMeter;
+      case 'см': return t.unitCm;
+      case 'дюймы': return t.unitInch;
+      case 'упаковка': return t.unitPack;
+      default: return unit;
+    }
+  }
+
   Future<void> _addIngredient() async {
     final t = AppLocalizations.of(context)!;
     List<dynamic> products = [];
@@ -47,6 +62,7 @@ class _RecipeEditorState extends ConsumerState<RecipeEditor> {
     }
 
     int? selectedProductId;
+    double quantity = 0;
     final quantityController = TextEditingController();
     String? selectedProductName;
 
@@ -76,9 +92,10 @@ class _RecipeEditorState extends ConsumerState<RecipeEditor> {
                   dropdownColor: colorScheme.surface,
                   style: TextStyle(color: colorScheme.onSurface),
                   items: products.map((p) {
+                    final unitTranslated = _translateUnit(p['unit'], t);
                     return DropdownMenuItem<int>(
                       value: p['id'],
-                      child: Text('${p['name']} (${t.remainingStock}: ${p['current_quantity']} ${p['unit']})'),
+                      child: Text('${p['name']} (${t.remainingStock}: ${p['current_quantity']} $unitTranslated)'),
                     );
                   }).toList(),
                   onChanged: (v) {

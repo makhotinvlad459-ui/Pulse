@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import '../services/api_client.dart';
 import '../providers/locale_provider.dart';
+import '../screens/subscription_screen.dart';
 import 'package:frontend/l10n/app_localizations.dart';
 
 class CreateCompanyScreen extends ConsumerStatefulWidget {
@@ -28,8 +29,31 @@ class _CreateCompanyScreenState extends ConsumerState<CreateCompanyScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
+    final api = ApiClient();
+    final t = AppLocalizations.of(context)!;
+
+    // 1. Проверяем, может ли пользователь создавать новую компанию
     try {
-      final api = ApiClient();
+      final statusRes = await api.get('/subscription/status');
+      final data = statusRes.data;
+      final canCreate = data['can_create_company'] as bool;
+      if (!canCreate) {
+        setState(() => _isLoading = false);
+        _showLimitDialog();
+        return;
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
+      // Если запрос статуса не удался, всё равно пробуем создать (может, бэкенд ещё не обновлён)
+      // Но лучше прервать и показать ошибку.
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${t.error}: $e')),
+      );
+      return;
+    }
+
+    // 2. Создаём компанию
+    try {
       final response = await api.post('/companies/', data: {
         'name': _nameController.text,
         'manager_full_name': _managerNameController.text,
@@ -47,12 +71,48 @@ class _CreateCompanyScreenState extends ConsumerState<CreateCompanyScreen> {
         }
       }
     } catch (e) {
-      if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('${AppLocalizations.of(context)!.error}: $e')));
+      if (mounted) {
+        String errorMsg = e.toString();
+        // Если бэкенд вернул 403 с сообщением о лимите – показываем диалог
+        if (errorMsg.contains('Company limit reached')) {
+          _showLimitDialog();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('${t.error}: $e')),
+          );
+        }
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _showLimitDialog() {
+    final t = AppLocalizations.of(context)!;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Text(t.companyLimitReached),
+        content: Text(t.companyLimitMessage),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(t.close),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context); // закрываем диалог
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SubscriptionScreen()),
+              );
+            },
+            child: Text(t.buySubscription),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showCredentialsDialog(List<dynamic> credentials) {
@@ -102,14 +162,12 @@ class _CreateCompanyScreenState extends ConsumerState<CreateCompanyScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Подписываемся на смену языка для перерисовки (опционально, но полезно)
     ref.watch(localeProvider);
     final colorScheme = Theme.of(context).colorScheme;
     final t = AppLocalizations.of(context)!;
     return Scaffold(
       appBar: AppBar(
         title: Text(t.newCompany),
-     
       ),
       body: Form(
         key: _formKey,

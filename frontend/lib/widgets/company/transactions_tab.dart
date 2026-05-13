@@ -84,7 +84,7 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
       firstDate: DateTime(2000),
       lastDate: now,
       initialDateRange: DateTimeRange(start: _startDate, end: endDate),
-      locale: Locale('ru'), // можно заменить на текущую локаль, но оставим для удобства
+      locale: Localizations.localeOf(context),
     );
     if (picked != null) {
       setState(() {
@@ -104,30 +104,80 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
     return type;
   }
 
+  String _translateAccountName(String name, AppLocalizations t) {
+    switch (name) {
+      case 'Наличные':
+        return t.cashType;
+      case 'Банк':
+        return t.bankType;
+      case 'Архив':
+        return t.archive;
+      default:
+        return name;
+    }
+  }
+
   String getAccountName(int? id) {
-    if (id == null) return '';
-    try {
-      final acc = widget.accounts
-          .cast<Map<String, dynamic>>()
-          .firstWhere((a) => a['id'] == id);
-      String icon =
-          acc['type'] == 'cash' ? '💵' : (acc['type'] == 'bank' ? '🏦' : '📁');
-      return '$icon ${acc['name']}';
-    } catch (e) {
-      return '';
+  if (id == null) return '';
+  try {
+    final acc = widget.accounts.cast<Map<String, dynamic>>().firstWhere((a) => a['id'] == id);
+    String icon = acc['type'] == 'cash' ? '💵' : (acc['type'] == 'bank' ? '🏦' : '📁');
+    String name = acc['name'];
+    // Перевод системных счетов
+    if (acc['type'] == 'cash') {
+      name = AppLocalizations.of(context)!.cashType; // "Наличные" -> "Cash"
+    } else if (acc['type'] == 'bank') {
+      name = AppLocalizations.of(context)!.bankType; // "Банк" -> "Bank"
+    } else if (name == 'Архив') {
+      name = AppLocalizations.of(context)!.archive;
+    }
+    return '$icon $name';
+  } catch (e) {
+    return '';
+  }
+}
+
+  String _translateCategoryName(String name, AppLocalizations t) {
+    switch (name) {
+      case 'Зарплата': return t.catSalary;
+      case 'Аренда': return t.catRent;
+      case 'Транспортные': return t.catTransport;
+      case 'Продукты': return t.catFood;
+      case 'Связь': return t.catCommunication;
+      case 'Реклама': return t.catAdvertising;
+      case 'Налоги': return t.catTaxes;
+      case 'Прочее': return t.catOther;
+      case 'Реализация': return t.catSales;
+      case 'Продажи': return t.catSales;
+      case 'Касса': return t.catCashbox;
+      case 'Офис': return t.catOffice;
+      case 'Магазин': return t.catShop;
+      case 'Подрядчики': return t.catContractors;
+      case 'Без категории': return t.withoutCategory;
+      default: return name;
     }
   }
 
   String getCategoryName(int? id, AppLocalizations t) {
-    if (id == null) return t.withoutCategory;
-    try {
-      final cat = widget.categories
-          .cast<Map<String, dynamic>>()
-          .firstWhere((c) => c['id'] == id);
-      return '${cat['icon'] ?? '📁'} ${cat['name']}';
-    } catch (e) {
-      return t.withoutCategory;
-    }
+  if (id == null) return t.withoutCategory;
+  try {
+    final cat = widget.categories
+        .cast<Map<String, dynamic>>()
+        .firstWhere((c) => c['id'] == id);
+    final name = cat['name'];
+    final translatedName = _translateCategoryName(name, t);
+    return '${cat['icon'] ?? '📁'} $translatedName';
+  } catch (e) {
+    return t.withoutCategory;
+  }
+}
+
+  String _translateDescription(String desc, AppLocalizations t) {
+    String result = desc;
+    result = result.replaceAll('Оплата по заказу', t.paymentForOrder);
+    result = result.replaceAll('Выполнение заказа', t.orderCompletion);
+    result = result.replaceAll('Продажа с витрины', t.saleFromShowcase);
+    return result;
   }
 
   Future<void> _restoreTransaction(int id) async {
@@ -331,6 +381,8 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
     ref.watch(localeProvider);
     final colorScheme = Theme.of(context).colorScheme;
     final t = AppLocalizations.of(context)!;
+    final currency = t.currencySymbol;
+
     Map<DateTime, List<Transaction>> grouped = {};
     for (var trans in _transactions) {
       DateTime date = trans.date.toLocal();
@@ -401,8 +453,7 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
                                           CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          DateFormat('EEEE, d MMMM yyyy', 'ru')
-                                              .format(date),
+                                          DateFormat.yMMMMd(Localizations.localeOf(context).toString()).format(date),
                                           style: TextStyle(
                                               fontWeight: FontWeight.bold,
                                               fontSize: 16,
@@ -412,15 +463,15 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
                                         Wrap(
                                           spacing: 12,
                                           children: [
-                                            Text('💹 ${t.turnover}: ${turnover.toStringAsFixed(2)} ₽',
+                                            Text('💹 ${t.turnover}: ${turnover.toStringAsFixed(2)}$currency',
                                                 style: TextStyle(
                                                     fontSize: 12,
                                                     color: colorScheme.onSurfaceVariant)),
-                                            Text('💵 ${t.cash}: ${cashIncome.toStringAsFixed(2)} ₽',
+                                            Text('💵 ${t.cash}: ${cashIncome.toStringAsFixed(2)}$currency',
                                                 style: TextStyle(
                                                     fontSize: 12,
                                                     color: colorScheme.onSurfaceVariant)),
-                                            Text('💳 ${t.nonCash}: ${nonCashIncome.toStringAsFixed(2)} ₽',
+                                            Text('💳 ${t.nonCash}: ${nonCashIncome.toStringAsFixed(2)}$currency',
                                                 style: TextStyle(
                                                     fontSize: 12,
                                                     color: colorScheme.onSurfaceVariant)),
@@ -431,6 +482,8 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
                                   ),
                                   ...dayTransactions.map((trans) {
                                     final isDeleted = trans.isDeleted;
+                                    final description = _translateDescription(trans.description ?? '', t);
+                                    final displayCreatorName = trans.creatorName == 'Основатель' ? t.founderRole : trans.creatorName;
                                     return Card(
                                       margin: const EdgeInsets.symmetric(
                                           vertical: 4, horizontal: 8),
@@ -441,7 +494,7 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
                                         title: Row(
                                           children: [
                                             Text(
-                                              '${trans.amount.toStringAsFixed(2)} ₽',
+                                              '${trans.amount.toStringAsFixed(2)}$currency',
                                               style: TextStyle(
                                                 color: trans.type == 'income'
                                                     ? (isDeleted
@@ -458,7 +511,7 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
                                             ),
                                             const SizedBox(width: 8),
                                             Text(
-                                              '${t.transactionNumber} №${trans.number}',
+                                              '${t.transactionNumber} ${trans.number}',
                                               style: TextStyle(
                                                 color: isDeleted ? colorScheme.onSurfaceVariant : colorScheme.onSurface,
                                                 fontSize: 12,
@@ -471,7 +524,7 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
                                               CrossAxisAlignment.start,
                                           children: [
                                             Text(
-                                              '${_typeName(trans.type, t)} • ${getCategoryName(trans.categoryId, t)} • ${getAccountName(trans.accountId)} • ${trans.description ?? ''}',
+                                              '${_typeName(trans.type, t)} • ${getCategoryName(trans.categoryId, t)} • ${getAccountName(trans.accountId)} • $description',
                                               style: TextStyle(
                                                   color: isDeleted
                                                       ? colorScheme.onSurfaceVariant
@@ -510,7 +563,7 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
                                               ),
                                             if (trans.creatorName != null)
                                               Text(
-                                                '${t.createdByLabel}: ${trans.creatorName}',
+                                                '${t.createdByLabel}: $displayCreatorName',
                                                 style: TextStyle(
                                                     fontSize: 10,
                                                     color: isDeleted

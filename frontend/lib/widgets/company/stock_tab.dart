@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../services/api_client.dart';
@@ -27,7 +28,35 @@ class _StockTabState extends ConsumerState<StockTab> {
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
 
-  final List<String> _materialUnits = ['шт', 'м', 'мм', 'см', 'дюймы', 'кг', 'г', 'л', 'мл', 'упаковка'];
+  // Маппинг ключа единицы измерения в локализованную строку
+  String _unitKeyToDisplay(String key, AppLocalizations t) {
+    switch (key) {
+      case 'шт': return t.unitPcs;
+      case 'кг': return t.unitKg;
+      case 'г': return t.unitGram;
+      case 'л': return t.unitLiter;
+      case 'мл': return t.unitMl;
+      case 'м': return t.unitMeter;
+      case 'см': return t.unitCm;
+      case 'дюймы': return t.unitInch;
+      case 'упаковка': return t.unitPack;
+      default: return key; // если ключ не найден, показываем как есть
+    }
+  }
+
+  // Обратный маппинг: локализованная строка -> ключ
+  String _displayToUnitKey(String display, AppLocalizations t) {
+    if (display == t.unitPcs) return 'шт';
+    if (display == t.unitKg) return 'кг';
+    if (display == t.unitGram) return 'г';
+    if (display == t.unitLiter) return 'л';
+    if (display == t.unitMl) return 'мл';
+    if (display == t.unitMeter) return 'м';
+    if (display == t.unitCm) return 'см';
+    if (display == t.unitInch) return 'дюймы';
+    if (display == t.unitPack) return 'упаковка';
+    return display;
+  }
 
   bool get _canViewProducts {
     final authState = ref.read(authProvider);
@@ -121,7 +150,7 @@ class _StockTabState extends ConsumerState<StockTab> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(t.deleteProductConfirmTitle),
-        content: Text('${t.deleteProductConfirmContent}\n\n${t.productWillBeHidden}'),
+        content: Text('${t.deleteProductConfirmContent} "${product['name']}"?\n\n${t.productWillBeHidden}'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -156,16 +185,23 @@ class _StockTabState extends ConsumerState<StockTab> {
 
     final t = AppLocalizations.of(context)!;
     final nameController = TextEditingController(text: existing?['name'] ?? '');
-    String? unit = existing?['unit'];
+    // Для существующего товара: unit - ключ, преобразуем в отображаемую строку
+    final existingUnitKey = existing?['unit'] as String?;
+    String? selectedUnitDisplay;
+    if (isEdit && existingUnitKey != null) {
+      selectedUnitDisplay = _unitKeyToDisplay(existingUnitKey, t);
+    }
     final labelController = TextEditingController(text: existing?['label'] ?? '');
     final sizeController = TextEditingController(text: existing?['size'] ?? '');
     final barcodeController = TextEditingController(text: existing?['barcode'] ?? '');
     final supplierController = TextEditingController(text: existing?['supplier'] ?? '');
 
     final colorScheme = Theme.of(context).colorScheme;
-    final units = _activeType == 'product'
-        ? ['шт', 'кг', 'г', 'л', 'мл', 'упаковка']
-        : _materialUnits;
+
+    // Список отображаемых единиц (локализованные строки)
+    final unitsDisplay = _activeType == 'product'
+        ? [t.unitPcs, t.unitKg, t.unitGram, t.unitLiter, t.unitMl, t.unitPack]
+        : [t.unitPcs, t.unitKg, t.unitGram, t.unitLiter, t.unitMl, t.unitMeter, t.unitCm, t.unitInch, t.unitPack];
 
     await showDialog(
       context: context,
@@ -183,12 +219,12 @@ class _StockTabState extends ConsumerState<StockTab> {
               ),
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
-                value: unit,
+                value: selectedUnitDisplay,
                 decoration: InputDecoration(labelText: t.unitRequired, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
                 dropdownColor: colorScheme.surface,
                 style: TextStyle(color: colorScheme.onSurface),
-                items: units.map((u) => DropdownMenuItem(value: u, child: Text(u))).toList(),
-                onChanged: (v) => unit = v,
+                items: unitsDisplay.map((u) => DropdownMenuItem<String>(value: u, child: Text(u))).toList(),
+                onChanged: (v) => selectedUnitDisplay = v,
               ),
               const SizedBox(height: 8),
               TextField(
@@ -224,16 +260,17 @@ class _StockTabState extends ConsumerState<StockTab> {
           ),
           ElevatedButton(
             onPressed: () async {
-              if (nameController.text.isEmpty || unit == null) {
+              if (nameController.text.isEmpty || selectedUnitDisplay == null) {
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.fillNameAndUnit)));
                 return;
               }
+              final unitKey = _displayToUnitKey(selectedUnitDisplay!, t);
               final api = ApiClient();
               try {
                 if (isEdit) {
                   await api.patch('/products/${existing!['id']}', queryParameters: {'company_id': widget.companyId}, data: {
                     'name': nameController.text,
-                    'unit': unit,
+                    'unit': unitKey,
                     'label': labelController.text,
                     'size': sizeController.text,
                     'barcode': barcodeController.text,
@@ -242,7 +279,7 @@ class _StockTabState extends ConsumerState<StockTab> {
                 } else {
                   await api.post('/products/', queryParameters: {'company_id': widget.companyId}, data: {
                     'name': nameController.text,
-                    'unit': unit,
+                    'unit': unitKey,
                     'type': _activeType,
                     'label': labelController.text,
                     'size': sizeController.text,
@@ -272,6 +309,7 @@ class _StockTabState extends ConsumerState<StockTab> {
     ref.watch(localeProvider);
     final colorScheme = Theme.of(context).colorScheme;
     final t = AppLocalizations.of(context)!;
+    final currency = t.currencySymbol;
     final availableTypes = _availableTypes;
 
     if (availableTypes.isEmpty) {
@@ -378,7 +416,7 @@ class _StockTabState extends ConsumerState<StockTab> {
                                           ],
                                         ),
                                       ),
-                                      Text('${p['current_quantity']} ${p['unit']}',
+                                      Text('${p['current_quantity']} ${_unitKeyToDisplay(p['unit'], t)}',
                                           style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
                                       if (_canDelete)
                                         IconButton(

@@ -15,6 +15,7 @@ import '../services/api_client.dart';
 import '../providers/theme_provider.dart';
 import '../models/user.dart';
 import 'package:frontend/l10n/app_localizations.dart';
+import '../screens/subscription_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -85,7 +86,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final t = AppLocalizations.of(context)!;
 
     return VideoBackground(
-      key: ValueKey(videoPath),   // быстрая смена видео при смене темы
+      key: ValueKey(videoPath),
       videoPath: videoPath,
       fit: BoxFit.cover,
       muted: true,
@@ -96,7 +97,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         body: SafeArea(
           child: Column(
             children: [
-              // Верхняя панель (без флагов)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Row(
@@ -128,7 +128,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ],
                 ),
               ),
-              // Подзаголовок
               Padding(
                 padding: const EdgeInsets.only(bottom: 16, left: 16),
                 child: Align(
@@ -149,7 +148,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                 ),
               ),
-              // Список компаний
               Expanded(
                 child: RefreshIndicator(
                   onRefresh: () async {
@@ -225,6 +223,8 @@ class _StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final t = AppLocalizations.of(context)!;
+    final currency = t.currencySymbol;
     return Expanded(
       child: Card(
         color: colorScheme.surface,
@@ -241,7 +241,7 @@ class _StatCard extends StatelessWidget {
                       fontWeight: FontWeight.w500)),
               const SizedBox(height: 8),
               Text(
-                '${amount.toStringAsFixed(2)} ₽',
+                '${amount.toStringAsFixed(2)}$currency',
                 style: TextStyle(
                     color: colorScheme.onSurface,
                     fontSize: 16,
@@ -303,6 +303,7 @@ class _CompanyCardState extends State<_CompanyCard>
         ? Colors.white.withOpacity(0.6)
         : Colors.white.withOpacity(0.8);
     final t = AppLocalizations.of(context)!;
+    final currency = t.currencySymbol;
 
     return AnimatedBuilder(
       animation: _animationController,
@@ -413,7 +414,7 @@ class _CompanyCardState extends State<_CompanyCard>
                       const SizedBox(height: 4),
                       if (widget.showBalance)
                         Text(
-                          '${t.totalAmount}: ${widget.company.totalBalance.toStringAsFixed(2)} ₽',
+                          '${t.totalAmount}: ${widget.company.totalBalance.toStringAsFixed(2)}$currency',
                           style: TextStyle(
                               color: colorScheme.onSurface,
                               fontWeight: FontWeight.w500),
@@ -526,12 +527,27 @@ class SettingsDrawer extends StatelessWidget {
           ),
           const Divider(),
           ListTile(
-            leading: Icon(Icons.people, color: colorScheme.onSurfaceVariant),
-            title: Text(t.employees,
+            leading: Icon(Icons.help_outline, color: colorScheme.onSurfaceVariant),
+            title: Text(t.userGuide,
                 style: TextStyle(color: colorScheme.onSurfaceVariant)),
             onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(t.employeesInDevelopment)),
+              showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: Text(t.userGuide, style: TextStyle(color: colorScheme.onSurface)),
+                  content: SingleChildScrollView(
+                    child: Text(
+                      t.userGuideText,
+                      style: TextStyle(color: colorScheme.onSurface),
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: Text(t.close, style: TextStyle(color: colorScheme.onSurfaceVariant)),
+                    ),
+                  ],
+                ),
               );
             },
           ),
@@ -579,10 +595,16 @@ class SettingsDrawer extends StatelessWidget {
             },
           ),
           const Divider(),
-          ExpansionTile(
-            title: Text(t.subscription,
-                style: TextStyle(color: colorScheme.onSurfaceVariant)),
-            children: [ListTile(title: Text(t.subscriptionStatus))],
+          ListTile(
+            leading: const Icon(Icons.credit_card),
+            title: Text(t.subscription),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SubscriptionScreen()),
+              );
+            },
           ),
           ExpansionTile(
             title: Text(t.support,

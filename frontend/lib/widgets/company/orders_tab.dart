@@ -201,6 +201,7 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
 
   Widget _buildSection(String title, List<Map<String, dynamic>> orders, Color color, ColorScheme colorScheme, AppLocalizations t) {
     final canEditAny = _canEdit;
+    final currency = t.currencySymbol;
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       elevation: 2,
@@ -244,9 +245,9 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
               subtitle: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('${t.workPrice}: ${order['work_price']} ₽', style: TextStyle(fontSize: 12)),
-                  Text('${t.materials}: ${(total - (order['work_price'] as num)).toStringAsFixed(2)} ₽', style: TextStyle(fontSize: 12)),
-                  Text('${t.paid}: ${paid.toStringAsFixed(2)} ₽', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  Text('${t.workPrice}: ${order['work_price']}$currency', style: TextStyle(fontSize: 12)),
+                  Text('${t.materials}: ${(total - (order['work_price'] as num)).toStringAsFixed(2)}$currency', style: TextStyle(fontSize: 12)),
+                  Text('${t.paid}: ${paid.toStringAsFixed(2)}$currency', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                 ],
               ),
               trailing: canDelete
@@ -267,9 +268,9 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
                       if (order['assignee_name'] != null)
                         Text('👤 ${t.assignedTo}: ${order['assignee_name']}', style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant)),
                       if (order['deadline'] != null)
-                        Text('⏰ ${t.deadline}: ${DateFormat('dd.MM.yyyy').format(DateTime.parse(order['deadline']))}',
+                        Text('⏰ ${t.deadline}: ${DateFormat.yMMMMd(Localizations.localeOf(context).toString()).format(DateTime.parse(order['deadline']))}',
                             style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant)),
-                      Text('${t.remaining}: ${remaining.toStringAsFixed(2)} ₽',
+                      Text('${t.remaining}: ${remaining.toStringAsFixed(2)}$currency',
                           style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: remaining > 0 ? Colors.red : Colors.green)),
                       const SizedBox(height: 8),
                       Wrap(

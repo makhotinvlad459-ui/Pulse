@@ -34,6 +34,28 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
   final ApiClient _api = ApiClient();
   List<Map<String, dynamic>> _bulkSaleItems = [];
 
+  // Функция перевода категорий (системные)
+  String _translateCategoryName(String name, AppLocalizations t) {
+    switch (name) {
+      case 'Зарплата': return t.catSalary;
+      case 'Аренда': return t.catRent;
+      case 'Транспортные': return t.catTransport;
+      case 'Продукты': return t.catFood;
+      case 'Связь': return t.catCommunication;
+      case 'Реклама': return t.catAdvertising;
+      case 'Налоги': return t.catTaxes;
+      case 'Прочее': return t.catOther;
+      case 'Реализация': return t.catSales;
+      case 'Продажи': return t.catSales;
+      case 'Касса': return t.catCashbox;
+      case 'Офис': return t.catOffice;
+      case 'Магазин': return t.catShop;
+      case 'Подрядчики': return t.catContractors;
+      case 'Без категории': return t.withoutCategory;
+      default: return name;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -171,8 +193,11 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                   DropdownButtonFormField<int>(
                     value: categoryId,
                     items: [
-                      const DropdownMenuItem(value: null, child: Text('Без категории')),
-                      ..._categories.map((c) => DropdownMenuItem(value: c['id'], child: Text('${c['icon'] ?? '📁'} ${c['name']}'))),
+                      DropdownMenuItem(value: null, child: Text(t.withoutCategory)),
+                      ..._categories.map((c) {
+                        String catName = _translateCategoryName(c['name'], t);
+                        return DropdownMenuItem(value: c['id'], child: Text('${c['icon'] ?? '📁'} $catName'));
+                      }),
                     ],
                     onChanged: (v) => categoryId = v,
                     decoration: InputDecoration(labelText: t.categoryOptional, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
@@ -274,8 +299,11 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                   DropdownButtonFormField<int>(
                     value: categoryId,
                     items: [
-                      const DropdownMenuItem(value: null, child: Text('Без категории')),
-                      ..._categories.map((c) => DropdownMenuItem(value: c['id'], child: Text('${c['icon'] ?? '📁'} ${c['name']}'))),
+                      DropdownMenuItem(value: null, child: Text(t.withoutCategory)),
+                      ..._categories.map((c) {
+                        String catName = _translateCategoryName(c['name'], t);
+                        return DropdownMenuItem(value: c['id'], child: Text('${c['icon'] ?? '📁'} $catName'));
+                      }),
                     ],
                     onChanged: (v) => categoryId = v,
                     decoration: InputDecoration(labelText: t.categoryOptional, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
@@ -355,6 +383,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
   Future<void> _sellItem(ShowcaseItem item) async {
     if (!_canSell) return;
     final t = AppLocalizations.of(context)!;
+    final currency = t.currencySymbol;
     double quantity = 1.0;
     double salePrice = item.price;
     final quantityController = TextEditingController(text: quantity.toString());
@@ -422,7 +451,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Text('${t.total}: ${salePrice.toStringAsFixed(2)} ₽', style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
+                  Text('${t.total}: ${salePrice.toStringAsFixed(2)}$currency', style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
                   const SizedBox(height: 8),
                   Row(
                     children: [
@@ -527,6 +556,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
   Future<void> _openBulkSaleDialog() async {
     if (!_canSell) return;
     final t = AppLocalizations.of(context)!;
+    final currency = t.currencySymbol;
     _bulkSaleItems = _items.map((item) => {
       'id': item.id,
       'name': item.name,
@@ -574,7 +604,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                         }
                         return ListTile(
                           title: Text(item['name'], style: TextStyle(color: colorScheme.onSurface)),
-                          subtitle: Text('${item['price']} ₽', style: TextStyle(color: colorScheme.onSurfaceVariant)),
+                          subtitle: Text('${item['price']}$currency', style: TextStyle(color: colorScheme.onSurfaceVariant)),
                           trailing: SizedBox(
                             width: 130,
                             child: Row(
@@ -812,7 +842,8 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
     if (categoryId == null) return '';
     try {
       final cat = _categories.firstWhere((c) => c['id'] == categoryId);
-      return cat['name'] ?? '';
+      final t = AppLocalizations.of(context)!;
+      return _translateCategoryName(cat['name'] ?? '', t);
     } catch (e) {
       return '';
     }
@@ -823,6 +854,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
     ref.watch(localeProvider);
     final colorScheme = Theme.of(context).colorScheme;
     final t = AppLocalizations.of(context)!;
+    final currency = t.currencySymbol;
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -921,7 +953,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                             ),
                             const SizedBox(width: 6),
                             Text(
-                              '${item.price.toStringAsFixed(2)} ₽',
+                              '${item.price.toStringAsFixed(2)}$currency',
                               style: TextStyle(color: Colors.green, fontWeight: FontWeight.w600, fontSize: 11),
                             ),
                           ],

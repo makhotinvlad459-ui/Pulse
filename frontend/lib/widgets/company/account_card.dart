@@ -15,10 +15,17 @@ class AccountCard extends ConsumerWidget {
     required this.isFounder,
   });
 
+  String _translateSystemAccountName(String name, AppLocalizations t) {
+    if (name == 'Наличные') return t.cashType;
+    if (name == 'Банк') return t.bankType;
+    return name;
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     ref.watch(localeProvider);
     final t = AppLocalizations.of(context)!;
+    final currency = t.currencySymbol;
     final colorScheme = Theme.of(context).colorScheme;
     String icon;
     if (account['type'] == 'cash')
@@ -31,6 +38,18 @@ class AccountCard extends ConsumerWidget {
     final isArchive = account['name'] == 'Архив';
     final balance = (account['balance'] as num).toDouble();
     final canDelete = isFounder && account['type'] == 'other' && !isArchive;
+    // Переводим название счёта, если это системный счёт (Наличные или Банк)
+    final accountName = _translateSystemAccountName(account['name'], t);
+
+    // Перевод типа счёта
+    String accountType;
+    if (account['type'] == 'cash') {
+      accountType = t.cashType;
+    } else if (account['type'] == 'bank') {
+      accountType = t.bankType;
+    } else {
+      accountType = t.customType;
+    }
 
     return Card(
       margin: const EdgeInsets.only(right: 12),
@@ -54,7 +73,7 @@ class AccountCard extends ConsumerWidget {
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
-                      account['name'],
+                      accountName,
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 12,
@@ -74,7 +93,7 @@ class AccountCard extends ConsumerWidget {
               ),
               if (!isArchive || balance != 0)
                 Text(
-                  '${balance.toStringAsFixed(2)} ₽',
+                  '${balance.toStringAsFixed(2)}$currency',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
@@ -91,9 +110,7 @@ class AccountCard extends ConsumerWidget {
                   ),
                 ),
               Text(
-                account['type'] == 'cash'
-                    ? t.cashType
-                    : (account['type'] == 'bank' ? t.bankType : t.customType),
+                accountType,
                 style: TextStyle(
                   fontSize: 10,
                   color: colorScheme.onSurfaceVariant,

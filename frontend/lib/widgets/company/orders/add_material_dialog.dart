@@ -23,6 +23,22 @@ class _AddMaterialDialogState extends ConsumerState<AddMaterialDialog> {
   double _totalPrice = 0;
   bool _useFromStock = false;
 
+  // Преобразование ключа единицы измерения в локализованную строку
+  String _unitKeyToDisplay(String key, AppLocalizations t) {
+    switch (key) {
+      case 'шт': return t.unitPcs;
+      case 'кг': return t.unitKg;
+      case 'г': return t.unitGram;
+      case 'л': return t.unitLiter;
+      case 'мл': return t.unitMl;
+      case 'м': return t.unitMeter;
+      case 'см': return t.unitCm;
+      case 'дюймы': return t.unitInch;
+      case 'упаковка': return t.unitPack;
+      default: return key;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -66,7 +82,7 @@ class _AddMaterialDialogState extends ConsumerState<AddMaterialDialog> {
                       final prod = _filteredProducts[idx];
                       return ListTile(
                         title: Text(prod['name'], style: TextStyle(color: colorScheme.onSurface)),
-                        subtitle: Text('${prod['unit']} / ${t.remainingStockLower}: ${prod['current_quantity']}', style: TextStyle(color: colorScheme.onSurfaceVariant)),
+                        subtitle: Text('${_unitKeyToDisplay(prod['unit'], t)} / ${t.remainingStockLower}: ${prod['current_quantity']}', style: TextStyle(color: colorScheme.onSurfaceVariant)),
                         onTap: () {
                           setState(() {
                             _selectedProductId = prod['id'];
@@ -146,8 +162,22 @@ class _AddMaterialDialogState extends ConsumerState<AddMaterialDialog> {
     final t = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
     final nameController = TextEditingController();
-    String unit = 'шт';
+    String unitKey = 'шт'; // по умолчанию
+    String unitDisplay = t.unitPcs;
     double price = 0;
+
+    final unitsList = [
+      {'key': 'шт', 'display': t.unitPcs},
+      {'key': 'кг', 'display': t.unitKg},
+      {'key': 'г', 'display': t.unitGram},
+      {'key': 'л', 'display': t.unitLiter},
+      {'key': 'мл', 'display': t.unitMl},
+      {'key': 'м', 'display': t.unitMeter},
+      {'key': 'см', 'display': t.unitCm},
+      {'key': 'дюймы', 'display': t.unitInch},
+      {'key': 'упаковка', 'display': t.unitPack},
+    ];
+
     await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -162,12 +192,17 @@ class _AddMaterialDialogState extends ConsumerState<AddMaterialDialog> {
             ),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
-              value: unit,
+              value: unitDisplay,
               decoration: InputDecoration(labelText: t.unitRequired, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
               dropdownColor: colorScheme.surface,
               style: TextStyle(color: colorScheme.onSurface),
-              items: ['шт', 'кг', 'г', 'л', 'мл', 'м', 'см', 'упаковка'].map((u) => DropdownMenuItem(value: u, child: Text(u))).toList(),
-              onChanged: (v) => unit = v!,
+              items: unitsList.map((u) => DropdownMenuItem<String>(value: u['display'] as String, child: Text(u['display'] as String))).toList(),
+              onChanged: (v) {
+                if (v != null) {
+                  unitDisplay = v;
+                  unitKey = unitsList.firstWhere((u) => u['display'] == v)['key'] as String;
+                }
+              },
             ),
             const SizedBox(height: 8),
             TextField(
@@ -190,7 +225,7 @@ class _AddMaterialDialogState extends ConsumerState<AddMaterialDialog> {
               try {
                 final productRes = await api.post('/products/', queryParameters: {'company_id': widget.companyId}, data: {
                   'name': nameController.text,
-                  'unit': unit,
+                  'unit': unitKey,
                   'type': 'material',
                 });
                 final newProduct = productRes.data;

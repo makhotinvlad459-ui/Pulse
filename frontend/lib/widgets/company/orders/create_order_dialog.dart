@@ -36,13 +36,11 @@ class _CreateOrderDialogState extends ConsumerState<CreateOrderDialog> {
   @override
   void initState() {
     super.initState();
-    // Не вызываем AppLocalizations.of(context) здесь
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Загружаем данные после того, как локализация стала доступна
     _loadProducts();
   }
 
@@ -59,7 +57,6 @@ class _CreateOrderDialogState extends ConsumerState<CreateOrderDialog> {
     } catch (e) {
       if (mounted) {
         setState(() => _loadingProducts = false);
-        // Локализация здесь не вызывается, чтобы избежать ошибки. Можно использовать контекст, но он уже доступен.
         final t = AppLocalizations.of(context)!;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
       }
@@ -100,6 +97,7 @@ class _CreateOrderDialogState extends ConsumerState<CreateOrderDialog> {
     ref.watch(localeProvider);
     final t = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
+    final currency = t.currencySymbol;
 
     return AlertDialog(
       title: Text(t.newOrderTitle, style: TextStyle(color: colorScheme.onSurface)),
@@ -193,7 +191,7 @@ class _CreateOrderDialogState extends ConsumerState<CreateOrderDialog> {
                     return ListTile(
                       dense: true,
                       title: Text(it['product_name'], style: TextStyle(color: colorScheme.onSurface)),
-                      subtitle: Text('${it['quantity']} ${t.pcs} × ${it['unit_price']} ₽ = ${it['total']} ₽'),
+                      subtitle: Text('${it['quantity']} ${t.pcs} × ${it['unit_price']}$currency = ${it['total']}$currency'),
                       trailing: IconButton(
                         icon: const Icon(Icons.delete, color: Colors.red),
                         onPressed: () => setState(() => _items.removeAt(idx)),
@@ -203,7 +201,7 @@ class _CreateOrderDialogState extends ConsumerState<CreateOrderDialog> {
                 ),
               const SizedBox(height: 8),
               if (_items.isNotEmpty)
-                Text('${t.materialsTotal}: ${_items.fold<double>(0, (s, i) => s + i['total']).toStringAsFixed(2)} ₽',
+                Text('${t.materialsTotal}: ${_items.fold<double>(0, (s, i) => s + i['total']).toStringAsFixed(2)}$currency',
                     style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
             ],
           ),

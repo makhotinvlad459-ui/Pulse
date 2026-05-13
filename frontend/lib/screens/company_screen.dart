@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_client.dart';
 import '../providers/auth_provider.dart';
 import '../providers/locale_provider.dart';
@@ -85,20 +86,222 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
   Set<String> _myPermissions = {};
   bool _permissionsLoaded = false;
 
-  void _initTabController(int length) {
-    if (_tabController.length != length) {
-      _tabController.dispose();
-      _tabController = TabController(length: length, vsync: this);
+  // ------------------- Перетаскиваемые вкладки -------------------
+  final List<String> _allTabKeys = [
+    'operations',
+    'showcase',
+    'chat_tasks',
+    'stock',
+    'reports',
+    'orders',
+    'counterparties',
+  ];
+
+  List<String> _tabOrder = [];
+  List<Tab> _tabs = [];
+  List<Widget> _tabWidgets = [];
+
+  String _getTabTitle(String key, AppLocalizations t) {
+    switch (key) {
+      case 'operations': return t.tabOperations;
+      case 'showcase': return t.tabShowcase;
+      case 'chat_tasks': return t.tabChatTasks;
+      case 'stock': return t.tabStock;
+      case 'reports': return t.tabReports;
+      case 'orders': return t.tabOrders;
+      case 'counterparties': return t.tabCounterparties;
+      default: return key;
     }
   }
+
+  Future<void> _loadTabOrder() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getStringList('tab_order_${widget.company.id}');
+    if (saved != null && saved.isNotEmpty) {
+      final validKeys = saved.where((key) => _allTabKeys.contains(key)).toList();
+      for (var key in _allTabKeys) {
+        if (!validKeys.contains(key)) validKeys.add(key);
+      }
+      setState(() {
+        _tabOrder = validKeys;
+      });
+    } else {
+      setState(() {
+        _tabOrder = List.from(_allTabKeys);
+      });
+    }
+    _rebuildTabs();
+  }
+
+  Future<void> _saveTabOrder(List<String> newOrder) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('tab_order_${widget.company.id}', newOrder);
+    setState(() {
+      _tabOrder = newOrder;
+    });
+    _rebuildTabs();
+  }
+
+  Future<void> _openReorderTabsDialog() async {
+    List<String> tempOrder = List.from(_tabOrder);
+    final t = AppLocalizations.of(context)!;
+    await showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setStateDialog) {
+          return AlertDialog(
+            title: Text(t.reorderTabs),
+            content: SizedBox(
+              width: double.maxFinite,
+              height: 300,
+              child: ReorderableListView(
+                onReorder: (oldIndex, newIndex) {
+                  if (oldIndex < newIndex) newIndex -= 1;
+                  final item = tempOrder.removeAt(oldIndex);
+                  tempOrder.insert(newIndex, item);
+                  setStateDialog(() {});
+                },
+                children: tempOrder.map((key) => ListTile(
+                  key: Key(key),
+                  leading: const Icon(Icons.drag_handle),
+                  title: Text(_getTabTitle(key, t)),
+                )).toList(),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(t.cancel),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  _saveTabOrder(tempOrder);
+                  Navigator.pop(context);
+                },
+                child: Text(t.save),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  void _rebuildTabs() {
+    final t = AppLocalizations.of(context)!;
+    final authState = ref.read(authProvider);
+    final isFounder = authState.user?.role == UserRole.founder;
+    Set<String> effectivePermissions;
+    if (isFounder) {
+      effectivePermissions = {
+        'view_operations', 'view_showcase', 'view_chat', 'view_tasks',
+        'view_products', 'view_reports', 'view_documents', 'view_requests',
+        'view_orders', 'edit_orders', 'view_accounts', 'view_counterparties', 'edit_counterparties'
+      };
+    } else {
+      effectivePermissions = _myPermissions;
+    }
+
+    final List<Tab> newTabs = [];
+    final List<Widget> newWidgets = [];
+
+    for (var key in _tabOrder) {
+      switch (key) {
+        case 'operations':
+          if (effectivePermissions.contains('view_operations')) {
+            newTabs.add(Tab(icon: const Icon(Icons.receipt), text: t.tabOperations));
+            newWidgets.add(TransactionsTab(
+              companyId: widget.company.id,
+              onRefresh: _refresh,
+              accounts: _accounts,
+              categories: _categories,
+              isFounder: isFounder,
+              permissions: effectivePermissions,
+            ));
+          }
+          break;
+        case 'showcase':
+          if (effectivePermissions.contains('view_showcase')) {
+            newTabs.add(Tab(icon: const Icon(Icons.storefront), text: t.tabShowcase));
+            newWidgets.add(ShowcaseTab(
+              companyId: widget.company.id,
+              onRefresh: _refresh,
+              permissions: effectivePermissions,
+            ));
+          }
+          break;
+        case 'chat_tasks':
+          if (effectivePermissions.contains('view_chat') || effectivePermissions.contains('view_tasks')) {
+            newTabs.add(Tab(icon: const Icon(Icons.chat_bubble), text: t.tabChatTasks));
+            newWidgets.add(ChatAndTasksTab(
+              companyId: widget.company.id,
+              isManager: widget.company.currentUserRole == 'manager',
+              onPendingTasksChanged: _onPendingTasksChanged,
+              onUnreadMessagesChanged: _onUnreadMessagesChanged,
+            ));
+          }
+          break;
+        case 'stock':
+          if (effectivePermissions.contains('view_products')) {
+            newTabs.add(Tab(icon: const Icon(Icons.inventory), text: t.tabStock));
+            newWidgets.add(StockTab(
+              companyId: widget.company.id,
+              permissions: effectivePermissions,
+            ));
+          }
+          break;
+        case 'reports':
+          if (effectivePermissions.contains('view_reports')) {
+            newTabs.add(Tab(icon: const Icon(Icons.bar_chart), text: t.tabReports));
+            newWidgets.add(ReportsTab(
+              key: _reportsTabKey,
+              companyId: widget.company.id,
+              categories: _categories,
+            ));
+          }
+          break;
+        case 'orders':
+          if (effectivePermissions.contains('view_orders')) {
+            newTabs.add(Tab(icon: const Icon(Icons.assignment), text: t.tabOrders));
+            newWidgets.add(OrdersTab(
+              companyId: widget.company.id,
+              permissions: effectivePermissions,
+              isFounder: isFounder,
+              onDataChanged: _updateAll,
+            ));
+          }
+          break;
+        case 'counterparties':
+          if (effectivePermissions.contains('view_counterparties')) {
+            newTabs.add(Tab(icon: const Icon(Icons.people), text: t.tabCounterparties));
+            newWidgets.add(CounterpartiesTab(
+              companyId: widget.company.id,
+              permissions: effectivePermissions,
+            ));
+          }
+          break;
+      }
+    }
+
+    setState(() {
+      _tabs = newTabs;
+      _tabWidgets = newWidgets;
+      if (_tabController.length != _tabs.length) {
+        _tabController.dispose();
+        _tabController = TabController(length: _tabs.length, vsync: this);
+      }
+    });
+  }
+  // -------------------------------------------------------------
 
   @override
   void initState() {
     super.initState();
     initializeDateFormatting('ru_RU', null);
-    _tabController = TabController(length: 7, vsync: this);
+    _tabController = TabController(length: 0, vsync: this);
     _loadData();
     _connectUserWebSocket();
+    _loadTabOrder();
   }
 
   @override
@@ -259,7 +462,6 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
 
   @override
   Widget build(BuildContext context) {
-    // Подписываемся на смену языка для перерисовки
     ref.watch(localeProvider);
     final authState = ref.watch(authProvider);
     final currentTheme = ref.watch(themeProvider);
@@ -291,6 +493,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
     }
 
     final showMenu = isFounder || effectivePermissions.contains('manage_employees') || effectivePermissions.contains('manage_permissions');
+    final showReorderTabs = isFounder || effectivePermissions.contains('edit_company');
     final showEditCompany = isFounder || effectivePermissions.contains('edit_company');
     final showAddAccount = isFounder || effectivePermissions.contains('create_account');
     final showManageCategories = isFounder || effectivePermissions.contains('manage_categories');
@@ -298,70 +501,10 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
     final showArchive = (isFounder || effectivePermissions.contains('view_archive')) && _archiveAccountId != null;
     final showDeleteCompany = isFounder;
 
-    final List<Tab> tabs = [];
-    final List<Widget> tabWidgets = [];
-
-    if (effectivePermissions.contains('view_operations')) {
-      tabs.add(Tab(icon: const Icon(Icons.receipt), text: t.tabOperations));
-      tabWidgets.add(TransactionsTab(
-        companyId: widget.company.id,
-        onRefresh: _refresh,
-        accounts: _accounts,
-        categories: _categories,
-        isFounder: isFounder,
-        permissions: effectivePermissions,
-      ));
+    // Перестраиваем вкладки при получении прав
+    if (_tabOrder.isNotEmpty) {
+      _rebuildTabs();
     }
-    if (effectivePermissions.contains('view_showcase')) {
-      tabs.add(Tab(icon: const Icon(Icons.storefront), text: t.tabShowcase));
-      tabWidgets.add(ShowcaseTab(
-        companyId: widget.company.id,
-        onRefresh: _refresh,
-        permissions: effectivePermissions,
-      ));
-    }
-    if (effectivePermissions.contains('view_chat') || effectivePermissions.contains('view_tasks')) {
-      tabs.add(Tab(icon: const Icon(Icons.chat_bubble), text: t.tabChatTasks));
-      tabWidgets.add(ChatAndTasksTab(
-        companyId: widget.company.id,
-        isManager: isManager,
-        onPendingTasksChanged: _onPendingTasksChanged,
-        onUnreadMessagesChanged: _onUnreadMessagesChanged,
-      ));
-    }
-    if (effectivePermissions.contains('view_products')) {
-      tabs.add(Tab(icon: const Icon(Icons.inventory), text: t.tabStock));
-      tabWidgets.add(StockTab(
-        companyId: widget.company.id,
-        permissions: effectivePermissions,
-      ));
-    }
-    if (effectivePermissions.contains('view_reports')) {
-      tabs.add(Tab(icon: const Icon(Icons.bar_chart), text: t.tabReports));
-      tabWidgets.add(ReportsTab(
-        key: _reportsTabKey,
-        companyId: widget.company.id,
-        categories: _categories,
-      ));
-    }
-    if (effectivePermissions.contains('view_orders')) {
-      tabs.add(Tab(icon: const Icon(Icons.assignment), text: t.tabOrders));
-      tabWidgets.add(OrdersTab(
-        companyId: widget.company.id,
-        permissions: effectivePermissions,
-        isFounder: isFounder,
-        onDataChanged: _updateAll,
-      ));
-    }
-    if (effectivePermissions.contains('view_counterparties')) {
-      tabs.add(Tab(icon: const Icon(Icons.people), text: t.tabCounterparties));
-      tabWidgets.add(CounterpartiesTab(
-        companyId: widget.company.id,
-        permissions: effectivePermissions,
-      ));
-    }
-
-    _initTabController(tabs.length);
 
     return Scaffold(
       backgroundColor: colorScheme.background,
@@ -430,6 +573,8 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                               _openArchive();
                             if (value == 'delete' && showDeleteCompany)
                               await _confirmDeleteCompany();
+                            if (value == 'reorder_tabs' && showReorderTabs)
+                              await _openReorderTabsDialog();
                           },
                           itemBuilder: (context) {
                             final items = <PopupMenuItem<String>>[];
@@ -456,6 +601,11 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                             if (showArchive) {
                               items.add(PopupMenuItem(
                                   value: 'archive', child: Text(t.archive)));
+                            }
+                            if (showReorderTabs) {
+                              items.add(PopupMenuItem(
+                                  value: 'reorder_tabs',
+                                  child: Text(t.reorderTabs)));
                             }
                             if (showDeleteCompany) {
                               items.add(PopupMenuItem(
@@ -523,7 +673,6 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                       ],
                     ),
                   ),
-                // Карточки счетов (показываются только при наличии права view_accounts)
                 if (effectivePermissions.contains('view_accounts'))
                   SizedBox(
                     height: 100,
@@ -559,21 +708,24 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                 Expanded(
                   child: Column(
                     children: [
-                      TabBar(
-                        controller: _tabController,
-                        isScrollable: true,
-                        indicatorColor: colorScheme.primary,
-                        labelColor: colorScheme.primary,
-                        unselectedLabelColor: colorScheme.onSurfaceVariant,
-                        labelStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                        unselectedLabelStyle: const TextStyle(fontSize: 14),
-                        tabs: tabs,
-                      ),
-                      Expanded(
-                        child: TabBarView(
+                      if (_tabs.isNotEmpty)
+                        TabBar(
                           controller: _tabController,
-                          children: tabWidgets,
+                          isScrollable: true,
+                          indicatorColor: colorScheme.primary,
+                          labelColor: colorScheme.primary,
+                          unselectedLabelColor: colorScheme.onSurfaceVariant,
+                          labelStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                          unselectedLabelStyle: const TextStyle(fontSize: 14),
+                          tabs: _tabs,
                         ),
+                      Expanded(
+                        child: _tabWidgets.isEmpty
+                            ? const Center(child: CircularProgressIndicator())
+                            : TabBarView(
+                                controller: _tabController,
+                                children: _tabWidgets,
+                              ),
                       ),
                     ],
                   ),

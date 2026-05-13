@@ -887,7 +887,7 @@ abstract class AppLocalizations {
   /// No description provided for @transactionNumber.
   ///
   /// In en, this message translates to:
-  /// **'Transaction'**
+  /// **'№'**
   String get transactionNumber;
 
   /// No description provided for @counterpartyLabel.
@@ -2983,6 +2983,468 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Enter title'**
   String get enterTitle;
+
+  /// No description provided for @currencySymbol.
+  ///
+  /// In en, this message translates to:
+  /// **''**
+  String get currencySymbol;
+
+  /// No description provided for @unitPcs.
+  ///
+  /// In en, this message translates to:
+  /// **'pcs'**
+  String get unitPcs;
+
+  /// No description provided for @unitKg.
+  ///
+  /// In en, this message translates to:
+  /// **'kg'**
+  String get unitKg;
+
+  /// No description provided for @unitG.
+  ///
+  /// In en, this message translates to:
+  /// **'g'**
+  String get unitG;
+
+  /// No description provided for @unitL.
+  ///
+  /// In en, this message translates to:
+  /// **'L'**
+  String get unitL;
+
+  /// No description provided for @unitMl.
+  ///
+  /// In en, this message translates to:
+  /// **'ml'**
+  String get unitMl;
+
+  /// No description provided for @unitM.
+  ///
+  /// In en, this message translates to:
+  /// **'m'**
+  String get unitM;
+
+  /// No description provided for @unitCm.
+  ///
+  /// In en, this message translates to:
+  /// **'cm'**
+  String get unitCm;
+
+  /// No description provided for @unitInch.
+  ///
+  /// In en, this message translates to:
+  /// **'inch'**
+  String get unitInch;
+
+  /// No description provided for @unitPackage.
+  ///
+  /// In en, this message translates to:
+  /// **'pack'**
+  String get unitPackage;
+
+  /// No description provided for @accountTypeCash.
+  ///
+  /// In en, this message translates to:
+  /// **'Cash'**
+  String get accountTypeCash;
+
+  /// No description provided for @accountTypeBank.
+  ///
+  /// In en, this message translates to:
+  /// **'Bank'**
+  String get accountTypeBank;
+
+  /// No description provided for @accountTypeCustom.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom'**
+  String get accountTypeCustom;
+
+  /// No description provided for @roleManager.
+  ///
+  /// In en, this message translates to:
+  /// **'Manager'**
+  String get roleManager;
+
+  /// No description provided for @roleEmployee.
+  ///
+  /// In en, this message translates to:
+  /// **'Employee'**
+  String get roleEmployee;
+
+  /// No description provided for @roleFounder.
+  ///
+  /// In en, this message translates to:
+  /// **'Founder'**
+  String get roleFounder;
+
+  /// No description provided for @unitGram.
+  ///
+  /// In en, this message translates to:
+  /// **'g'**
+  String get unitGram;
+
+  /// No description provided for @unitLiter.
+  ///
+  /// In en, this message translates to:
+  /// **'L'**
+  String get unitLiter;
+
+  /// No description provided for @unitMeter.
+  ///
+  /// In en, this message translates to:
+  /// **'m'**
+  String get unitMeter;
+
+  /// No description provided for @unitPack.
+  ///
+  /// In en, this message translates to:
+  /// **'pack'**
+  String get unitPack;
+
+  /// No description provided for @categoryTransport.
+  ///
+  /// In en, this message translates to:
+  /// **'Transportation'**
+  String get categoryTransport;
+
+  /// No description provided for @catSalary.
+  ///
+  /// In en, this message translates to:
+  /// **'Salary'**
+  String get catSalary;
+
+  /// No description provided for @catRent.
+  ///
+  /// In en, this message translates to:
+  /// **'Rent'**
+  String get catRent;
+
+  /// No description provided for @catTransport.
+  ///
+  /// In en, this message translates to:
+  /// **'Transport'**
+  String get catTransport;
+
+  /// No description provided for @catFood.
+  ///
+  /// In en, this message translates to:
+  /// **'Food'**
+  String get catFood;
+
+  /// No description provided for @catCommunication.
+  ///
+  /// In en, this message translates to:
+  /// **'Communication'**
+  String get catCommunication;
+
+  /// No description provided for @catAdvertising.
+  ///
+  /// In en, this message translates to:
+  /// **'Advertising'**
+  String get catAdvertising;
+
+  /// No description provided for @catTaxes.
+  ///
+  /// In en, this message translates to:
+  /// **'Taxes'**
+  String get catTaxes;
+
+  /// No description provided for @catOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get catOther;
+
+  /// No description provided for @catImplementation.
+  ///
+  /// In en, this message translates to:
+  /// **'Sales'**
+  String get catImplementation;
+
+  /// No description provided for @catRevenue.
+  ///
+  /// In en, this message translates to:
+  /// **'Revenue'**
+  String get catRevenue;
+
+  /// No description provided for @catOffice.
+  ///
+  /// In en, this message translates to:
+  /// **'Office'**
+  String get catOffice;
+
+  /// No description provided for @catShop.
+  ///
+  /// In en, this message translates to:
+  /// **'Store'**
+  String get catShop;
+
+  /// No description provided for @catCashbox.
+  ///
+  /// In en, this message translates to:
+  /// **'Cashbox'**
+  String get catCashbox;
+
+  /// No description provided for @catContractors.
+  ///
+  /// In en, this message translates to:
+  /// **'Contractors'**
+  String get catContractors;
+
+  /// No description provided for @founderRole.
+  ///
+  /// In en, this message translates to:
+  /// **'Founder'**
+  String get founderRole;
+
+  /// No description provided for @catSales.
+  ///
+  /// In en, this message translates to:
+  /// **'Sales'**
+  String get catSales;
+
+  /// No description provided for @catCashDesk.
+  ///
+  /// In en, this message translates to:
+  /// **'Cash desk'**
+  String get catCashDesk;
+
+  /// No description provided for @paymentForOrder.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment for order'**
+  String get paymentForOrder;
+
+  /// No description provided for @orderCompletion.
+  ///
+  /// In en, this message translates to:
+  /// **'Order completion'**
+  String get orderCompletion;
+
+  /// No description provided for @productMovementTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Product movement'**
+  String get productMovementTitle;
+
+  /// No description provided for @selectProduct.
+  ///
+  /// In en, this message translates to:
+  /// **'Select product'**
+  String get selectProduct;
+
+  /// No description provided for @exportToExcel.
+  ///
+  /// In en, this message translates to:
+  /// **'Export to Excel'**
+  String get exportToExcel;
+
+  /// No description provided for @selectProductHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Select a product to view its transactions'**
+  String get selectProductHint;
+
+  /// No description provided for @noTransactionsForProduct.
+  ///
+  /// In en, this message translates to:
+  /// **'No transactions for this product'**
+  String get noTransactionsForProduct;
+
+  /// No description provided for @typeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Type'**
+  String get typeLabel;
+
+  /// No description provided for @exportReport.
+  ///
+  /// In en, this message translates to:
+  /// **'Export report'**
+  String get exportReport;
+
+  /// No description provided for @noDataToExport.
+  ///
+  /// In en, this message translates to:
+  /// **'No data to export'**
+  String get noDataToExport;
+
+  /// No description provided for @errorExcelGenerate.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to generate Excel file'**
+  String get errorExcelGenerate;
+
+  /// No description provided for @incomeType.
+  ///
+  /// In en, this message translates to:
+  /// **'Income'**
+  String get incomeType;
+
+  /// No description provided for @expenseType.
+  ///
+  /// In en, this message translates to:
+  /// **'Expense'**
+  String get expenseType;
+
+  /// No description provided for @operationsExportTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Operations export'**
+  String get operationsExportTitle;
+
+  /// No description provided for @categoryLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Category'**
+  String get categoryLabel;
+
+  /// No description provided for @selectCounterparty.
+  ///
+  /// In en, this message translates to:
+  /// **'Select counterparty'**
+  String get selectCounterparty;
+
+  /// No description provided for @selectCounterpartyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Select a counterparty to view transactions'**
+  String get selectCounterpartyHint;
+
+  /// No description provided for @noTransactionsForCounterparty.
+  ///
+  /// In en, this message translates to:
+  /// **'No transactions for this counterparty'**
+  String get noTransactionsForCounterparty;
+
+  /// No description provided for @counterpartyMovementTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Counterparty movement'**
+  String get counterpartyMovementTitle;
+
+  /// No description provided for @cashMovementTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Cash movement'**
+  String get cashMovementTitle;
+
+  /// No description provided for @bankMovementTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Bank movement'**
+  String get bankMovementTitle;
+
+  /// No description provided for @userGuide.
+  ///
+  /// In en, this message translates to:
+  /// **'User Guide'**
+  String get userGuide;
+
+  /// No description provided for @userGuideText.
+  ///
+  /// In en, this message translates to:
+  /// **'🚀 **Pulse of your finances** — financial accounting for business\n\n✅ **All‑in‑one tool** – no need for separate programs for accounting, chat, tasks, and orders.\n✅ **Owner’s overview across all companies** – see finances of each company and the overall situation. Employees only see what you allow.\n✅ **Simple** – anyone who can use a smartphone can figure it out.\n✅ **Time saving** – reports are built in seconds, no manual calculations.\n✅ **Mobile** – work from home, office, on the road. Everything syncs.\n✅ **Support** – we are always in touch.\n\n🌍 **Works anywhere**\n💻 Web version – open in a browser on a computer or laptop.\n📱 Mobile apps for Android and iOS – download from stores (Google Play, App Store) and work from your phone or tablet.\nData syncs automatically – start on computer, continue on phone.\n\n**Why this app?**\nManage money, orders, goods, and employees – all in one place.\nBusiness owner can keep a finger on the pulse of several companies at once: see income, expenses, account balances, debts, orders, and stock.\nEmployees work only with the companies and sections you assign.\n\n**How to get started**\n1. **Sign up** – provide email, phone (optional), name, and password (min 8 characters).\n2. **Create a company** (owner only) – tap the green ‘+’ button. Fill in: company name, manager name, manager phone (login). Optionally add employees – the app generates a password for each. ⚠️ Password is NOT sent by email – copy it and give to the employee personally.\n3. **Roles & permissions** – owner has full access. Manager and employees see only what you allow. To change permissions later: Company → menu (three dots) → “Manage employees”.\n\n**Main screen (after entering a company)**\n- Account cards – “Cash” and “Bank” (and any extra accounts). Balance updates automatically.\n- Tabs (depending on role):\n  - **Transactions** – record income/expense. Attach photo, add products, specify counterparty. Products can be deducted from stock automatically.\n  - **Showcase** – fixed‑price products/services. Attach a recipe (tech card) – when sold, materials are deducted automatically.\n  - **Chat & Tasks** – communicate and assign tasks. Employees see only their tasks. Attach files.\n  - **Stock** – product and material balances. Add, edit, set units (pcs, kg, m, pack…). Materials in orders can be deducted or not – you choose.\n  - **Reports** – dynamics, income/expense by category, sales, material consumption in orders, order statistics, counterparties, **Export to Excel** (transactions, product movement, counterparty movement, cash/bank movement).\n  - **Orders** – create orders, assign responsible, set deadline, track payments, attach files, change status (pending → accepted → completed / failed).\n  - **Counterparties** – list of suppliers and customers, automatic stats (income, expense, balance). Add/edit.\n\n**Features for owners of multiple companies**\n- Create any number of companies, switch between them on the main screen.\n- Each company has separate accounts, employees, transactions, categories.\n- Financial overview of all companies – you see the total cash and bank balances of each company.\nThis is real management accounting – you always know where the money is, what expenses, what profit per business area. No confusion.\n\n**Switch language**\nTap ☰ (menu) in the top‑left corner, then choose 🇬🇧 or 🇷🇺. System strings (buttons, tab names, categories) translate automatically. Your personal data (company names, account names, product names) remain in the language you entered.\n\n**Try it – it’s easier than it looks. All data at hand, reports build themselves.** 😊'**
+  String get userGuideText;
+
+  /// No description provided for @reorderTabs.
+  ///
+  /// In en, this message translates to:
+  /// **'Reorder tabs'**
+  String get reorderTabs;
+
+  /// No description provided for @activeSubscription.
+  ///
+  /// In en, this message translates to:
+  /// **'Active subscription'**
+  String get activeSubscription;
+
+  /// No description provided for @noActiveSubscription.
+  ///
+  /// In en, this message translates to:
+  /// **'No active subscription'**
+  String get noActiveSubscription;
+
+  /// No description provided for @expiresAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Expires at'**
+  String get expiresAt;
+
+  /// No description provided for @companiesCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Companies'**
+  String get companiesCount;
+
+  /// No description provided for @remainingFreeCompanies.
+  ///
+  /// In en, this message translates to:
+  /// **'Remaining free companies'**
+  String get remainingFreeCompanies;
+
+  /// No description provided for @chooseTariff.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose tariff'**
+  String get chooseTariff;
+
+  /// No description provided for @monthly.
+  ///
+  /// In en, this message translates to:
+  /// **'Monthly (30 days)'**
+  String get monthly;
+
+  /// No description provided for @halfYear.
+  ///
+  /// In en, this message translates to:
+  /// **'6 months'**
+  String get halfYear;
+
+  /// No description provided for @yearly.
+  ///
+  /// In en, this message translates to:
+  /// **'Year'**
+  String get yearly;
+
+  /// No description provided for @extraCompany.
+  ///
+  /// In en, this message translates to:
+  /// **'Extra company slot'**
+  String get extraCompany;
+
+  /// No description provided for @payment.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment'**
+  String get payment;
+
+  /// No description provided for @paymentNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment is processed via secure gateway. After payment, the status will update automatically.'**
+  String get paymentNote;
+
+  /// No description provided for @companyLimitReached.
+  ///
+  /// In en, this message translates to:
+  /// **'Company limit reached'**
+  String get companyLimitReached;
+
+  /// No description provided for @companyLimitMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'You have reached the limit of free companies. Please buy a subscription or an extra company slot to continue.'**
+  String get companyLimitMessage;
+
+  /// No description provided for @buySubscription.
+  ///
+  /// In en, this message translates to:
+  /// **'Buy subscription'**
+  String get buySubscription;
 }
 
 class _AppLocalizationsDelegate

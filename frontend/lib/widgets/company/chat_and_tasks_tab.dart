@@ -347,6 +347,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
 
   Future<void> _loadChatMessages() async {
     final api = ApiClient();
+    final t = AppLocalizations.of(context)!;
     try {
       final res = await api.get('/chat/company/${widget.companyId}');
       final newMessages = List<Map<String, dynamic>>.from(res.data);
@@ -610,7 +611,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
                     dropdownColor: colorScheme.surface,
                     style: TextStyle(color: colorScheme.onSurface),
                     items: [
-                       DropdownMenuItem(value: null, child: Text(t.notAssigned)),
+                      DropdownMenuItem(value: null, child: Text(t.notAssigned)),
                       ..._employees.map((e) => DropdownMenuItem(
                           value: e['user_id'], child: Text(e['full_name']))),
                     ],
@@ -756,12 +757,12 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
     return Column(
       children: [
         TabBar(
-  controller: _tabController,
-  tabs: [Tab(text: t.chatTab), Tab(text: t.tasksTab)],
-  labelColor: colorScheme.primary,
-  unselectedLabelColor: colorScheme.onSurfaceVariant,
-  indicatorColor: colorScheme.primary,
-),
+          controller: _tabController,
+          tabs: [Tab(text: t.chatTab), Tab(text: t.tasksTab)],
+          labelColor: colorScheme.primary,
+          unselectedLabelColor: colorScheme.onSurfaceVariant,
+          indicatorColor: colorScheme.primary,
+        ),
         Expanded(
           child: TabBarView(
             controller: _tabController,
@@ -787,80 +788,57 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
                             itemBuilder: (context, index) {
                               final msg = _messages[index];
                               final isMe = msg['user_id'] == currentUser?.id;
-                              final displayName = msg['user_full_name'];
+                              final originalName = msg['user_full_name'];
+                              final displayName = (originalName == 'Основатель')
+                                  ? t.founderRole
+                                  : originalName;
                               return _buildMessageBubble(isMe, displayName, msg, isFounder, colorScheme, t);
                             },
                           ),
                   ),
                   Padding(
-                    padding: const EdgeInsets.all(12.0),
-                    child: Row(
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.attach_file),
-                          onPressed: () => _showAttachmentPicker(context),
-                          tooltip: t.attachFileTooltip,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: TextField(
-                            controller: _messageController,
-                            style: TextStyle(color: colorScheme.onSurface),
-                            decoration: InputDecoration(
-                              hintText: t.enterMessageHint,
-                              hintStyle: TextStyle(color: colorScheme.onSurfaceVariant),
-                              filled: true,
-                              fillColor: colorScheme.surfaceContainerHighest,
-                              border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(30),
-                                  borderSide: BorderSide.none),
-                              contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 20, vertical: 12),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        CircleAvatar(
-                          backgroundColor: colorScheme.primaryContainer,
-                          child: IconButton(
-                            icon: Icon(Icons.send, color: colorScheme.onPrimaryContainer),
-                            onPressed: _sendMessage,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (_attachmentFile != null || _webFile != null)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.blue.shade50,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.attachment, size: 16, color: Colors.blue),
-                            const SizedBox(width: 8),
-                            Text(
-                              _attachmentFile != null ? _attachmentFile!.name : _webFile!.name,
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.clear, size: 16),
-                              onPressed: () => setState(() {
-                                _attachmentFile = null;
-                                _webFile = null;
-                              }),
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+  padding: EdgeInsets.only(
+    left: 12.0,
+    right: 12.0,
+    top: 12.0,
+    bottom: MediaQuery.of(context).viewInsets.bottom,
+  ),
+  child: Row(
+    children: [
+      IconButton(
+        icon: const Icon(Icons.attach_file),
+        onPressed: () => _showAttachmentPicker(context),
+        tooltip: t.attachFileTooltip,
+      ),
+      const SizedBox(width: 8),
+      Expanded(
+        child: TextField(
+          controller: _messageController,
+          style: TextStyle(color: colorScheme.onSurface),
+          decoration: InputDecoration(
+            hintText: t.enterMessageHint,
+            hintStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+            filled: true,
+            fillColor: colorScheme.surfaceContainerHighest,
+            border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(30),
+                borderSide: BorderSide.none),
+            contentPadding: const EdgeInsets.symmetric(
+                horizontal: 20, vertical: 12),
+          ),
+        ),
+      ),
+      const SizedBox(width: 8),
+      CircleAvatar(
+        backgroundColor: colorScheme.primaryContainer,
+        child: IconButton(
+          icon: Icon(Icons.send, color: colorScheme.onPrimaryContainer),
+          onPressed: _sendMessage,
+        ),
+      ),
+    ],
+  ),
+),
                 ],
               ),
               // ==================== ЗАДАЧИ ====================
@@ -1052,8 +1030,10 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
           final isAssignee = task['assignee_id'] == currentUser?.id;
           final isAuthor = task['author_id'] == currentUser?.id;
           final canDelete = isFounder || isAuthor || widget.isManager;
-          final authorName = task['author_name'];
-          final assigneeName = task['assignee_name'];
+          final originalAuthor = task['author_name'];
+          final originalAssignee = task['assignee_name'];
+          final authorName = (originalAuthor == 'Основатель') ? t.founderRole : originalAuthor;
+          final assigneeName = (originalAssignee == 'Основатель') ? t.founderRole : originalAssignee;
           return Card(
             margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             elevation: 1,

@@ -39,6 +39,41 @@ class _ManageCategoriesDialogState extends ConsumerState<ManageCategoriesDialog>
     _localCategories = List.from(widget.categories);
   }
 
+  String _translateCategoryName(String name, AppLocalizations t) {
+    switch (name) {
+      case 'Зарплата':
+        return t.catSalary;
+      case 'Аренда':
+        return t.catRent;
+      case 'Транспортные':
+        return t.catTransport;
+      case 'Продукты':
+        return t.catFood;
+      case 'Связь':
+        return t.catCommunication;
+      case 'Реклама':
+        return t.catAdvertising;
+      case 'Налоги':
+        return t.catTaxes;
+      case 'Прочее':
+        return t.catOther;
+      case 'Реализация':
+        return t.catImplementation;
+      case 'Продажи':
+        return t.catRevenue;
+      case 'Касса':
+        return t.catCashDesk;   // добавим позже, если нужно
+      case 'Офис':
+        return t.catOffice;
+      case 'Магазин':
+        return t.catShop;
+      case 'Подрядчики':
+        return t.catContractors;
+      default:
+        return name;
+    }
+  }
+
   Future<void> _addCategory() async {
     if (_nameController.text.isEmpty) return;
     final t = AppLocalizations.of(context)!;
@@ -144,12 +179,27 @@ class _ManageCategoriesDialogState extends ConsumerState<ManageCategoriesDialog>
                 itemBuilder: (context, index) {
                   final c = _localCategories[index];
                   if (c['is_system']) return const SizedBox.shrink();
+                  // Для пользовательских категорий не переводим имя (оставляем как есть)
+                  // Для системных категорий (is_system == true) – они не отображаются, так как выше условие.
+                  // Но на скриншоте видны системные категории, значит, условие может быть другим.
+                  // Если нужно отображать системные категории, но без удаления, и переводить их, то изменим.
+                  // В вашем коде системные категории скрыты (c['is_system'] -> возвращаем пустой виджет).
+                  // Однако на скриншоте они видны. Возможно, у них is_system == false.
+                  // Поэтому переведём все категории, кроме тех, которые созданы пользователем (можно по флагу is_system).
+                  // Но для простоты переведём все, кроме тех, у которых is_system == true? Посмотрим.
+                  // На скриншоте "Реализация", "Продажи" – скорее всего, системные, но они отображаются.
+                  // Значит, условие может не срабатывать. Оставим перевод для всех названий.
+                  final categoryName = c['name'];
+                  final translatedName = _translateCategoryName(categoryName, t);
                   return ListTile(
                     leading: Text(c['icon'] ?? '📁', style: const TextStyle(fontSize: 24)),
-                    title: Text(c['name'], style: TextStyle(color: colorScheme.onSurface)),
-                    trailing: IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.red),
-                        onPressed: () => _deleteCategory(c['id'])),
+                    title: Text(translatedName, style: TextStyle(color: colorScheme.onSurface)),
+                    trailing: (c['is_system'] == true)
+                        ? null
+                        : IconButton(
+                            icon: const Icon(Icons.delete, color: Colors.red),
+                            onPressed: () => _deleteCategory(c['id']),
+                          ),
                   );
                 },
               ),

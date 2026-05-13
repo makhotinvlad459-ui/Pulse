@@ -1,3 +1,4 @@
+// dynamics_chart.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -24,6 +25,7 @@ class DynamicsChart extends ConsumerWidget {
     ref.watch(localeProvider);
     final t = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
+    final currency = t.currencySymbol;
     if (incomeSpots.isEmpty || incomeSpots.length <= 2) {
       return Center(child: Text(t.noChartData, style: TextStyle(color: colorScheme.onSurfaceVariant)));
     }
@@ -84,7 +86,7 @@ class DynamicsChart extends ConsumerWidget {
             touchTooltipData: LineTouchTooltipData(
               getTooltipItems: (touchedSpots) {
                 return touchedSpots.map((spot) => LineTooltipItem(
-                  '${spot.barIndex == 0 ? t.incomeTooltip : t.expenseTooltip}: ${spot.y.toStringAsFixed(2)} ₽',
+                  '${spot.barIndex == 0 ? t.incomeTooltip : t.expenseTooltip}: ${spot.y.toStringAsFixed(2)}$currency',
                   const TextStyle(color: Colors.white),
                 )).toList();
               },
