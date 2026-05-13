@@ -55,37 +55,24 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> _loadUserProfile() async {
-    try {
-      final response = await _api.get('/auth/me');
-      final data = response.data;
-      final user = User(
-        id: data['id'] as int,
-        email: data['email'] as String,
-        phone: data['phone'] != null ? data['phone'] as String : null,
-        fullName: data['full_name'] as String,
-        role: _stringToRole(data['role'] as String),
-        subscriptionUntil: data['subscription_until'] != null
-            ? DateTime.parse(data['subscription_until'] as String)
-            : null,
-      );
-      state = AuthState(user: user);
-    } catch (e) {
-      state = AuthState(error: 'Failed to load profile: $e');
-    }
+  try {
+    final response = await _api.get('/auth/me');
+    final data = response.data;
+    final user = User(
+      id: data['id'] as int,
+      email: data['email'] as String,
+      phone: data['phone'] as String?,   // <-- исправлено
+      fullName: data['full_name'] as String,
+      role: _stringToRole(data['role'] as String),
+      subscriptionUntil: data['subscription_until'] != null
+          ? DateTime.parse(data['subscription_until'] as String)
+          : null,
+    );
+    state = AuthState(user: user);
+  } catch (e) {
+    state = AuthState(error: 'Failed to load profile: $e');
   }
-
-  UserRole _stringToRole(String role) {
-    switch (role) {
-      case 'founder':
-        return UserRole.founder;
-      case 'employee':
-        return UserRole.employee;
-      case 'superadmin':
-        return UserRole.superadmin;
-      default:
-        return UserRole.employee;
-    }
-  }
+}
 
   Future<void> logout() async {
     await _api.clearToken();
