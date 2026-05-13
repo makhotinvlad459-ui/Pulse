@@ -5,6 +5,7 @@ import '../providers/auth_provider.dart';
 import '../providers/locale_provider.dart';
 import '../widgets/video_background.dart';
 import 'package:frontend/l10n/app_localizations.dart';
+import 'dart:async';
 
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
@@ -55,13 +56,34 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     }
 
     final authNotifier = ref.read(authProvider.notifier);
-    final success = await authNotifier.register(
-      email,
-      null, // phone
-      fullName,
-      password,
-    );
-    if (success && mounted) {
+    // Запускаем регистрацию
+    final success = await authNotifier.register(email, null, fullName, password);
+    if (!success) {
+      if (mounted) {
+        _showSnackBar(ref.read(authProvider).error ?? AppLocalizations.of(context)!.registrationError);
+      }
+      return;
+    }
+
+    // Дожидаемся, пока загрузится профиль (в RegisterNotifier уже есть вызов _loadUserProfile)
+    final completer = Completer<bool>();
+    void listener() {
+      final user = ref.read(authProvider).user;
+      if (user != null) {
+        completer.complete(true);
+      } else if (ref.read(authProvider).error != null) {
+        completer.complete(false);
+      }
+    }
+    ref.listenManual(authProvider, (previous, next) {
+      if (next.user != null) {
+        completer.complete(true);
+      } else if (next.error != null) {
+        completer.complete(false);
+      }
+    });
+    final loaded = await completer.future.timeout(const Duration(seconds: 5), onTimeout: () => false);
+    if (loaded && mounted) {
       Navigator.pushReplacementNamed(context, '/home');
     } else if (mounted) {
       _showSnackBar(ref.read(authProvider).error ?? AppLocalizations.of(context)!.registrationError);

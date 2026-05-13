@@ -96,39 +96,44 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _performLogin(String login, String password) async {
-    try {
-      await ref.read(authProvider.notifier).login(login, password);
-      if (ref.read(authProvider).user != null && mounted) {
-        if (_rememberMe) {
-          await _storage.write(key: 'saved_login', value: login);
-          await _storage.write(key: 'saved_password', value: password);
-          await _storage.write(key: 'remember_me', value: 'true');
-        } else {
-          await _storage.delete(key: 'saved_password');
-          await _storage.write(key: 'saved_login', value: login);
-          await _storage.write(key: 'remember_me', value: 'false');
-        }
-        if (mounted) {
-          Navigator.pushReplacementNamed(context, '/home');
-        }
+    final authNotifier = ref.read(authProvider.notifier);
+    // Запускаем логин
+    await authNotifier.login(login, password);
+    // Подписываемся на изменения состояния, чтобы дождаться загрузки профиля
+    final completer = Completer<bool>();
+    late void Function() listener;
+    listener = () {
+      final user = ref.read(authProvider).user;
+      if (user != null) {
+        completer.complete(true);
+      } else if (ref.read(authProvider).error != null) {
+        completer.complete(false);
       }
-    } catch (e) {
-      String message;
-      final errorStr = e.toString().toLowerCase();
-      if (errorStr.contains('401') || errorStr.contains('invalid credentials')) {
-        message = AppLocalizations.of(context)!.invalidCredentials;
-      } else if (errorStr.contains('403')) {
-        message = AppLocalizations.of(context)!.accountDeactivated;
-      } else if (errorStr.contains('socket') || errorStr.contains('network')) {
-        message = AppLocalizations.of(context)!.connectionError;
+      // отписываться будем после завершения
+    };
+    ref.listenManual(authProvider, (previous, next) {
+      if (next.user != null) {
+        completer.complete(true);
+      } else if (next.error != null) {
+        completer.complete(false);
+      }
+    });
+    final success = await completer.future.timeout(const Duration(seconds: 5), onTimeout: () => false);
+    if (success && mounted) {
+      if (_rememberMe) {
+        await _storage.write(key: 'saved_login', value: login);
+        await _storage.write(key: 'saved_password', value: password);
+        await _storage.write(key: 'remember_me', value: 'true');
       } else {
-        message = AppLocalizations.of(context)!.unknownError;
+        await _storage.delete(key: 'saved_password');
+        await _storage.write(key: 'saved_login', value: login);
+        await _storage.write(key: 'remember_me', value: 'false');
       }
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message)),
-        );
-      }
+      Navigator.pushReplacementNamed(context, '/home');
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(ref.read(authProvider).error ?? AppLocalizations.of(context)!.unknownError)),
+      );
     }
   }
 

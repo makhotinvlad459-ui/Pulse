@@ -34,13 +34,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await _loadUserProfile();
       return true;
     } catch (e) {
-      String errorMessage;
-      if (e is DioError && e.response?.statusCode == 400) {
-        errorMessage = 'Пользователь с таким email уже существует';
-      } else {
-        errorMessage = e.toString();
-      }
-      state = AuthState(error: errorMessage);
+      state = AuthState(error: e.toString());
       return false;
     }
   }
@@ -56,19 +50,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await _api.setToken(token);
       await _loadUserProfile();
     } catch (e) {
-      String errorMessage;
-      if (e is DioError) {
-        if (e.response?.statusCode == 401) {
-          errorMessage = 'Неверный логин или пароль';
-        } else if (e.response?.statusCode == 403) {
-          errorMessage = 'Учётная запись деактивирована';
-        } else {
-          errorMessage = 'Ошибка подключения к серверу';
-        }
-      } else {
-        errorMessage = e.toString();
-      }
-      state = AuthState(error: errorMessage);
+      state = AuthState(error: e.toString());
     }
   }
 
@@ -77,18 +59,18 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final response = await _api.get('/auth/me');
       final data = response.data;
       final user = User(
-        id: data['id'],
-        email: data['email'],
-        phone: data['phone'],
-        fullName: data['full_name'],
-        role: _stringToRole(data['role']),
+        id: data['id'] as int,
+        email: data['email'] as String,
+        phone: data['phone'] as String?,
+        fullName: data['full_name'] as String,
+        role: _stringToRole(data['role'] as String),
         subscriptionUntil: data['subscription_until'] != null
-            ? DateTime.parse(data['subscription_until'])
+            ? DateTime.parse(data['subscription_until'] as String)
             : null,
       );
       state = AuthState(user: user);
     } catch (e) {
-      state = AuthState(error: 'Failed to load user profile: $e');
+      state = AuthState(error: 'Failed to load profile: $e');
     }
   }
 
