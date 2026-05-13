@@ -96,10 +96,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _performLogin(String login, String password) async {
-    final authNotifier = ref.read(authProvider.notifier);
-    await authNotifier.login(login, password);
-    if (mounted) {
-      // Сохраняем/удаляем пароль
+  final authNotifier = ref.read(authProvider.notifier);
+  await authNotifier.login(login, password);
+  if (mounted) {
+    // Даём время на загрузку профиля (не более 2 секунд)
+    await Future.delayed(const Duration(milliseconds: 500));
+    final user = ref.read(authProvider).user;
+    if (user != null) {
       if (_rememberMe) {
         await _storage.write(key: 'saved_login', value: login);
         await _storage.write(key: 'saved_password', value: password);
@@ -109,13 +112,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         await _storage.write(key: 'saved_login', value: login);
         await _storage.write(key: 'remember_me', value: 'false');
       }
-      // Даём время загрузиться профилю и переходим
-      await Future.delayed(const Duration(milliseconds: 500));
-      if (mounted) {
-        Navigator.pushReplacementNamed(context, '/home');
-      }
+      Navigator.pushReplacementNamed(context, '/home');
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось загрузить профиль. Попробуйте войти снова.')),
+      );
+      // Возможно, стоит разлогинить?
+      await authNotifier.logout();
+      setState(() {}); // обновляем состояние
     }
   }
+}
 
   String _getVideoPath(AppTheme theme) {
     switch (theme) {
