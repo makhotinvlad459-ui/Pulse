@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import String, Boolean, DateTime, ForeignKey, Numeric, Enum, Integer, CheckConstraint, Text, UniqueConstraint
+from sqlalchemy import String, Boolean, DateTime, ForeignKey, Numeric, Enum, Integer, CheckConstraint, Text, UniqueConstraint, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from enum import Enum as PyEnum
 from app.database import Base
@@ -28,7 +28,7 @@ class User(Base):
     soft_delete_retention_days: Mapped[int] = mapped_column(Integer, default=15)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    last_login: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    extra_companies: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     # relationships
     companies_founded: Mapped[list["Company"]] = relationship("Company", back_populates="founder", foreign_keys="Company.founder_id")

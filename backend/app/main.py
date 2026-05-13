@@ -3,6 +3,7 @@ from app.auth import router as auth_router
 from app.routers import counterparties, companies, accounts, categories, transactions, statistics, admin, showcase, chat, tasks, websocket, notifications, products, permissions, orders
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import String, Boolean, DateTime, ForeignKey, Numeric, Enum, Integer, CheckConstraint, Text, UniqueConstraint, JSON
 import os
 
 app = FastAPI(title="Pulse API", version="0.2.0")
