@@ -15,7 +15,6 @@ class RegisterScreen extends ConsumerStatefulWidget {
 
 class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmController = TextEditingController();
@@ -26,7 +25,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   @override
   void dispose() {
     _emailController.dispose();
-    _phoneController.dispose();
     _nameController.dispose();
     _passwordController.dispose();
     _confirmController.dispose();
@@ -35,18 +33,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   Future<void> _register() async {
     final email = _emailController.text.trim();
-    final phone = _phoneController.text.trim();
     final fullName = _nameController.text.trim();
     final password = _passwordController.text.trim();
     final confirm = _confirmController.text.trim();
 
-    // Валидация с локализацией
     if (!email.contains('@') || !email.contains('.')) {
       _showSnackBar(AppLocalizations.of(context)!.invalidEmail);
-      return;
-    }
-    if (phone.isNotEmpty && phone.length < 6) {
-      _showSnackBar(AppLocalizations.of(context)!.phoneTooShort);
       return;
     }
     if (fullName.isEmpty) {
@@ -65,7 +57,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     final authNotifier = ref.read(authProvider.notifier);
     final success = await authNotifier.register(
       email,
-      phone.isNotEmpty ? phone : null,
+      null, // phone
       fullName,
       password,
     );
@@ -87,7 +79,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
-    final colorScheme = Theme.of(context).colorScheme;
 
     return VideoBackground(
       videoPath: 'assets/videos/city.mp4',
@@ -178,28 +169,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                             labelText: AppLocalizations.of(context)!.emailRequired,
                             labelStyle: TextStyle(color: Colors.grey.shade600),
                             prefixIcon: Icon(Icons.email, color: Colors.grey.shade700),
-                            filled: true,
-                            fillColor: Colors.white,
-                            border: const OutlineInputBorder(
-                              borderRadius: BorderRadius.all(Radius.circular(8)),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderSide: BorderSide(color: Colors.grey.shade400),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderSide: BorderSide(color: Colors.grey.shade700, width: 2),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        TextField(
-                          controller: _phoneController,
-                          style: const TextStyle(color: Colors.black87),
-                          decoration: InputDecoration(
-                            labelText: AppLocalizations.of(context)!.phoneOptional,
-                            hintText: AppLocalizations.of(context)!.min6Chars,
-                            labelStyle: TextStyle(color: Colors.grey.shade600),
-                            prefixIcon: Icon(Icons.phone, color: Colors.grey.shade700),
                             filled: true,
                             fillColor: Colors.white,
                             border: const OutlineInputBorder(
@@ -336,7 +305,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     ),
                   ),
                 ),
-                
               ],
             ),
           ),

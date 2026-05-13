@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:dio/dio.dart'; // добавьте импорт Dio
+import 'package:dio/dio.dart';
 import '../services/api_client.dart';
 import '../models/user.dart';
 
@@ -19,31 +19,31 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   final ApiClient _api = ApiClient();
 
- Future<bool> register(
+  Future<bool> register(
     String email, String? phone, String fullName, String password) async {
-  state = AuthState(isLoading: true);
-  try {
-    final response = await _api.post('/auth/register', data: {
-      'email': email,
-      'phone': phone,
-      'full_name': fullName,
-      'password': password,
-    });
-    final token = response.data['access_token'];
-    await _api.setToken(token);
-    await _loadUserProfile();
-    return true;
-  } catch (e) {
-    String errorMessage;
-    if (e is DioError && e.response?.statusCode == 400) {
-      errorMessage = 'Пользователь с таким email уже существует';
-    } else {
-      errorMessage = e.toString();
+    state = AuthState(isLoading: true);
+    try {
+      final response = await _api.post('/auth/register', data: {
+        'email': email,
+        'phone': phone,
+        'full_name': fullName,
+        'password': password,
+      });
+      final token = response.data['access_token'];
+      await _api.setToken(token);
+      await _loadUserProfile();
+      return true;
+    } catch (e) {
+      String errorMessage;
+      if (e is DioError && e.response?.statusCode == 400) {
+        errorMessage = 'Пользователь с таким email уже существует';
+      } else {
+        errorMessage = e.toString();
+      }
+      state = AuthState(error: errorMessage);
+      return false;
     }
-    state = AuthState(error: errorMessage);
-    return false;
   }
-}
 
   Future<void> login(String username, String password) async {
     state = AuthState(isLoading: true);
