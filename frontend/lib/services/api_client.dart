@@ -12,7 +12,7 @@ import '../models/statistics.dart';
 import '../main.dart';                           // ← navigatorKey
 
 class ApiClient {
-  sstatic String get baseUrl {
+  static String get baseUrl {
     if (kIsWeb) return '/api';  
     if (Platform.isAndroid) return 'http://93.115.19.96:8000'; 
     return 'http://93.115.19.96:8000'; 
