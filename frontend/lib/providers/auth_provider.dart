@@ -33,8 +33,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       if (token == null) throw Exception('No token');
       print('✅ Register token: $token');
       await _api.setToken(token);
-      final loaded = await _loadUserProfile();
-      return loaded;
+      final success = await _loadUserProfile();
+      return success;
     } catch (e) {
       print('❌ Register error: $e');
       state = AuthState(error: e.toString());
@@ -42,7 +42,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  Future<void> login(String username, String password) async {
+  Future<bool> login(String username, String password) async {
     state = AuthState(isLoading: true);
     try {
       final response = await _api.postForm('/auth/login', data: {
@@ -53,44 +53,47 @@ class AuthNotifier extends StateNotifier<AuthState> {
       if (token == null) throw Exception('No token');
       print('✅ Login token: $token');
       await _api.setToken(token);
-      await _loadUserProfile();  // не проверяем результат, ошибка внутри
+      final success = await _loadUserProfile();
+      return success;
     } catch (e) {
       print('❌ Login error: $e');
       state = AuthState(error: e.toString());
+      return false;
     }
   }
 
-  Future<void> _loadUserProfile() async {
+  Future<bool> _loadUserProfile() async {
     try {
       print('🔄 Loading user profile...');
       final response = await _api.get('/auth/me');
       final data = response.data;
       print('📦 Profile data: $data');
       if (data == null) throw Exception('No data');
+      // Проверяем наличие полей (без приведения к null)
       final userId = data['id'] as int?;
       final email = data['email'] as String?;
-      final phone = data['phone'] as String?;
       final fullName = data['full_name'] as String?;
       final roleStr = data['role'] as String?;
-      final subUntil = data['subscription_until'] as String?;
-      
       if (userId == null || email == null || fullName == null || roleStr == null) {
         throw Exception('Incomplete user data');
       }
-      
       final user = User(
         id: userId,
         email: email,
-        phone: phone ?? '',
+        phone: data['phone'] as String? ?? '',
         fullName: fullName,
         role: _stringToRole(roleStr),
-        subscriptionUntil: subUntil != null ? DateTime.parse(subUntil) : null,
+        subscriptionUntil: data['subscription_until'] != null
+            ? DateTime.parse(data['subscription_until'] as String)
+            : null,
       );
       state = AuthState(user: user);
       print('✅ Profile loaded, user: ${user.email}');
+      return true;
     } catch (e) {
       print('❌ Load profile error: $e');
       state = AuthState(error: 'Failed to load profile: $e');
+      return false;
     }
   }
 

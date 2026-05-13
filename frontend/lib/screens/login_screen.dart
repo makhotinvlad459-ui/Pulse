@@ -97,30 +97,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   Future<void> _performLogin(String login, String password) async {
   final authNotifier = ref.read(authProvider.notifier);
-  await authNotifier.login(login, password);
-  if (mounted) {
-    // Даём время на загрузку профиля (не более 2 секунд)
-    await Future.delayed(const Duration(milliseconds: 500));
-    final user = ref.read(authProvider).user;
-    if (user != null) {
-      if (_rememberMe) {
-        await _storage.write(key: 'saved_login', value: login);
-        await _storage.write(key: 'saved_password', value: password);
-        await _storage.write(key: 'remember_me', value: 'true');
-      } else {
-        await _storage.delete(key: 'saved_password');
-        await _storage.write(key: 'saved_login', value: login);
-        await _storage.write(key: 'remember_me', value: 'false');
-      }
-      Navigator.pushReplacementNamed(context, '/home');
+  final success = await authNotifier.login(login, password);
+  if (!mounted) return;
+  if (success) {
+    if (_rememberMe) {
+      await _storage.write(key: 'saved_login', value: login);
+      await _storage.write(key: 'saved_password', value: password);
+      await _storage.write(key: 'remember_me', value: 'true');
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Не удалось загрузить профиль. Попробуйте войти снова.')),
-      );
-      // Возможно, стоит разлогинить?
-      await authNotifier.logout();
-      setState(() {}); // обновляем состояние
+      await _storage.delete(key: 'saved_password');
+      await _storage.write(key: 'saved_login', value: login);
+      await _storage.write(key: 'remember_me', value: 'false');
     }
+    Navigator.pushReplacementNamed(context, '/home');
+  } else {
+    final error = ref.read(authProvider).error ?? 'Ошибка входа';
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
   }
 }
 

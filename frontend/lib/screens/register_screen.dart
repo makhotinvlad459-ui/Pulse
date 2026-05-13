@@ -32,38 +32,37 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   }
 
   Future<void> _register() async {
-    final email = _emailController.text.trim();
-    final fullName = _nameController.text.trim();
-    final password = _passwordController.text.trim();
-    final confirm = _confirmController.text.trim();
+  final email = _emailController.text.trim();
+  final fullName = _nameController.text.trim();
+  final password = _passwordController.text.trim();
+  final confirm = _confirmController.text.trim();
 
-    if (!email.contains('@') || !email.contains('.')) {
-      _showSnackBar(AppLocalizations.of(context)!.invalidEmail);
-      return;
-    }
-    if (fullName.isEmpty) {
-      _showSnackBar(AppLocalizations.of(context)!.enterName);
-      return;
-    }
-    if (password.length < 8) {
-      _showSnackBar(AppLocalizations.of(context)!.passwordTooShort);
-      return;
-    }
-    if (password != confirm) {
-      _showSnackBar(AppLocalizations.of(context)!.passwordsDoNotMatch);
-      return;
-    }
-
-    final authNotifier = ref.read(authProvider.notifier);
-    final success = await authNotifier.register(email, null, fullName, password);
-    if (success && mounted) {
-      // Через небольшую задержку, чтобы профиль успел загрузиться
-      await Future.delayed(const Duration(milliseconds: 500));
-      Navigator.pushReplacementNamed(context, '/home');
-    } else if (mounted) {
-      _showSnackBar(ref.read(authProvider).error ?? AppLocalizations.of(context)!.registrationError);
-    }
+  if (!email.contains('@') || !email.contains('.')) {
+    _showSnackBar(AppLocalizations.of(context)!.invalidEmail);
+    return;
   }
+  if (fullName.isEmpty) {
+    _showSnackBar(AppLocalizations.of(context)!.enterName);
+    return;
+  }
+  if (password.length < 8) {
+    _showSnackBar(AppLocalizations.of(context)!.passwordTooShort);
+    return;
+  }
+  if (password != confirm) {
+    _showSnackBar(AppLocalizations.of(context)!.passwordsDoNotMatch);
+    return;
+  }
+
+  final authNotifier = ref.read(authProvider.notifier);
+  final success = await authNotifier.register(email, null, fullName, password);
+  if (success && mounted) {
+    Navigator.pushReplacementNamed(context, '/home');
+  } else if (mounted) {
+    final error = ref.read(authProvider).error ?? AppLocalizations.of(context)!.registrationError;
+    _showSnackBar(error);
+  }
+}
 
   void _showSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
