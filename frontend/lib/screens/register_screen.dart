@@ -31,7 +31,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     super.dispose();
   }
 
-  String _localized(String? key, String defaultText) {
+  String _localized(String key, String defaultText) {
     final t = AppLocalizations.of(context);
     return t != null ? (t as dynamic)[key] ?? defaultText : defaultText;
   }
@@ -67,12 +67,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       Navigator.pushReplacementNamed(context, '/home');
     } else {
       final error = ref.read(authProvider).error ?? _localized('registrationError', 'Ошибка регистрации');
-      _showSnackBar(error);
+      if (mounted) _showSnackBar(error);
     }
   }
 
-  void _showSnackBar(String message) 
-  if (mounted) {
+  void _showSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
