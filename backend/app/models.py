@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import String, Boolean, DateTime, ForeignKey, Numeric, Enum, Integer, CheckConstraint, Text, UniqueConstraint, JSON
+from sqlalchemy import String,Float, Boolean, DateTime, ForeignKey, Numeric, Enum, Integer, CheckConstraint, Text, UniqueConstraint, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from enum import Enum as PyEnum
 from app.database import Base
@@ -28,9 +28,13 @@ class User(Base):
     soft_delete_retention_days: Mapped[int] = mapped_column(Integer, default=15)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    extra_companies: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
-    # relationships
+    # ВАЖНО: старые поля (как на сервере)
+    last_login: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    subscription_plan: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    extra_companies: Mapped[int] = mapped_column(Integer, default=0)  # не JSON!
+
+    # relationships (все старые остаются + новая связь)
     companies_founded: Mapped[list["Company"]] = relationship("Company", back_populates="founder", foreign_keys="Company.founder_id")
     memberships: Mapped[list["CompanyMember"]] = relationship("CompanyMember", foreign_keys="CompanyMember.user_id", back_populates="user")
     invited_members: Mapped[list["CompanyMember"]] = relationship("CompanyMember", foreign_keys="CompanyMember.invited_by", back_populates="inviter")
@@ -40,6 +44,9 @@ class User(Base):
     deleted_transactions: Mapped[list["Transaction"]] = relationship("Transaction", foreign_keys="Transaction.deleted_by", back_populates="deleter")
     chat_messages: Mapped[list["ChatMessage"]] = relationship(back_populates="user")
     transaction_comments: Mapped[list["TransactionComment"]] = relationship(back_populates="user")
+    # новая связь
+    payment_orders: Mapped[list["PaymentOrder"]] = relationship(back_populates="user")
+
 
     @property
     def display_name(self) -> str:
@@ -440,3 +447,17 @@ class PasswordResetToken(Base):
     token: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)    
+
+class PaymentOrder(Base):
+    __tablename__ = "payment_orders"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    plan: Mapped[str] = mapped_column(String, nullable=False)
+    amount: Mapped[float] = mapped_column(Float, nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False, default="pending")
+    payment_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user: Mapped["User"] = relationship(back_populates="payment_orders")
