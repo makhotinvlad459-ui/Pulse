@@ -78,153 +78,156 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   @override
-Widget build(BuildContext context) {
-  final homeAsync = ref.watch(homeProvider);
-  final currentTheme = ref.watch(themeProvider);
-  final videoPath = _getVideoPath(currentTheme);
-  final colorScheme = Theme.of(context).colorScheme;
-  final t = AppLocalizations.of(context)!;
+  Widget build(BuildContext context) {
+    final homeAsync = ref.watch(homeProvider);
+    final currentTheme = ref.watch(themeProvider);
+    final videoPath = _getVideoPath(currentTheme);
+    final colorScheme = Theme.of(context).colorScheme;
+    final t = AppLocalizations.of(context)!;
 
-  return VideoBackground(
-    key: ValueKey(videoPath),
-    videoPath: videoPath,
-    fit: BoxFit.cover,
-    muted: true,
-    loop: true,
-    child: Scaffold(
-      backgroundColor: Colors.transparent,
-      drawer: const SettingsDrawer(),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Shimmer.fromColors(
+    return VideoBackground(
+      key: ValueKey(videoPath),
+      videoPath: videoPath,
+      fit: BoxFit.cover,
+      muted: true,
+      loop: true,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        drawer: const SettingsDrawer(),
+        body: SafeArea(
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Shimmer.fromColors(
+                      baseColor: colorScheme.onSurface.withOpacity(0.3),
+                      highlightColor: colorScheme.onSurface,
+                      period: const Duration(seconds: 2),
+                      child: Text(
+                        t.appTitle,
+                        style: GoogleFonts.caveat(fontSize: 32, color: colorScheme.onSurface),
+                      ),
+                    ),
+                    Builder(
+                      builder: (context) => Column(
+                        children: [
+                          IconButton(
+                            icon: Icon(Icons.settings, color: colorScheme.onSurface),
+                            onPressed: () => Scaffold.of(context).openDrawer(),
+                          ),
+                          Text(
+                            t.settings,
+                            style: TextStyle(fontSize: 10, color: colorScheme.onSurface),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16, left: 16),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Shimmer.fromColors(
                     baseColor: colorScheme.onSurface.withOpacity(0.3),
                     highlightColor: colorScheme.onSurface,
                     period: const Duration(seconds: 2),
                     child: Text(
-                      t.appTitle,
-                      style: GoogleFonts.caveat(fontSize: 32, color: colorScheme.onSurface),
-                    ),
-                  ),
-                  Builder(
-                    builder: (context) => Column(
-                      children: [
-                        IconButton(
-                          icon: Icon(Icons.settings, color: colorScheme.onSurface),
-                          onPressed: () => Scaffold.of(context).openDrawer(),
-                        ),
-                        Text(
-                          t.settings,
-                          style: TextStyle(fontSize: 10, color: colorScheme.onSurface),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16, left: 16),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Shimmer.fromColors(
-                  baseColor: colorScheme.onSurface.withOpacity(0.3),
-                  highlightColor: colorScheme.onSurface,
-                  period: const Duration(seconds: 2),
-                  child: Text(
-                    t.subtitle,
-                    style: GoogleFonts.orbitron(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      letterSpacing: 1,
-                      color: colorScheme.onSurface,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            Expanded(
-              child: RefreshIndicator(
-                onRefresh: () async {
-                  ref.invalidate(homeProvider);
-                  await Future.delayed(Duration.zero);
-                },
-                child: homeAsync.when(
-                  data: (data) {
-                    final companies = data.companies;
-                    final overview = data.overview;
-                    final counts = data.counts as Map<String, dynamic>? ?? {};
-                    return ListView(
-                      padding: const EdgeInsets.all(16),
-                      children: [
-                        if (overview.hasAnyAccountsPermission)
-                          Row(
-                            children: [
-                              _StatCard(title: t.totalAll, amount: overview.totalAll),
-                              const SizedBox(width: 8),
-                              _StatCard(title: t.totalCash, amount: overview.totalCash),
-                              const SizedBox(width: 8),
-                              _StatCard(title: t.totalBank, amount: overview.totalBank),
-                            ],
-                          ),
-                        const SizedBox(height: 16),
-                        ...companies.map((company) {
-                          final unread = counts[company.id.toString()]['unread_messages'] ?? 0;
-                          final pending = counts[company.id.toString()]['pending_tasks'] ?? 0;
-                          return _CompanyCard(
-                            company: company,
-                            ref: ref,
-                            unreadMessages: unread,
-                            pendingTasks: pending,
-                            showBalance: overview.hasAnyAccountsPermission,
-                          );
-                        }),
-                      ],
-                    );
-                  },
-                  loading: () => const Center(child: CircularProgressIndicator()),
-                  error: (error, stack) {
-                    // Диагностика в консоль
-                    print('Home error: $error\n$stack');
-                    // Безопасное приведение к строке
-                    final errorMessage = error is String
-                        ? error
-                        : error is Exception
-                            ? error.toString()
-                            : '${t.error}: $error';
-                    return Center(
-                      child: Text(
-                        errorMessage,
-                        style: TextStyle(color: colorScheme.error),
+                      t.subtitle,
+                      style: GoogleFonts.orbitron(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 1,
+                        color: colorScheme.onSurface,
                       ),
-                    );
-                  },
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ],
+              Expanded(
+                child: RefreshIndicator(
+                  onRefresh: () async {
+                    ref.invalidate(homeProvider);
+                    await Future.delayed(Duration.zero);
+                  },
+                  child: homeAsync.when(
+                    data: (data) {
+                      final companies = data.companies;
+                      final overview = data.overview;
+                      final counts = data.counts as Map<String, dynamic>? ?? {};
+                      return ListView(
+                        padding: const EdgeInsets.all(16),
+                        children: [
+                          if (overview.hasAnyAccountsPermission)
+                            Row(
+                              children: [
+                                _StatCard(title: t.totalAll, amount: overview.totalAll),
+                                const SizedBox(width: 8),
+                                _StatCard(title: t.totalCash, amount: overview.totalCash),
+                                const SizedBox(width: 8),
+                                _StatCard(title: t.totalBank, amount: overview.totalBank),
+                              ],
+                            ),
+                          const SizedBox(height: 16),
+                          ...companies.map((company) {
+                            final unread = counts[company.id.toString()]['unread_messages'] ?? 0;
+                            final pending = counts[company.id.toString()]['pending_tasks'] ?? 0;
+                            return _CompanyCard(
+                              company: company,
+                              ref: ref,
+                              unreadMessages: unread,
+                              pendingTasks: pending,
+                              showBalance: overview.hasAnyAccountsPermission,
+                            );
+                          }),
+                        ],
+                      );
+                    },
+                    loading: () => const Center(child: CircularProgressIndicator()),
+                    error: (error, stack) {
+                      // Диагностика в консоль
+                      print('Home error: $error\n$stack');
+                      // Безопасное приведение к строке
+                      final errorMessage = error is String
+                          ? error
+                          : error is Exception
+                              ? error.toString()
+                              : '${t.error}: $error';
+                      return Center(
+                        child: Text(
+                          errorMessage,
+                          style: TextStyle(color: colorScheme.error),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        floatingActionButton: FloatingActionButton(
+          onPressed: () async {
+            final result = await Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const CreateCompanyScreen()),
+            );
+            if (result == true) ref.invalidate(homeProvider);
+          },
+          backgroundColor: colorScheme.primary,
+          foregroundColor: colorScheme.onPrimary,
+          child: const Icon(Icons.add),
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          final result = await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const CreateCompanyScreen()),
-          );
-          if (result == true) ref.invalidate(homeProvider);
-        },
-        backgroundColor: colorScheme.primary,
-        foregroundColor: colorScheme.onPrimary,
-        child: const Icon(Icons.add),
-      ),
-    ),
-  );
+    );
+  }
 }
+
+// Далее идут отдельные виджеты (за пределами _HomeScreenState)
 
 class _StatCard extends StatelessWidget {
   final String title;
