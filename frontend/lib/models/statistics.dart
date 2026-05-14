@@ -13,9 +13,9 @@ class FounderOverview {
 
   factory FounderOverview.fromJson(Map<String, dynamic> json) {
     return FounderOverview(
-      totalCash: (json['total_cash'] as num).toDouble(),
-      totalBank: (json['total_bank'] as num).toDouble(),
-      totalAll: (json['total_all'] as num).toDouble(),
+      totalCash: (json['total_cash'] as num?)?.toDouble() ?? 0.0,
+      totalBank: (json['total_bank'] as num?)?.toDouble() ?? 0.0,
+      totalAll: (json['total_all'] as num?)?.toDouble() ?? 0.0,
       hasAnyAccountsPermission: json['has_any_accounts_permission'] ?? false,
     );
   }
