@@ -13,7 +13,9 @@ import '../main.dart';
 class ApiClient {
   static final ApiClient _instance = ApiClient._internal();
   factory ApiClient() => _instance;
-  ApiClient._internal();
+  ApiClient._internal() {
+    _init();
+  }
 
   static String get baseUrl {
     if (kIsWeb) return '/api';
@@ -23,8 +25,6 @@ class ApiClient {
 
   final Dio _dio = Dio();
   String? _token;
-
-  Dio get dio => _dio;
 
   void _init() {
     _dio.options = BaseOptions(
@@ -98,7 +98,7 @@ class ApiClient {
 
   Future<String?> getToken() async => _token;
 
-  // Загрузка фото (оставляем без изменений)
+  // Загрузка фото
   Future<void> uploadPhoto(String path, XFile photo, {Map<String, dynamic>? queryParameters}) async {
     final bytes = await photo.readAsBytes();
     final multipartFile = MultipartFile.fromBytes(bytes, filename: photo.name);
@@ -118,16 +118,7 @@ class ApiClient {
         options: Options(responseType: ResponseType.bytes));
   }
 
-  // Управление токеном (теперь без хранилища)
-  Future<void> setToken(String token) async {
-    _token = token;
-  }
-  Future<void> clearToken() async {
-    _token = null;
-  }
-  Future<String?> getToken() async => _token;
-
-  // Методы API (оставляем как есть)
+  // ========== Методы API ==========
   Future<List<Company>> getCompanies() async {
     final response = await get('/companies');
     final List<dynamic> data = response.data;
@@ -142,6 +133,11 @@ class ApiClient {
   Future<FounderOverview> getUserOverview() async {
     final response = await get('/statistics/user-overview');
     return FounderOverview.fromJson(response.data);
+  }
+
+  Future<Map<String, dynamic>> getUnreadCounts() async {
+    final response = await get('/notifications/unread-counts');
+    return response.data as Map<String, dynamic>;
   }
 
   Future<dynamic> getDynamics(int companyId, DateTime startDate, DateTime endDate, String interval) async {
@@ -195,7 +191,11 @@ class ApiClient {
     });
   }
 
-  Future<Map<String, dynamic>> uploadChatFile(XFile? photo, PlatformFile? webFile, int companyId) async {
+  Future<Map<String, dynamic>> uploadChatFile(
+    XFile? photo,
+    PlatformFile? webFile,
+    int companyId,
+  ) async {
     final uri = Uri.parse('$baseUrl/chat/upload');
     final request = http.MultipartRequest('POST', uri)
       ..headers['Authorization'] = 'Bearer ${await getToken()}';
