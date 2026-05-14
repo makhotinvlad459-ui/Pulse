@@ -41,26 +41,42 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<bool> login(String username, String password) async {
-    state = AuthState(isLoading: true);
-    try {
-      final response = await _api.postForm('/auth/login', data: {
-        'username': username,
-        'password': password,
-      });
-      if (response.statusCode != 200) throw Exception('Server error: ${response.statusCode}');
-      final data = response.data;
-      if (data is! Map<String, dynamic>) throw Exception('Invalid response format');
-      final token = data['access_token'] as String?;
-      if (token == null) throw Exception('No token');
-      await _api.setToken(token);
-      final loaded = await _loadUserProfile();
-      return loaded;
-    } catch (e) {
-      print('login error: $e');
-      state = AuthState(error: e.toString());
-      return false;
+  state = AuthState(isLoading: true);
+  try {
+    print('>>> LOGIN START');
+    final response = await _api.postForm('/auth/login', data: {
+      'username': username,
+      'password': password,
+    });
+    print('>>> GOT RESPONSE: ${response.statusCode}');
+    print('>>> RESPONSE DATA TYPE: ${response.data.runtimeType}');
+    
+    if (response.statusCode != 200) {
+      throw Exception('Server error: ${response.statusCode}');
     }
+    
+    final data = response.data;
+    if (data is! Map<String, dynamic>) {
+      throw Exception('Invalid response format: ${data.runtimeType}');
+    }
+    
+    final token = data['access_token'] as String?;
+    if (token == null) throw Exception('No token in response: $data');
+    
+    print('>>> TOKEN: $token');
+    await _api.setToken(token);
+    print('>>> TOKEN SAVED');
+    
+    final loaded = await _loadUserProfile();
+    print('>>> PROFILE LOADED: $loaded');
+    return loaded;
+  } catch (e, stack) {
+    print('login error: $e');
+    print('STACKTRACE:\n$stack');   // <-- вот это самое важное
+    state = AuthState(error: e.toString());
+    return false;
   }
+}
 
   Future<bool> _loadUserProfile() async {
     try {
