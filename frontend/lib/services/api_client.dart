@@ -31,22 +31,21 @@ class ApiClient {
       followRedirects: true,
       maxRedirects: 5,
       validateStatus: (status) => status != null && status < 500,
-      headers: {},
+      headers: {},                     // ← инициализация пустыми заголовками
     );
 
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
-  final token = await _storage.read(key: 'access_token');
-  if (token != null) {
-    options.headers ??= {};
-    options.headers['Authorization'] = 'Bearer $token';
-  }
-  return handler.next(options);
-},
+        final token = await _storage.read(key: 'access_token');
+        if (token != null) {
+          options.headers ??= {};       // гарантируем, что headers не null
+          options.headers['Authorization'] = 'Bearer $token';
+        }
+        return handler.next(options);
+      },
       onError: (DioException e, handler) async {
         if (e.response?.statusCode == 401) {
           await clearToken();
-          // Исправленная строка – безопасный вызов с ?.
           WidgetsBinding.instance.addPostFrameCallback((_) {
             navigatorKey.currentState?.pushNamedAndRemoveUntil(
               '/login',
@@ -86,7 +85,10 @@ class ApiClient {
     return await _dio.post(
       path,
       data: data,
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        contentType: Headers.formUrlEncodedContentType,
+        headers: {},                   // ← предотвращает сброс headers
+      ),
     );
   }
 
@@ -112,15 +114,19 @@ class ApiClient {
       {Map<String, dynamic>? queryParameters}) async {
     return await _dio.get(path,
         queryParameters: queryParameters,
-        options: Options(responseType: ResponseType.bytes));
+        options: Options(
+          responseType: ResponseType.bytes,
+          headers: {},                 // ← предотвращает сброс headers
+        ));
   }
 
   // Управление токеном
- Future<void> setToken(String token) async {
-  await _storage.write(key: 'access_token', value: token);
-  _dio.options.headers ??= {}; // на всякий случай
-  _dio.options.headers['Authorization'] = 'Bearer $token';
-}
+  Future<void> setToken(String token) async {
+    await _storage.write(key: 'access_token', value: token);
+    _dio.options.headers ??= {};       // гарантируем, что headers не null
+    _dio.options.headers['Authorization'] = 'Bearer $token';
+  }
+
   Future<void> clearToken() async => await _storage.delete(key: 'access_token');
   Future<String?> getToken() async => await _storage.read(key: 'access_token');
 
