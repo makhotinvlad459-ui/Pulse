@@ -131,28 +131,28 @@ class ApiClient {
 
   // ========== Методы для работы с API ==========
   Future<List<Company>> getCompanies() async {
-    final response = await get('/companies');
+    final response = await get('/companies/');
     final List<dynamic> data = response.data;
     return data.map((json) => Company.fromJson(json)).toList();
   }
 
   Future<FounderOverview> getFounderOverview() async {
-    final response = await get('/statistics/founder-overview');
+    final response = await get('/statistics/founder-overview/');
     return FounderOverview.fromJson(response.data);
   }
 
   Future<FounderOverview> getUserOverview() async {
-    final response = await get('/statistics/user-overview');
+    final response = await get('/statistics/user-overview/');
     return FounderOverview.fromJson(response.data);
   }
 
   Future<Map<String, dynamic>> getUnreadCounts() async {
-    final response = await get('/notifications/unread-counts');
+    final response = await get('/notifications/unread-counts/');
     return response.data as Map<String, dynamic>;
   }
 
   Future<dynamic> getDynamics(int companyId, DateTime startDate, DateTime endDate, String interval) async {
-    return await get('/statistics/dynamics', queryParameters: {
+    return await get('/statistics/dynamics/', queryParameters: {
       'company_id': companyId,
       'start_date': startDate.toIso8601String(),
       'end_date': endDate.toIso8601String(),
@@ -161,7 +161,7 @@ class ApiClient {
   }
 
   Future<dynamic> getIncomeByCategory(int companyId, DateTime startDate, DateTime endDate) async {
-    return await get('/statistics/income-by-category', queryParameters: {
+    return await get('/statistics/income-by-category/', queryParameters: {
       'company_id': companyId,
       'start_date': startDate.toIso8601String(),
       'end_date': endDate.toIso8601String(),
@@ -169,7 +169,7 @@ class ApiClient {
   }
 
   Future<dynamic> getExpenseByCategory(int companyId, DateTime startDate, DateTime endDate) async {
-    return await get('/statistics/expense-by-category', queryParameters: {
+    return await get('/statistics/expense-by-category/', queryParameters: {
       'company_id': companyId,
       'start_date': startDate.toIso8601String(),
       'end_date': endDate.toIso8601String(),
@@ -177,7 +177,7 @@ class ApiClient {
   }
 
   Future<dynamic> getCashVsNoncash(int companyId, DateTime startDate, DateTime endDate) async {
-    return await get('/statistics/cash-vs-noncash', queryParameters: {
+    return await get('/statistics/cash-vs-noncash/', queryParameters: {
       'company_id': companyId,
       'start_date': startDate.toIso8601String(),
       'end_date': endDate.toIso8601String(),
@@ -185,7 +185,7 @@ class ApiClient {
   }
 
   Future<dynamic> getProductSales(int companyId, DateTime startDate, DateTime endDate, String sortBy) async {
-    return await get('/statistics/product-sales', queryParameters: {
+    return await get('/statistics/product-sales/', queryParameters: {
       'company_id': companyId,
       'start_date': startDate.toIso8601String(),
       'end_date': endDate.toIso8601String(),
@@ -194,7 +194,7 @@ class ApiClient {
   }
 
   Future<dynamic> getShowcaseSales(int companyId, DateTime startDate, DateTime endDate, String sortBy) async {
-    return await get('/statistics/showcase-sales', queryParameters: {
+    return await get('/statistics/showcase-sales/', queryParameters: {
       'company_id': companyId,
       'start_date': startDate.toIso8601String(),
       'end_date': endDate.toIso8601String(),
@@ -207,7 +207,7 @@ class ApiClient {
     PlatformFile? webFile,
     int companyId,
   ) async {
-    final uri = Uri.parse('$baseUrl/chat/upload');
+    final uri = Uri.parse('$baseUrl/chat/upload/');
     final request = http.MultipartRequest('POST', uri)
       ..headers['Authorization'] = 'Bearer ${await getToken()}';
     if (photo != null) {
@@ -232,17 +232,17 @@ class ApiClient {
 
   // Методы для работы с правами
   Future<List<dynamic>> getAllPermissions() async {
-    final response = await get('/permissions/list');
+    final response = await get('/permissions/list/');
     return response.data;
   }
 
   Future<Map<String, dynamic>> getMyPermissions(int companyId) async {
-    final response = await get('/permissions/company/$companyId/my');
+    final response = await get('/permissions/company/$companyId/my/');
     return response.data;
   }
 
   Future<List<dynamic>> getCompanyPermissions(int companyId) async {
-    final response = await get('/permissions/company/$companyId');
+    final response = await get('/permissions/company/$companyId/');
     return response.data;
   }
 

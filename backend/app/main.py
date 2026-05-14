@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from app.auth import router as auth_router
-from app.routers import counterparties, companies, accounts, categories, transactions, statistics, admin, showcase, chat, tasks, websocket, notifications, products, permissions, orders
+from app.routers import subscription, counterparties, companies, accounts, categories, transactions, statistics, admin, showcase, chat, tasks, websocket, notifications, products, permissions, orders
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import String, Boolean, DateTime, ForeignKey, Numeric, Enum, Integer, CheckConstraint, Text, UniqueConstraint, JSON
@@ -25,6 +25,7 @@ app.include_router(showcase.router)
 app.include_router(permissions.router)
 app.include_router(orders.router)
 app.include_router(counterparties.router)
+app.include_router(subscription.router)
 
 # Статика
 UPLOAD_DIR = "uploads"
