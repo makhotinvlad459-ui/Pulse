@@ -67,19 +67,24 @@ class AuthNotifier extends StateNotifier<AuthState> {
       if (response.statusCode != 200) throw Exception('Failed to fetch profile');
       final data = response.data;
       if (data is! Map<String, dynamic>) throw Exception('Invalid profile data');
-      final id = data['id'];
-      final email = data['email'];
-      final fullName = data['full_name'];
-      final roleStr = data['role'];
-      if (id == null || email == null || fullName == null || roleStr == null) {
-        throw Exception('Missing fields');
+
+      print('DEBUG: Profile data keys: ${data.keys.toList()}'); // для отладки
+
+      // Безопасный парсинг id (на вебе может быть double)
+      final rawId = data['id'];
+      final int parsedId;
+      if (rawId is int) {
+        parsedId = rawId;
+      } else {
+        parsedId = int.tryParse(rawId.toString()) ?? 0;
       }
+
       final user = User(
-        id: id is int ? id : int.parse(id.toString()),
-        email: email.toString(),
+        id: parsedId,
+        email: data['email']?.toString() ?? '',
         phone: data['phone']?.toString() ?? '',
-        fullName: fullName.toString(),
-        role: _stringToRole(roleStr.toString()),
+        fullName: data['full_name']?.toString() ?? '',
+        role: _stringToRole(data['role']?.toString() ?? 'employee'),
         subscriptionUntil: data['subscription_until'] != null
             ? DateTime.tryParse(data['subscription_until'].toString())
             : null,
@@ -87,6 +92,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       state = AuthState(user: user);
       return true;
     } catch (e) {
+      print('Profile load error: $e');
       state = AuthState(error: 'Profile load error: $e');
       return false;
     }
