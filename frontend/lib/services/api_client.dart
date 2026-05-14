@@ -80,10 +80,15 @@ class ApiClient {
           {Map<String, dynamic>? queryParameters}) =>
       _dio.delete(path, queryParameters: queryParameters);
 
-  Future<Response> postForm(String path, {required Map<String, String> data}) =>
-      _dio.post(path,
-          data: data,
-          options: Options(contentType: Headers.formUrlEncodedContentType));
+  Future<Response> postForm(String path, {required Map<String, String> data}) async {
+  return await _dio.post(
+    path,
+    data: data, // передаём обычный Map, не FormData
+    options: Options(
+      contentType: Headers.formUrlEncodedContentType,
+    ),
+  );
+}
 
   // Загрузка фото (мобильное устройство)
   Future<void> uploadPhoto(String path, XFile photo,

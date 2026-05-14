@@ -37,22 +37,33 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<bool> login(String username, String password) async {
-    state = AuthState(isLoading: true);
-    try {
-      final response = await _api.postForm('/auth/login', data: {
-        'username': username,
-        'password': password,
-      });
-      final token = response.data['access_token'] as String?;
-      if (token == null) throw Exception('No token');
-      // ⚠️ ВАЖНО: сохраняем токен!
-      await _api.setToken(token);
-      return await _loadUserProfile();
-    } catch (e) {
-      state = AuthState(error: e.toString());
-      return false;
+  state = AuthState(isLoading: true);
+  try {
+    final response = await _api.postForm('/auth/login', data: {
+      'username': username,
+      'password': password,
+    });
+
+    // Проверяем, что статус ответа 200 (успех)
+    if (response.statusCode != 200) {
+      throw Exception('Server error: ${response.statusCode}');
     }
+
+    final token = response.data['access_token'] as String?;
+    if (token == null) throw Exception('No token');
+
+    // Сохраняем токен в хранилище и в заголовки Dio
+    await _api.setToken(token);
+
+    // Загружаем профиль пользователя
+    final profileLoaded = await _loadUserProfile();
+    return profileLoaded;
+  } catch (e) {
+    print('Login error: $e');
+    state = AuthState(error: e.toString());
+    return false;
   }
+}
 
   Future<bool> _loadUserProfile() async {
   try {
