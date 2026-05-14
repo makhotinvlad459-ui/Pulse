@@ -56,14 +56,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   final authNotifier = ref.read(authProvider.notifier);
   final success = await authNotifier.register(email, null, fullName, password);
-  if (success && mounted) {
+  print('📝 Register success: $success, mounted: $mounted');
+  if (!mounted) return;
+  if (success) {
+    await Future.delayed(const Duration(milliseconds: 100));
     Navigator.pushReplacementNamed(context, '/home');
-  } else if (mounted) {
+  } else {
     final error = ref.read(authProvider).error ?? AppLocalizations.of(context)!.registrationError;
     _showSnackBar(error);
   }
 }
-
   void _showSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
