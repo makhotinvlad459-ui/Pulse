@@ -71,7 +71,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     }
   }
 
-  void _showSnackBar(String message) {
+  void _showSnackBar(String message) 
+  if (mounted) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 

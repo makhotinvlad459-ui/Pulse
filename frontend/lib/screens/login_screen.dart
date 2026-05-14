@@ -120,7 +120,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (mounted) Navigator.pushReplacementNamed(context, '/home');
     } else {
       final error = ref.read(authProvider).error ?? 'Неизвестная ошибка';
+      if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
+    }
     }
   }
 

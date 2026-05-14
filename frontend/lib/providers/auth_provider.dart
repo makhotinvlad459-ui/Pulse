@@ -47,85 +47,51 @@ class AuthNotifier extends StateNotifier<AuthState> {
         'username': username,
         'password': password,
       });
-      if (response.statusCode != 200) throw Exception('Server error: ${response.statusCode}');
+      if (response.statusCode != 200) throw Exception('Server error');
       final data = response.data;
-      if (data is! Map<String, dynamic>) throw Exception('Invalid response format');
+      if (data is! Map<String, dynamic>) throw Exception('Invalid response');
       final token = data['access_token'] as String?;
       if (token == null) throw Exception('No token');
       await _api.setToken(token);
-      print('🔵 Token saved, calling _loadUserProfile...');
       final loaded = await _loadUserProfile();
-      print('login: profile loaded = $loaded');
       return loaded;
     } catch (e) {
-      print('login error: $e');
       state = AuthState(error: e.toString());
       return false;
     }
   }
 
   Future<bool> _loadUserProfile() async {
-  try {
-    print('🔵 1. _loadUserProfile started');
-    final response = await _api.get('/auth/me');
-    print('🔵 2. Response status: ${response.statusCode}');
-    if (response.statusCode != 200) throw Exception('Failed to fetch profile');
-    
-    final data = response.data;
-    print('🔵 3. Data type: ${data.runtimeType}');
-    print('🔵 4. Data content: $data');
-    
-    if (data is! Map<String, dynamic>) throw Exception('Invalid profile data');
-    
-    print('🔵 5. Keys: ${data.keys}');
-    
-    final rawId = data['id'];
-    print('🔵 6. rawId: $rawId, type: ${rawId.runtimeType}');
-    
-    final int parsedId;
-    if (rawId is int) {
-      parsedId = rawId;
-    } else {
-      parsedId = int.tryParse(rawId.toString()) ?? 0;
+    try {
+      final response = await _api.get('/auth/me');
+      if (response.statusCode != 200) throw Exception('Failed to fetch profile');
+      final data = response.data;
+      if (data is! Map<String, dynamic>) throw Exception('Invalid profile data');
+
+      // Безопасное извлечение с дефолтными значениями
+      final rawId = data['id'];
+      final int parsedId = rawId is int ? rawId : int.tryParse(rawId.toString()) ?? 0;
+      final email = data['email']?.toString() ?? '';
+      final fullName = data['full_name']?.toString() ?? 'No Name';
+      final roleStr = data['role']?.toString() ?? 'employee';
+      final phone = data['phone']?.toString(); // может быть null
+      final subUntilStr = data['subscription_until']?.toString();
+
+      final user = User(
+        id: parsedId,
+        email: email,
+        phone: phone,
+        fullName: fullName,
+        role: _stringToRole(roleStr),
+        subscriptionUntil: subUntilStr != null ? DateTime.tryParse(subUntilStr) : null,
+      );
+      state = AuthState(user: user);
+      return true;
+    } catch (e) {
+      state = AuthState(error: 'Profile load error: $e');
+      return false;
     }
-    print('🔵 7. parsedId: $parsedId');
-    
-    final email = data['email']?.toString() ?? '';
-    print('🔵 8. email: $email');
-    
-    final fullName = data['full_name']?.toString() ?? 'No Name';
-    print('🔵 9. fullName: $fullName');
-    
-    final roleStr = data['role']?.toString() ?? 'employee';
-    print('🔵 10. roleStr: $roleStr');
-    
-    final phone = data['phone']?.toString() ?? '';
-    print('🔵 11. phone: $phone');
-    
-    final subUntilStr = data['subscription_until']?.toString();
-    print('🔵 12. subUntilStr: $subUntilStr');
-    
-    print('🔵 13. Creating User object...');
-    final user = User(
-      id: parsedId,
-      email: email,
-      phone: phone,
-      fullName: fullName,
-      role: _stringToRole(roleStr),
-      subscriptionUntil: subUntilStr != null ? DateTime.tryParse(subUntilStr) : null,
-    );
-    print('🔵 14. User created: ${user.email}');
-    
-    state = AuthState(user: user);
-    print('🔵 15. State updated, returning true');
-    return true;
-  } catch (e, stack) {
-    print('🔴 ERROR in _loadUserProfile: $e');
-    print('🔴 Stack: $stack');
-    state = AuthState(error: 'Profile load error: $e');
-    return false;
   }
-}
 
   UserRole _stringToRole(String role) {
     switch (role.toLowerCase()) {
