@@ -47,16 +47,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
         'username': username,
         'password': password,
       });
-      if (response.statusCode != 200) throw Exception('Server error');
+      if (response.statusCode != 200) throw Exception('Server error: ${response.statusCode}');
       final data = response.data;
-      if (data is! Map<String, dynamic>) throw Exception('Invalid response');
+      if (data is! Map<String, dynamic>) throw Exception('Invalid response format');
       final token = data['access_token'] as String?;
       if (token == null) throw Exception('No token');
-      print('Token before setToken: $token');
       await _api.setToken(token);
       final loaded = await _loadUserProfile();
       return loaded;
     } catch (e) {
+      print('login error: $e');
       state = AuthState(error: e.toString());
       return false;
     }
@@ -69,26 +69,31 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final data = response.data;
       if (data is! Map<String, dynamic>) throw Exception('Invalid profile data');
 
-      // Безопасное извлечение с дефолтными значениями
-      final rawId = data['id'];
-      final int parsedId = rawId is int ? rawId : int.tryParse(rawId.toString()) ?? 0;
-      final email = data['email']?.toString() ?? '';
-      final fullName = data['full_name']?.toString() ?? 'No Name';
-      final roleStr = data['role']?.toString() ?? 'employee';
-      final phone = data['phone']?.toString(); // может быть null
-      final subUntilStr = data['subscription_until']?.toString();
+      print('Profile data: $data');
+
+      // Безопасное извлечение
+      final id = (data['id'] as num).toInt();
+      final email = data['email'] as String;
+      final fullName = data['full_name'] as String;
+      final roleStr = data['role'] as String;
+      final phone = data['phone'] as String?;
+      final subUntilStr = data['subscription_until'] as String?;
+
+      print('Parsed: id=$id, email=$email, name=$fullName, role=$roleStr, phone=$phone, sub=$subUntilStr');
 
       final user = User(
-        id: parsedId,
+        id: id,
         email: email,
         phone: phone,
         fullName: fullName,
         role: _stringToRole(roleStr),
-        subscriptionUntil: subUntilStr != null ? DateTime.tryParse(subUntilStr) : null,
+        subscriptionUntil: subUntilStr != null ? DateTime.parse(subUntilStr) : null,
       );
       state = AuthState(user: user);
       return true;
-    } catch (e) {
+    } catch (e, stack) {
+      print('Profile load error: $e');
+      print('Stack: $stack');
       state = AuthState(error: 'Profile load error: $e');
       return false;
     }

@@ -115,7 +115,7 @@ class ApiClient {
 
   // Управление токеном
   Future<void> setToken(String token) async {
-  // временно: сохраняем в статическую переменную
+  await _storage.write(key: 'access_token', value: token);
   _dio.options.headers['Authorization'] = 'Bearer $token';
 }
   Future<void> clearToken() async => await _storage.delete(key: 'access_token');

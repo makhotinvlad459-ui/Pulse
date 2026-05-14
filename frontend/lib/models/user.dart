@@ -21,19 +21,19 @@ class User {
 
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
-      id: json['id'] is int ? json['id'] : int.tryParse(json['id'].toString()) ?? 0,
-      email: json['email']?.toString() ?? '',
-      phone: json['phone']?.toString(),
-      fullName: json['full_name']?.toString() ?? '',
+      id: (json['id'] as num).toInt(),
+      email: json['email'] as String,
+      phone: json['phone'] as String?,
+      fullName: json['full_name'] as String,
       role: UserRole.values.firstWhere(
         (e) => e.toString().split('.').last == json['role'],
         orElse: () => UserRole.employee,
       ),
       subscriptionUntil: json['subscription_until'] != null
-          ? DateTime.tryParse(json['subscription_until'].toString())
+          ? DateTime.parse(json['subscription_until'] as String)
           : null,
       lastLogin: json['last_login'] != null
-          ? DateTime.tryParse(json['last_login'].toString())
+          ? DateTime.parse(json['last_login'] as String)
           : null,
     );
   }

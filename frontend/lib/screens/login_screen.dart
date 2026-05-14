@@ -102,29 +102,27 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _performLogin(String login, String password) async {
-    final authNotifier = ref.read(authProvider.notifier);
-    final success = await authNotifier.login(login, password);
-    if (!mounted) return;
-    if (success) {
-      if (_rememberMe) {
-        await _storage.write(key: 'saved_login', value: login);
-        await _storage.write(key: 'saved_password', value: password);
-        await _storage.write(key: 'remember_me', value: 'true');
-      } else {
-        await _storage.delete(key: 'saved_password');
-        await _storage.write(key: 'saved_login', value: login);
-        await _storage.write(key: 'remember_me', value: 'false');
-      }
-      // Даём время на сохранение токена и переходим
-      await Future.delayed(const Duration(milliseconds: 100));
-      if (mounted) Navigator.pushReplacementNamed(context, '/home');
+  final authNotifier = ref.read(authProvider.notifier);
+  final success = await authNotifier.login(login, password);
+  if (!mounted) return;
+  if (success) {
+    if (_rememberMe) {
+      await _storage.write(key: 'saved_login', value: login);
+      await _storage.write(key: 'saved_password', value: password);
+      await _storage.write(key: 'remember_me', value: 'true');
     } else {
-      final error = ref.read(authProvider).error ?? 'Неизвестная ошибка';
-      if (mounted) {
+      await _storage.delete(key: 'saved_password');
+      await _storage.write(key: 'saved_login', value: login);
+      await _storage.write(key: 'remember_me', value: 'false');
+    }
+    Navigator.pushReplacementNamed(context, '/home');
+  } else {
+    final error = ref.read(authProvider).error ?? 'Неизвестная ошибка';
+    if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
     }
-    }
   }
+}
 
   String _getVideoPath(AppTheme theme) {
     switch (theme) {
