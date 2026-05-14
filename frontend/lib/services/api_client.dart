@@ -11,6 +11,10 @@ import '../models/statistics.dart';
 import '../main.dart';
 
 class ApiClient {
+  static final ApiClient _instance = ApiClient._internal();
+  factory ApiClient() => _instance;
+  ApiClient._internal();
+
   static String get baseUrl {
     if (kIsWeb) return '/api';
     if (Platform.isAndroid) return 'http://93.115.19.96:8000';
@@ -18,11 +22,11 @@ class ApiClient {
   }
 
   final Dio _dio = Dio();
-  static String? _token; // вместо FlutterSecureStorage
+  String? _token;
 
   Dio get dio => _dio;
 
-  ApiClient() {
+  void _init() {
     _dio.options = BaseOptions(
       baseUrl: baseUrl,
       connectTimeout: const Duration(seconds: 30),
@@ -33,7 +37,7 @@ class ApiClient {
     );
 
     _dio.interceptors.add(InterceptorsWrapper(
-      onRequest: (options, handler) async {
+      onRequest: (options, handler) {
         if (_token != null) {
           options.headers['Authorization'] = 'Bearer $_token';
         }
@@ -57,7 +61,7 @@ class ApiClient {
     _dio.interceptors.add(LogInterceptor(responseBody: true, requestBody: true));
   }
 
-  // Базовые методы (оставляем все)
+  // Базовые методы
   Future<Response> post(String path, {dynamic data, Map<String, dynamic>? queryParameters}) =>
       _dio.post(path, data: data, queryParameters: queryParameters);
 
@@ -80,6 +84,19 @@ class ApiClient {
       options: Options(contentType: Headers.formUrlEncodedContentType),
     );
   }
+
+  // Управление токеном
+  Future<void> setToken(String token) async {
+    _token = token;
+    _dio.options.headers['Authorization'] = 'Bearer $token';
+  }
+
+  Future<void> clearToken() async {
+    _token = null;
+    _dio.options.headers.remove('Authorization');
+  }
+
+  Future<String?> getToken() async => _token;
 
   // Загрузка фото (оставляем без изменений)
   Future<void> uploadPhoto(String path, XFile photo, {Map<String, dynamic>? queryParameters}) async {
