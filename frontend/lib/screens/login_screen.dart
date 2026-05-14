@@ -59,6 +59,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
+  // Безопасное получение локализации
+  String _localized(String? key, String defaultText) {
+    final t = AppLocalizations.of(context);
+    return t != null ? (t as dynamic)[key] ?? defaultText : defaultText;
+  }
+
   Future<void> _authenticateWithBiometrics() async {
     final biometricAvailable = await ref.read(biometricProvider.future);
     if (!biometricAvailable) return;
@@ -66,7 +72,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final localAuth = ref.read(localAuthProvider);
     try {
       final authenticated = await localAuth.authenticate(
-        localizedReason: AppLocalizations.of(context)!.fingerprintLogin,
+        localizedReason: _localized('fingerprintLogin', 'Вход по отпечатку'),
         options: const AuthenticationOptions(
           stickyAuth: true,
           biometricOnly: true,
@@ -80,7 +86,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         } else {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(AppLocalizations.of(context)!.noSavedCredentials)),
+              SnackBar(content: Text(_localized('noSavedCredentials', 'Сохранённые данные не найдены'))),
             );
           }
         }
@@ -89,35 +95,34 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       debugPrint('Biometric error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppLocalizations.of(context)!.biometricError)),
+          SnackBar(content: Text(_localized('biometricError', 'Ошибка биометрии'))),
         );
       }
     }
   }
 
   Future<void> _performLogin(String login, String password) async {
-  final authNotifier = ref.read(authProvider.notifier);
-  final success = await authNotifier.login(login, password);
-  print('Login success: $success, mounted: $mounted');
-  if (!mounted) return;
-  print('🔵 Before login, success = $success');
-  if (success) {
-    if (_rememberMe) {
-      await _storage.write(key: 'saved_login', value: login);
-      await _storage.write(key: 'saved_password', value: password);
-      await _storage.write(key: 'remember_me', value: 'true');
+    final authNotifier = ref.read(authProvider.notifier);
+    final success = await authNotifier.login(login, password);
+    if (!mounted) return;
+    if (success) {
+      if (_rememberMe) {
+        await _storage.write(key: 'saved_login', value: login);
+        await _storage.write(key: 'saved_password', value: password);
+        await _storage.write(key: 'remember_me', value: 'true');
+      } else {
+        await _storage.delete(key: 'saved_password');
+        await _storage.write(key: 'saved_login', value: login);
+        await _storage.write(key: 'remember_me', value: 'false');
+      }
+      // Даём время на сохранение токена и переходим
+      await Future.delayed(const Duration(milliseconds: 100));
+      if (mounted) Navigator.pushReplacementNamed(context, '/home');
     } else {
-      await _storage.delete(key: 'saved_password');
-      await _storage.write(key: 'saved_login', value: login);
-      await _storage.write(key: 'remember_me', value: 'false');
+      final error = ref.read(authProvider).error ?? 'Неизвестная ошибка';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
     }
-    // Даже если профиль не загрузился, но success true — всё равно переходим
-    Navigator.pushReplacementNamed(context, '/home');
-  } else {
-    final error = ref.read(authProvider).error ?? 'Неизвестная ошибка';
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
   }
-}
 
   String _getVideoPath(AppTheme theme) {
     switch (theme) {
@@ -142,6 +147,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final currentTheme = ref.watch(themeProvider);
     final videoPath = _getVideoPath(currentTheme);
     final biometricAsync = ref.watch(biometricProvider);
+    final t = AppLocalizations.of(context);
 
     return VideoBackground(
       key: ValueKey('$videoPath-${currentTheme.name}'),
@@ -188,7 +194,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         child: Column(
                           children: [
                             Text(
-                              AppLocalizations.of(context)!.appTitle,
+                              t?.appTitle ?? 'Pulse',
                               style: GoogleFonts.orbitron(
                                 fontSize: 52,
                                 fontWeight: FontWeight.w700,
@@ -202,7 +208,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               highlightColor: Colors.grey.shade700,
                               period: const Duration(seconds: 2),
                               child: Text(
-                                AppLocalizations.of(context)!.subtitle,
+                                t?.subtitle ?? 'Управляйте своим бизнесом',
                                 style: GoogleFonts.orbitron(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w500,
@@ -233,7 +239,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           controller: _loginController,
                           style: const TextStyle(color: Colors.black87),
                           decoration: InputDecoration(
-                            labelText: AppLocalizations.of(context)!.loginLabel,
+                            labelText: t?.loginLabel ?? 'Email или телефон',
                             labelStyle: TextStyle(color: Colors.grey.shade600),
                             prefixIcon: Icon(Icons.person, color: Colors.grey.shade700),
                             filled: true,
@@ -255,7 +261,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           obscureText: true,
                           style: const TextStyle(color: Colors.black87),
                           decoration: InputDecoration(
-                            labelText: AppLocalizations.of(context)!.passwordLabel,
+                            labelText: t?.passwordLabel ?? 'Пароль',
                             labelStyle: TextStyle(color: Colors.grey.shade600),
                             prefixIcon: Icon(Icons.lock, color: Colors.grey.shade700),
                             filled: true,
@@ -282,7 +288,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 });
                               },
                             ),
-                            Text(AppLocalizations.of(context)!.rememberMe),
+                            Text(t?.rememberMe ?? 'Запомнить меня'),
                           ],
                         ),
                         const SizedBox(height: 16),
@@ -306,7 +312,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                 ),
-                                child: Text(AppLocalizations.of(context)!.signIn),
+                                child: Text(t?.signIn ?? 'Войти'),
                               ),
                               biometricAsync.maybeWhen(
                                 data: (isAvailable) => isAvailable
@@ -315,7 +321,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                         child: OutlinedButton.icon(
                                           onPressed: _authenticateWithBiometrics,
                                           icon: const Icon(Icons.fingerprint),
-                                          label: Text(AppLocalizations.of(context)!.fingerprintLogin),
+                                          label: Text(t?.fingerprintLogin ?? 'Вход по отпечатку'),
                                           style: OutlinedButton.styleFrom(
                                             foregroundColor: Colors.grey.shade800,
                                           ),
@@ -333,7 +339,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             foregroundColor: Colors.grey.shade900,
                           ),
                           child: Text(
-                            AppLocalizations.of(context)!.noAccount,
+                            t?.noAccount ?? 'Нет аккаунта? Зарегистрируйтесь',
                             style: TextStyle(
                               color: Colors.grey.shade900,
                               fontWeight: FontWeight.w500,
@@ -345,7 +351,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           style: TextButton.styleFrom(
                             foregroundColor: Colors.grey.shade900,
                           ),
-                          child: Text(AppLocalizations.of(context)!.forgotPassword),
+                          child: Text(t?.forgotPassword ?? 'Забыли пароль?'),
                         ),
                       ],
                     ),

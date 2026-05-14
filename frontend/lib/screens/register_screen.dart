@@ -31,41 +31,46 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     super.dispose();
   }
 
+  String _localized(String? key, String defaultText) {
+    final t = AppLocalizations.of(context);
+    return t != null ? (t as dynamic)[key] ?? defaultText : defaultText;
+  }
+
   Future<void> _register() async {
-  final email = _emailController.text.trim();
-  final fullName = _nameController.text.trim();
-  final password = _passwordController.text.trim();
-  final confirm = _confirmController.text.trim();
+    final email = _emailController.text.trim();
+    final fullName = _nameController.text.trim();
+    final password = _passwordController.text.trim();
+    final confirm = _confirmController.text.trim();
 
-  if (!email.contains('@') || !email.contains('.')) {
-    _showSnackBar(AppLocalizations.of(context)!.invalidEmail);
-    return;
-  }
-  if (fullName.isEmpty) {
-    _showSnackBar(AppLocalizations.of(context)!.enterName);
-    return;
-  }
-  if (password.length < 8) {
-    _showSnackBar(AppLocalizations.of(context)!.passwordTooShort);
-    return;
-  }
-  if (password != confirm) {
-    _showSnackBar(AppLocalizations.of(context)!.passwordsDoNotMatch);
-    return;
+    if (!email.contains('@') || !email.contains('.')) {
+      _showSnackBar(_localized('invalidEmail', 'Неверный email'));
+      return;
+    }
+    if (fullName.isEmpty) {
+      _showSnackBar(_localized('enterName', 'Введите имя'));
+      return;
+    }
+    if (password.length < 8) {
+      _showSnackBar(_localized('passwordTooShort', 'Пароль должен быть не менее 8 символов'));
+      return;
+    }
+    if (password != confirm) {
+      _showSnackBar(_localized('passwordsDoNotMatch', 'Пароли не совпадают'));
+      return;
+    }
+
+    final authNotifier = ref.read(authProvider.notifier);
+    final success = await authNotifier.register(email, null, fullName, password);
+    if (!mounted) return;
+    if (success) {
+      await Future.delayed(const Duration(milliseconds: 100));
+      Navigator.pushReplacementNamed(context, '/home');
+    } else {
+      final error = ref.read(authProvider).error ?? _localized('registrationError', 'Ошибка регистрации');
+      _showSnackBar(error);
+    }
   }
 
-  final authNotifier = ref.read(authProvider.notifier);
-  final success = await authNotifier.register(email, null, fullName, password);
-  print('📝 Register success: $success, mounted: $mounted');
-  if (!mounted) return;
-  if (success) {
-    await Future.delayed(const Duration(milliseconds: 100));
-    Navigator.pushReplacementNamed(context, '/home');
-  } else {
-    final error = ref.read(authProvider).error ?? AppLocalizations.of(context)!.registrationError;
-    _showSnackBar(error);
-  }
-}
   void _showSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
@@ -77,6 +82,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
+    final t = AppLocalizations.of(context);
 
     return VideoBackground(
       videoPath: 'assets/videos/city.mp4',
@@ -118,7 +124,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       child: Column(
                         children: [
                           Text(
-                            AppLocalizations.of(context)!.registrationTitle,
+                            t?.registrationTitle ?? 'Регистрация',
                             style: GoogleFonts.orbitron(
                               fontSize: 42,
                               fontWeight: FontWeight.w700,
@@ -135,7 +141,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            AppLocalizations.of(context)!.registrationSubtitle,
+                            t?.registrationSubtitle ?? 'Создайте аккаунт',
                             style: GoogleFonts.orbitron(
                               fontSize: 16,
                               fontWeight: FontWeight.w500,
@@ -164,7 +170,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           controller: _emailController,
                           style: const TextStyle(color: Colors.black87),
                           decoration: InputDecoration(
-                            labelText: AppLocalizations.of(context)!.emailRequired,
+                            labelText: t?.emailRequired ?? 'Email',
                             labelStyle: TextStyle(color: Colors.grey.shade600),
                             prefixIcon: Icon(Icons.email, color: Colors.grey.shade700),
                             filled: true,
@@ -185,7 +191,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           controller: _nameController,
                           style: const TextStyle(color: Colors.black87),
                           decoration: InputDecoration(
-                            labelText: AppLocalizations.of(context)!.nameRequired,
+                            labelText: t?.nameRequired ?? 'Имя',
                             labelStyle: TextStyle(color: Colors.grey.shade600),
                             prefixIcon: Icon(Icons.person, color: Colors.grey.shade700),
                             filled: true,
@@ -207,7 +213,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           obscureText: _obscurePassword,
                           style: const TextStyle(color: Colors.black87),
                           decoration: InputDecoration(
-                            labelText: AppLocalizations.of(context)!.passwordMin8,
+                            labelText: t?.passwordMin8 ?? 'Пароль (мин. 8 символов)',
                             labelStyle: TextStyle(color: Colors.grey.shade600),
                             prefixIcon: Icon(Icons.lock, color: Colors.grey.shade700),
                             suffixIcon: IconButton(
@@ -233,7 +239,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           obscureText: _obscureConfirm,
                           style: const TextStyle(color: Colors.black87),
                           decoration: InputDecoration(
-                            labelText: AppLocalizations.of(context)!.confirmPassword,
+                            labelText: t?.confirmPassword ?? 'Подтвердите пароль',
                             labelStyle: TextStyle(color: Colors.grey.shade600),
                             prefixIcon: Icon(Icons.lock_outline, color: Colors.grey.shade700),
                             suffixIcon: IconButton(
@@ -267,14 +273,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                                 borderRadius: BorderRadius.circular(8),
                               ),
                             ),
-                            child: Text(AppLocalizations.of(context)!.registerButton),
+                            child: Text(t?.registerButton ?? 'Зарегистрироваться'),
                           ),
                         const SizedBox(height: 16),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text(
-                              AppLocalizations.of(context)!.alreadyHaveAccount,
+                              t?.alreadyHaveAccount ?? 'Уже есть аккаунт?',
                               style: TextStyle(color: Colors.grey.shade700),
                             ),
                             TextButton(
@@ -283,7 +289,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                                 foregroundColor: Colors.grey.shade900,
                               ),
                               child: Text(
-                                AppLocalizations.of(context)!.signIn,
+                                t?.signIn ?? 'Войти',
                                 style: const TextStyle(fontWeight: FontWeight.bold),
                               ),
                             ),
@@ -291,7 +297,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          AppLocalizations.of(context)!.passwordWarning,
+                          t?.passwordWarning ?? 'Пароль должен содержать не менее 8 символов',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: Colors.grey.shade700,
