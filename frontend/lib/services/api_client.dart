@@ -30,7 +30,7 @@ class ApiClient {
       receiveTimeout: const Duration(seconds: 30),
       followRedirects: true,
       maxRedirects: 5,
-      validateStatus: (status) => status! < 500,
+      validateStatus: (status) => status != null && status < 500,
     );
 
     _dio.interceptors.add(InterceptorsWrapper(

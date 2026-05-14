@@ -55,34 +55,40 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<bool> _loadUserProfile() async {
-    try {
-      final response = await _api.get('/auth/me');
-      final data = response.data;
-      print('📦 /auth/me response: $data'); // посмотрим в консоли
-      final id = data['id'] as int?;
-      final email = data['email'] as String?;
-      final fullName = data['full_name'] as String?;
-      final roleStr = data['role'] as String?;
-      if (id == null || email == null || fullName == null || roleStr == null) {
-        throw Exception('Missing fields');
-      }
-      final user = User(
-        id: id,
-        email: email,
-        phone: data['phone']?.toString() ?? '',
-        fullName: fullName,
-        role: _stringToRole(roleStr),
-        subscriptionUntil: data['subscription_until'] != null
-            ? DateTime.tryParse(data['subscription_until'].toString())
-            : null,
-      );
-      state = AuthState(user: user);
-      return true;
-    } catch (e) {
-      state = AuthState(error: 'Profile load error: $e');
-      return false;
+  try {
+    final response = await _api.get('/auth/me');
+    if (response.statusCode != 200) {
+      throw Exception('HTTP ${response.statusCode}');
     }
+    final data = response.data;
+    if (data is! Map<String, dynamic>) {
+      throw Exception('Invalid data format');
+    }
+    final id = data['id'];
+    final email = data['email'];
+    final fullName = data['full_name'];
+    final roleStr = data['role'];
+    if (id == null || email == null || fullName == null || roleStr == null) {
+      throw Exception('Missing required fields');
+    }
+    final user = User(
+      id: id is int ? id : int.parse(id.toString()),
+      email: email.toString(),
+      phone: data['phone']?.toString() ?? '',
+      fullName: fullName.toString(),
+      role: _stringToRole(roleStr.toString()),
+      subscriptionUntil: data['subscription_until'] != null
+          ? DateTime.tryParse(data['subscription_until'].toString())
+          : null,
+    );
+    state = AuthState(user: user);
+    return true;
+  } catch (e) {
+    print('Load profile error: $e');
+    state = AuthState(error: 'Failed to load profile: $e');
+    return false;
   }
+}
 
   UserRole _stringToRole(String role) {
     switch (role.toLowerCase()) {
