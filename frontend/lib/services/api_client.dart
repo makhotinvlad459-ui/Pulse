@@ -31,16 +31,18 @@ class ApiClient {
       followRedirects: true,
       maxRedirects: 5,
       validateStatus: (status) => status != null && status < 500,
+      headers: {},
     );
 
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
-        final token = await _storage.read(key: 'access_token');
-        if (token != null) {
-          options.headers['Authorization'] = 'Bearer $token';
-        }
-        return handler.next(options);
-      },
+  final token = await _storage.read(key: 'access_token');
+  if (token != null) {
+    options.headers ??= {};
+    options.headers['Authorization'] = 'Bearer $token';
+  }
+  return handler.next(options);
+},
       onError: (DioException e, handler) async {
         if (e.response?.statusCode == 401) {
           await clearToken();
@@ -114,8 +116,9 @@ class ApiClient {
   }
 
   // Управление токеном
-  Future<void> setToken(String token) async {
+ Future<void> setToken(String token) async {
   await _storage.write(key: 'access_token', value: token);
+  _dio.options.headers ??= {}; // на всякий случай
   _dio.options.headers['Authorization'] = 'Bearer $token';
 }
   Future<void> clearToken() async => await _storage.delete(key: 'access_token');
