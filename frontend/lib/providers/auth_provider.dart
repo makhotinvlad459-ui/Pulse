@@ -47,15 +47,17 @@ class AuthNotifier extends StateNotifier<AuthState> {
         'username': username,
         'password': password,
       });
-      if (response.statusCode != 200) throw Exception('Server error');
+      if (response.statusCode != 200) throw Exception('Server error: ${response.statusCode}');
       final data = response.data;
-      if (data is! Map<String, dynamic>) throw Exception('Invalid response');
+      if (data is! Map<String, dynamic>) throw Exception('Invalid response format');
       final token = data['access_token'] as String?;
       if (token == null) throw Exception('No token');
       await _api.setToken(token);
       final loaded = await _loadUserProfile();
+      print('login: profile loaded = $loaded');
       return loaded;
     } catch (e) {
+      print('login error: $e');
       state = AuthState(error: e.toString());
       return false;
     }
@@ -63,14 +65,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<bool> _loadUserProfile() async {
     try {
+      print('_loadUserProfile: start');
       final response = await _api.get('/auth/me');
+      print('_loadUserProfile: response status ${response.statusCode}');
       if (response.statusCode != 200) throw Exception('Failed to fetch profile');
       final data = response.data;
+      print('_loadUserProfile: data type ${data.runtimeType}');
       if (data is! Map<String, dynamic>) throw Exception('Invalid profile data');
 
-      print('DEBUG: Profile data keys: ${data.keys.toList()}'); // для отладки
-
-      // Безопасный парсинг id (на вебе может быть double)
       final rawId = data['id'];
       final int parsedId;
       if (rawId is int) {
@@ -78,21 +80,26 @@ class AuthNotifier extends StateNotifier<AuthState> {
       } else {
         parsedId = int.tryParse(rawId.toString()) ?? 0;
       }
+      final email = data['email']?.toString() ?? '';
+      final fullName = data['full_name']?.toString() ?? 'No Name';
+      final roleStr = data['role']?.toString() ?? 'employee';
+      final phone = data['phone']?.toString() ?? '';
+      final subUntilStr = data['subscription_until']?.toString();
 
       final user = User(
         id: parsedId,
-        email: data['email']?.toString() ?? '',
-        phone: data['phone']?.toString() ?? '',
-        fullName: data['full_name']?.toString() ?? '',
-        role: _stringToRole(data['role']?.toString() ?? 'employee'),
-        subscriptionUntil: data['subscription_until'] != null
-            ? DateTime.tryParse(data['subscription_until'].toString())
-            : null,
+        email: email,
+        phone: phone,
+        fullName: fullName,
+        role: _stringToRole(roleStr),
+        subscriptionUntil: subUntilStr != null ? DateTime.tryParse(subUntilStr) : null,
       );
       state = AuthState(user: user);
+      print('_loadUserProfile: user created, email=${user.email}');
       return true;
-    } catch (e) {
-      print('Profile load error: $e');
+    } catch (e, stack) {
+      print('_loadUserProfile error: $e');
+      print('Stack: $stack');
       state = AuthState(error: 'Profile load error: $e');
       return false;
     }

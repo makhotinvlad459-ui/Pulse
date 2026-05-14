@@ -98,6 +98,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Future<void> _performLogin(String login, String password) async {
   final authNotifier = ref.read(authProvider.notifier);
   final success = await authNotifier.login(login, password);
+  print('Login success: $success, mounted: $mounted');
   if (!mounted) return;
   if (success) {
     if (_rememberMe) {
@@ -109,6 +110,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       await _storage.write(key: 'saved_login', value: login);
       await _storage.write(key: 'remember_me', value: 'false');
     }
+    // Даже если профиль не загрузился, но success true — всё равно переходим
     Navigator.pushReplacementNamed(context, '/home');
   } else {
     final error = ref.read(authProvider).error ?? 'Неизвестная ошибка';
