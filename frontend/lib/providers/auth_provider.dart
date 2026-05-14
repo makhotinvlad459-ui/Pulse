@@ -26,15 +26,20 @@ class AuthNotifier extends StateNotifier<AuthState> {
         'full_name': fullName,
         'password': password,
       });
-      print('📤 Register response status: ${response.statusCode}');
+      print('📤 Register status: ${response.statusCode}');
       if (response.statusCode != 200) {
         throw Exception('Server error: ${response.statusCode}');
       }
-      final token = response.data['access_token'] as String?;
+      final data = response.data;
+      print('📦 Register response data type: ${data.runtimeType}');
+      print('📦 Register response data: $data');
+      if (data is! Map<String, dynamic>) {
+        throw Exception('Invalid response format: $data');
+      }
+      final token = data['access_token'] as String?;
       if (token == null) throw Exception('No token');
       await _api.setToken(token);
-      final profileLoaded = await _loadUserProfile();
-      return profileLoaded;
+      return await _loadUserProfile();
     } catch (e) {
       print('❌ Register error: $e');
       state = AuthState(error: e.toString());
@@ -49,15 +54,20 @@ class AuthNotifier extends StateNotifier<AuthState> {
         'username': username,
         'password': password,
       });
-      print('📤 Login response status: ${response.statusCode}');
+      print('📤 Login status: ${response.statusCode}');
       if (response.statusCode != 200) {
         throw Exception('Server error: ${response.statusCode}');
       }
-      final token = response.data['access_token'] as String?;
+      final data = response.data;
+      print('📦 Login response data type: ${data.runtimeType}');
+      print('📦 Login response data: $data');
+      if (data is! Map<String, dynamic>) {
+        throw Exception('Invalid response format: $data');
+      }
+      final token = data['access_token'] as String?;
       if (token == null) throw Exception('No token');
       await _api.setToken(token);
-      final profileLoaded = await _loadUserProfile();
-      return profileLoaded;
+      return await _loadUserProfile();
     } catch (e) {
       print('❌ Login error: $e');
       state = AuthState(error: e.toString());
@@ -67,24 +77,24 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<bool> _loadUserProfile() async {
     try {
-      print('🔄 Loading user profile...');
       final response = await _api.get('/auth/me');
-      print('📥 /auth/me status: ${response.statusCode}');
+      print('📤 Profile status: ${response.statusCode}');
       if (response.statusCode != 200) {
         throw Exception('Failed to fetch profile: ${response.statusCode}');
       }
       final data = response.data;
-      print('📦 Profile raw data: $data');
-
+      print('📦 Profile data type: ${data.runtimeType}');
+      print('📦 Profile data: $data');
+      if (data is! Map<String, dynamic>) {
+        throw Exception('Invalid profile data format');
+      }
       final id = data['id'];
       final email = data['email'];
       final fullName = data['full_name'];
       final roleStr = data['role'];
-
       if (id == null || email == null || fullName == null || roleStr == null) {
         throw Exception('Missing required fields');
       }
-
       final user = User(
         id: id is int ? id : int.parse(id.toString()),
         email: email.toString(),
@@ -96,7 +106,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
             : null,
       );
       state = AuthState(user: user);
-      print('✅ Profile loaded for: ${user.email}');
       return true;
     } catch (e) {
       print('❌ Load profile error: $e');
