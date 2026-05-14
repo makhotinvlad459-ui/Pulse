@@ -100,6 +100,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final success = await authNotifier.login(login, password);
   print('Login success: $success, mounted: $mounted');
   if (!mounted) return;
+  print('🔵 Before login, success = $success');
   if (success) {
     if (_rememberMe) {
       await _storage.write(key: 'saved_login', value: login);
