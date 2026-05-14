@@ -52,6 +52,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       if (data is! Map<String, dynamic>) throw Exception('Invalid response');
       final token = data['access_token'] as String?;
       if (token == null) throw Exception('No token');
+      print('Token before setToken: $token');
       await _api.setToken(token);
       final loaded = await _loadUserProfile();
       return loaded;
