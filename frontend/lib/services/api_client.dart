@@ -31,7 +31,7 @@ class ApiClient {
       followRedirects: true,
       maxRedirects: 5,
       validateStatus: (status) => status != null && status < 500,
-      headers: {},                     // ← инициализация пустыми заголовками
+      headers: {},                     // инициализация (на всякий случай)
     );
 
     _dio.interceptors.add(InterceptorsWrapper(
@@ -87,7 +87,7 @@ class ApiClient {
       data: data,
       options: Options(
         contentType: Headers.formUrlEncodedContentType,
-        headers: {},                   // ← предотвращает сброс headers
+        headers: {},                   // предотвращает сброс headers
       ),
     );
   }
@@ -116,15 +116,14 @@ class ApiClient {
         queryParameters: queryParameters,
         options: Options(
           responseType: ResponseType.bytes,
-          headers: {},                 // ← предотвращает сброс headers
+          headers: {},                 // предотвращает сброс headers
         ));
   }
 
-  // Управление токеном
+  // Управление токеном – теперь только через storage!
   Future<void> setToken(String token) async {
     await _storage.write(key: 'access_token', value: token);
-    _dio.options.headers ??= {};       // гарантируем, что headers не null
-    _dio.options.headers['Authorization'] = 'Bearer $token';
+    // НЕ трогаем _dio.options.headers – перехватчик сам всё сделает
   }
 
   Future<void> clearToken() async => await _storage.delete(key: 'access_token');
