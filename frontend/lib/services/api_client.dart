@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'secure_storage.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
@@ -19,7 +19,7 @@ class ApiClient {
   }
 
   final Dio _dio = Dio();
-  final FlutterSecureStorage _storage = const FlutterSecureStorage();
+  final SecureStorage _storage = SecureStorage();
 
   Dio get dio => _dio;
 
