@@ -1,12 +1,21 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/api_client.dart';
+import '../models/company.dart';        
+import '../models/statistics.dart';    
 
-final homeProvider = FutureProvider((ref) async {
+class HomeData {
+  final List<Company> companies;
+  final FounderOverview overview;
+  final Map<String, dynamic> counts;
+
+  HomeData({required this.companies, required this.overview, required this.counts});
+}
+
+final homeProvider = FutureProvider<HomeData>((ref) async {
   final api = ApiClient();
   final companies = await api.getCompanies();
   final overview = await api.getUserOverview();
 
-  // Безопасно получаем counts – если не Map, используем пустой Map
   Map<String, dynamic> counts;
   try {
     final countsResponse = await api.get('/notifications/unread-counts');
@@ -22,5 +31,5 @@ final homeProvider = FutureProvider((ref) async {
     counts = {};
   }
 
-  return (companies: companies, overview: overview, counts: counts);
+  return HomeData(companies: companies, overview: overview, counts: counts);
 });
