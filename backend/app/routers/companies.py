@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, delete
+from sqlalchemy import select, update, delete, func
 from sqlalchemy.orm import selectinload
 from app.models import CompanyMember
 from typing import List
@@ -10,7 +10,7 @@ import string
 
 from app.database import get_db
 from app.models import User, Company, Account, CompanyMember, UserRole, Category, Permission, CompanyMemberPermission
-from app.schemas import CompanyCreate, CompanyResponse,  UpdateMemberRole, SetManagerRequest
+from app.schemas import CompanyCreate, CompanyResponse, UpdateMemberRole, SetManagerRequest
 from app.deps import get_current_user
 from app.auth import get_password_hash
 
@@ -19,14 +19,11 @@ router = APIRouter(prefix="/companies", tags=["companies"])
 def generate_random_password(length=8):
     return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
 
-# --- Вспомогательная функция проверки прав на управление сотрудниками ---
 async def _can_manage_employees(company_id: int, current_user: User, db: AsyncSession) -> bool:
-    # Учредитель может всё
     if current_user.role == UserRole.FOUNDER:
         result = await db.execute(select(Company).where(Company.id == company_id, Company.founder_id == current_user.id))
         if result.scalar_one_or_none():
             return True
-    # Для остальных проверяем наличие права manage_employees
     member = await db.execute(
         select(CompanyMember).where(CompanyMember.company_id == company_id, CompanyMember.user_id == current_user.id)
     )
@@ -41,7 +38,6 @@ async def _can_manage_employees(company_id: int, current_user: User, db: AsyncSe
     )
     return perm.scalar_one_or_none() is not None
 
-# --- Выдача прав члену компании (без дублирования) ---
 async def _grant_permissions_to_member(member_id: int, permission_names: List[str], granter_id: int, db: AsyncSession):
     for perm_name in permission_names:
         perm = await db.execute(select(Permission).where(Permission.name == perm_name))
@@ -62,7 +58,6 @@ async def _grant_permissions_to_member(member_id: int, permission_names: List[st
                     granted_by=granter_id
                 ))
 
-# --- Создание компании ---
 @router.post("/", response_model=CompanyResponse)
 async def create_company(
     company_data: CompanyCreate,
@@ -72,20 +67,33 @@ async def create_company(
     if current_user.role != UserRole.FOUNDER:
         raise HTTPException(status_code=403, detail="Only founder can create companies")
     
-    if current_user.subscription_until and current_user.subscription_until < datetime.utcnow():
-        raise HTTPException(status_code=403, detail="Subscription expired")
+    # Проверка активной подписки
+    has_active_subscription = current_user.subscription_until and current_user.subscription_until > datetime.utcnow()
+    if not has_active_subscription:
+        raise HTTPException(status_code=403, detail="Subscription expired or not active")
+    
+    # Считаем количество уже созданных компаний
+    result = await db.execute(select(func.count()).select_from(Company).where(Company.founder_id == current_user.id))
+    companies_count = result.scalar() or 0
+    
+    free_limit = 3 + (current_user.extra_companies or 0)
+    if companies_count >= free_limit:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Company limit reached. You can have up to {free_limit} companies. Please buy additional company slots."
+        )
     
     # Создаём компанию
     inn = company_data.inn or ""
     bank_account = company_data.bank_account or ""
 
     new_company = Company(
-    founder_id=current_user.id,
-    inn=inn,
-    name=company_data.name,
-    bank_account=bank_account,
-    manager_full_name=company_data.manager_full_name,
-    manager_phone=company_data.manager_phone,
+        founder_id=current_user.id,
+        inn=inn,
+        name=company_data.name,
+        bank_account=bank_account,
+        manager_full_name=company_data.manager_full_name,
+        manager_phone=company_data.manager_phone,
     )
     db.add(new_company)
     await db.flush()
@@ -98,7 +106,7 @@ async def create_company(
         include_in_profit_loss=True,
         balance=0.0
     )
-    bank_account = Account(
+    bank_account_obj = Account(
         company_id=new_company.id,
         name="Банк",
         type="bank",
@@ -106,9 +114,9 @@ async def create_company(
         balance=0.0
     )
     db.add(cash_account)
-    db.add(bank_account)
+    db.add(bank_account_obj)
     
-    # Предустановленные категории (расширенные)
+    # Предустановленные категории
     preset_categories = [
         {"name": "Реализация", "type": "income", "icon": "💰"},
         {"name": "Продажи", "type": "income", "icon": "📈"},
@@ -131,7 +139,7 @@ async def create_company(
         )
         db.add(category)
     
-    # Добавляем учредителя в company_members (если ещё не добавлен)
+    # Добавляем учредителя в company_members
     founder_member_exists = await db.execute(
         select(CompanyMember).where(
             CompanyMember.company_id == new_company.id,
@@ -147,7 +155,7 @@ async def create_company(
         )
         db.add(founder_member)
         await db.flush()
-        # Выдаём учредителю все права (позже, после получения member_id)
+        # Выдаём учредителю все права
         all_perms = await db.execute(select(Permission))
         for perm in all_perms.scalars().all():
             existing = await db.execute(
@@ -178,7 +186,6 @@ async def create_company(
             )
             db.add(member)
             await db.flush()
-            # Выдаём управляющему расширенные права (кроме manage_permissions и delete_company)
             await _grant_permissions_to_member(member.id, [
                 "view_operations", "create_transaction", "edit_transaction",
                 "view_showcase", "edit_showcase", "sell_from_showcase",
@@ -292,7 +299,7 @@ async def create_company(
     await db.commit()
     await db.refresh(new_company)
     
-    total_balance = (cash_account.balance or 0) + (bank_account.balance or 0)
+    total_balance = (cash_account.balance or 0) + (bank_account_obj.balance or 0)
     return CompanyResponse(
         id=new_company.id,
         inn=new_company.inn,

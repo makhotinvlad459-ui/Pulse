@@ -463,7 +463,6 @@ async def update_order_status(
     if status_value not in ['accepted', 'completed', 'failed']:
         raise HTTPException(400, "Invalid status")
     
-    # Проверка прав
     if not await _has_permission(company_id, current_user, db, "edit_orders"):
         raise HTTPException(403, "No permission")
     
@@ -475,16 +474,22 @@ async def update_order_status(
     if status_value == 'failed' and order.status not in (OrderStatus.PENDING, OrderStatus.ACCEPTED):
         raise HTTPException(400, "Only pending/accepted can be failed")
     
+    # Пункт 6: предотвращаем повторное завершение
+    if status_value == 'completed' and order.status == OrderStatus.COMPLETED:
+        raise HTTPException(400, "Order already completed")
+    
     # Обработка выполнения заказа (списание со склада, создание транзакции)
     if status_value == 'completed':
-        # Установка даты выполнения
         order.completed_at = datetime.utcnow()
         
-        # ... остальной код (списание, транзакция) ...
-        cash_acc = await db.execute(select(Account).where(Account.company_id == company_id, Account.type == 'cash'))
-        cash_acc = cash_acc.scalar_one_or_none()
+        # Пункт 7: правильно получаем счёт "Наличные"
+        cash_acc_result = await db.execute(
+            select(Account).where(Account.company_id == company_id, Account.type == 'cash').limit(1)
+        )
+        cash_acc = cash_acc_result.scalar_one_or_none()
         if not cash_acc:
-            raise HTTPException(400, "No cash account")
+            raise HTTPException(400, "No cash account found")
+        
         await db.refresh(order, attribute_names=['items'])
         for item in order.items:
             if item.use_from_stock:
@@ -501,6 +506,7 @@ async def update_order_status(
                     created_by=current_user.id
                 )
                 db.add(write_off)
+        
         last_num = await db.execute(select(func.max(Transaction.number)).where(Transaction.company_id == company_id))
         last_num = last_num.scalar() or 0
         new_number = last_num + 1
@@ -516,7 +522,7 @@ async def update_order_status(
         )
         db.add(tx)
     
-    # Присваиваем новый статус (напрямую из перечисления, чтобы избежать проблем с регистром)
+    # Присваиваем новый статус
     if status_value == 'accepted':
         order.status = OrderStatus.ACCEPTED
     elif status_value == 'completed':

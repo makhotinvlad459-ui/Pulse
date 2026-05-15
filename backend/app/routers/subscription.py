@@ -14,23 +14,21 @@ from app.config import settings
 
 router = APIRouter(prefix="/subscription", tags=["subscription"])
 
-# Цены (в рублях)
 PRICES = {
     "monthly": 480,
     "half_year": 2400,
     "yearly": 4000,
-    "extra_company": 200,
+    "extra_company": 250,
 }
+
 class PaymentCreateRequest(BaseModel):
     plan: str
-
 
 @router.get("/status")
 async def get_subscription_status(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # Количество компаний у пользователя
     if current_user.role == UserRole.FOUNDER:
         result = await db.execute(select(Company).where(Company.founder_id == current_user.id))
         companies = result.scalars().all()
@@ -67,11 +65,14 @@ async def create_payment(
     if plan not in PRICES:
         raise HTTPException(400, "Invalid plan")
 
-    amount = PRICES[plan]
-    order_id = str(uuid.uuid4())
-    payment_id = None
+    if plan == "extra_company":
+        amount = PRICES["extra_company"]
+    else:
+        base_amount = PRICES[plan]
+        extra_count = current_user.extra_companies or 0
+        extra_amount = extra_count * 250
+        amount = base_amount + extra_amount
 
-    # Сохраняем заказ в БД
     payment_order = PaymentOrder(
         user_id=current_user.id,
         plan=plan,
@@ -82,7 +83,6 @@ async def create_payment(
     await db.flush()
     order_db_id = payment_order.id
 
-    # Запрос к YooKassa
     async with httpx.AsyncClient() as client:
         response = await client.post(
             "https://api.yookassa.ru/v3/payments",
@@ -90,7 +90,7 @@ async def create_payment(
                 "amount": {"value": amount, "currency": "RUB"},
                 "confirmation": {
                     "type": "redirect",
-                    "return_url": settings.FRONTEND_URL + "/payment-complete",  # используйте переменную
+                    "return_url": settings.FRONTEND_URL + "/payment-complete",
                 },
                 "capture": True,
                 "description": f"Подписка {plan} для пользователя {current_user.email}",
@@ -128,7 +128,6 @@ async def yookassa_webhook(request: Request, db: AsyncSession = Depends(get_db))
     user_id = int(metadata["user_id"])
     amount = float(payment["amount"]["value"])
 
-    # Находим заказ
     result = await db.execute(
         select(PaymentOrder).where(
             PaymentOrder.payment_id == payment_id,
@@ -140,42 +139,38 @@ async def yookassa_webhook(request: Request, db: AsyncSession = Depends(get_db))
     if not order or order.status != "pending":
         return {"status": "ignored"}
 
-    # Обновляем статус заказа
     order.status = "paid"
     order.updated_at = datetime.utcnow()
 
-    # Находим пользователя
     user = await db.get(User, user_id)
     if not user:
         return {"status": "user not found"}
 
-    # Обработка в зависимости от плана
     now = datetime.utcnow()
     if plan == "extra_company":
         user.extra_companies = (user.extra_companies or 0) + 1
     else:
-        # Продлеваем подписку
+        # Продление подписки
         if plan == "monthly":
             delta = timedelta(days=30)
         elif plan == "half_year":
             delta = timedelta(days=180)
         else:  # yearly
             delta = timedelta(days=365)
-
         if user.subscription_until and user.subscription_until > now:
             user.subscription_until = user.subscription_until + delta
         else:
             user.subscription_until = now + delta
         user.subscription_plan = plan
+        # extra_companies не сбрасываются
 
     await db.commit()
     return {"status": "ok"}
 
 @router.post("/ios/verify-receipt")
-async def verify_apple_receipt(  # заглушка, реализуется отдельно
+async def verify_apple_receipt(
     request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # Будет реализовано позже
     return {"detail": "iOS receipts not yet implemented"}

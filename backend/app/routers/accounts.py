@@ -150,10 +150,12 @@ async def delete_account(
     )
     
     # Удаляем старый счёт
+    # ... удаляем старый счёт
     await db.delete(account)
-    await db.commit()
-    
-    # Пересчитываем баланс архивного счёта (чтобы учесть переназначенные операции)
+
+# Пересчитываем баланс архивного счёта (ДО КОММИТА, но после удаления)
     await _recalc_account_balance(archive_account.id, db)
-    
+
+    await db.commit()   # коммитим и удаление, и обновление баланса
+
     return {"detail": "Account deleted, transactions moved to archive"}

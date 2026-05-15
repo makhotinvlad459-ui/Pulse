@@ -592,33 +592,33 @@ async def delete_transaction(
         order_id = order_payment.order_id
     
     if current_user.role == UserRole.FOUNDER:
-        # Полное удаление (жёсткое)
-        # Если транзакция связана с оплатой заказа, удаляем оплату и пересчитываем сумму оплат заказа
+    # Полное удаление (жёсткое)
+    # Если транзакция связана с оплатой заказа, удаляем оплату и пересчитываем сумму оплат заказа
         if order_payment:
             await db.delete(order_payment)
             await _recalc_paid_amount(order_id, db)
-        
-        # Откатываем остатки товаров
+    
+    # Откатываем остатки товаров
         for item in items:
             product = item.product
             if transaction.type == 'income':
                 product.current_quantity += Decimal(str(item.quantity))
             else:  # expense
                 product.current_quantity -= Decimal(str(item.quantity))
-        
-        # Удаляем файл вложения, если есть
+    
+    # Удаляем файл вложения, если есть
         if transaction.attachment_url and os.path.exists(transaction.attachment_url):
             try:
                 os.remove(transaction.attachment_url)
             except Exception as e:
                 print(f"Error deleting file: {e}")
-        
+    
         await db.delete(transaction)
-        await db.commit()
-        # Пересчитываем балансы счетов
+    # Пересчитываем балансы счетов (до коммита, но после удаления)
         await recalc_account_balance(transaction.account_id, db)
         if transaction.transfer_to_account_id:
             await recalc_account_balance(transaction.transfer_to_account_id, db)
+    # ОДИН коммит в конце
         await db.commit()
         return {"detail": "Transaction permanently deleted"}
     

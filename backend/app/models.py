@@ -370,8 +370,6 @@ class Order(Base):
     deadline: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     work_price: Mapped[float] = mapped_column(Numeric(15, 2), default=0.0)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # relationships
     company: Mapped["Company"] = relationship()
