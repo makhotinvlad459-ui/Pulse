@@ -141,7 +141,7 @@ class ApiClient {
 
   // ========== Методы для работы с API ==========
   Future<List<Company>> getCompanies() async {
-  final response = await get('/companies');
+  final response = await get('/companies/');
   final data = response.data;
   if (data is! List) {
     print('Ошибка: получен не список, а ${data.runtimeType}. Ответ: $data');
