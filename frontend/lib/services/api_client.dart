@@ -16,16 +16,17 @@ class ApiClient {
   const bool isProduction = bool.fromEnvironment('dart.vm.product');
   if (isProduction) {
     // Режим продакшена (release-сборка)
-    if (kIsWeb) return '/api';
+    if (kIsWeb) return '';  // ← пустая строка, запросы будут идти на /companies и т.д.
     if (Platform.isAndroid) return 'http://93.115.19.96:8000';
     return 'http://93.115.19.96:8000';
   } else {
     // Режим разработки (debug)
-    if (kIsWeb) return 'http://93.115.19.96:8000'; 
+    if (kIsWeb) return 'http://localhost:8000';
     if (Platform.isAndroid) return 'http://10.0.2.2:8000';
     return 'http://localhost:8000';
   }
 }
+
 
   final Dio _dio = Dio();
   final SecureStorage _storage = SecureStorage();
