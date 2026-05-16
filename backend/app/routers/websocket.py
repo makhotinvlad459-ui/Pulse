@@ -7,7 +7,7 @@ from app.models import User
 from app.config import settings
 from app.websocket_manager import manager
 
-router = APIRouter(tags=["websocket"],redirect_slashes=False)
+router = APIRouter(tags=["websocket"])
 
 async def get_user_from_token(token: str, db: AsyncSession) -> User | None:
     """Извлекает пользователя из JWT токена"""
