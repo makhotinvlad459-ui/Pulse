@@ -10,7 +10,7 @@ from app.database import get_db
 from app.models import User, Company, Permission, CompanyMemberPermission, Counterparty, Transaction, Category, CompanyMember, UserRole, Account, ShowcaseItem, TransactionItem, Product, Order, OrderItem, OrderStatus
 from app.deps import get_current_user
 
-router = APIRouter(prefix="/statistics", tags=["statistics"])
+router = APIRouter(prefix="/statistics", tags=["statistics"], redirect_slashes=False)
 
 async def _check_company_access(company_id: int, current_user: User, db: AsyncSession) -> bool:
     if current_user.role == UserRole.FOUNDER:

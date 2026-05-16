@@ -9,7 +9,7 @@ from app.database import get_db
 from app.models import User, Company, Counterparty, CompanyMember, UserRole
 from app.deps import get_current_user
 
-router = APIRouter(prefix="/counterparties", tags=["counterparties"])
+router = APIRouter(prefix="/counterparties", tags=["counterparties"], redirect_slashes=False)
 
 class CounterpartyCreate(BaseModel):
     name: str

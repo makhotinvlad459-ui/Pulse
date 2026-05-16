@@ -15,7 +15,7 @@ from app.models import User, Company, Counterparty, Account, Category, Transacti
 from app.schemas import TransactionCreate, TransactionResponse, TransactionItemResponse
 from app.deps import get_current_user
 
-router = APIRouter(prefix="/transactions", tags=["transactions"])
+router = APIRouter(prefix="/transactions", tags=["transactions"], redirect_slashes=False)
 
 MAX_FILE_SIZE = 10 * 1024 * 1024
 ALLOWED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.pdf'}

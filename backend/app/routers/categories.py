@@ -9,7 +9,7 @@ from app.models import User, Company, Category, Transaction, TransactionType, Co
 from app.schemas import CategoryCreate, CategoryResponse
 from app.deps import get_current_user
 
-router = APIRouter(prefix="/categories", tags=["categories"])
+router = APIRouter(prefix="/categories", tags=["categories"], redirect_slashes=False)
 
 @router.post("/", response_model=CategoryResponse)
 async def create_category(

@@ -11,7 +11,7 @@ from app.models import User, Company, Product, CompanyMember, UserRole, ProductT
 from app.deps import get_current_user
 from app.routers.orders import _has_permission  
 
-router = APIRouter(prefix="/products", tags=["products"])
+router = APIRouter(prefix="/products", tags=["products"], redirect_slashes=False)
 
 
 # Enum для типа продукта

@@ -13,7 +13,7 @@ from app.models import User, Company, ChatMessage, TransactionComment, Transacti
 from app.deps import get_current_user
 from app.websocket_manager import manager
 
-router = APIRouter(prefix="/chat", tags=["chat"])
+router = APIRouter(prefix="/chat", tags=["chat"], redirect_slashes=False)
 
 # ========== Pydantic модели ==========
 class ChatMessageCreate(BaseModel):

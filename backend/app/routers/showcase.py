@@ -9,7 +9,7 @@ from app.models import User, Company, ShowcaseItem, CompanyMember, UserRole, Per
 from app.schemas import ShowcaseItemCreate, ShowcaseItemUpdate, ShowcaseItemResponse
 from app.deps import get_current_user
 
-router = APIRouter(prefix="/showcase", tags=["showcase"])
+router = APIRouter(prefix="/showcase", tags=["showcase"],redirect_slashes=False)
 
 async def _check_company_access(company_id: int, current_user: User, db: AsyncSession) -> bool:
     if current_user.role == UserRole.FOUNDER:

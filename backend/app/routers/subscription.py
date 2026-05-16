@@ -12,7 +12,7 @@ from app.models import User, Company, UserRole, PaymentOrder
 from app.deps import get_current_user
 from app.config import settings
 
-router = APIRouter(prefix="/subscription", tags=["subscription"])
+router = APIRouter(prefix="/subscription", tags=["subscription"], redirect_slashes=False)
 
 PRICES = {
     "monthly": 480,

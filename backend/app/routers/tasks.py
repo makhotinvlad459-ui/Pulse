@@ -11,7 +11,7 @@ from app.models import User, Company, Task, TaskStatus, CompanyMember, UserRole
 from app.deps import get_current_user
 from app.websocket_manager import manager
 
-router = APIRouter(prefix="/tasks", tags=["tasks"])
+router = APIRouter(prefix="/tasks", tags=["tasks"], redirect_slashes=False)
 
 class TaskCreate(BaseModel):
     assignee_id: Optional[int] = None

@@ -375,10 +375,10 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
     final api = ApiClient();
     try {
       final accountsRes = await api
-          .get('/accounts/', queryParameters: {'company_id': widget.company.id});
-      final transactionsRes = await api.get('/transactions/',
+          .get('/accounts', queryParameters: {'company_id': widget.company.id});
+      final transactionsRes = await api.get('/transactions',
           queryParameters: {'company_id': widget.company.id});
-      final categoriesRes = await api.get('/categories/',
+      final categoriesRes = await api.get('/categories',
           queryParameters: {'company_id': widget.company.id});
       setState(() {
         final accountsList =

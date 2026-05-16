@@ -8,7 +8,7 @@ from app.models import User, Company, Account, CompanyMember, UserRole, Transact
 from app.schemas import AccountCreate, AccountResponse
 from app.deps import get_current_user
 
-router = APIRouter(prefix="/accounts", tags=["accounts"])
+router = APIRouter(prefix="/accounts", tags=["accounts"], redirect_slashes=False)
 
 @router.post("/", response_model=AccountResponse)
 async def create_account(

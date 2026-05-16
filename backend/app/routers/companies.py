@@ -14,7 +14,7 @@ from app.schemas import CompanyCreate, CompanyResponse, UpdateMemberRole, SetMan
 from app.deps import get_current_user
 from app.auth import get_password_hash
 
-router = APIRouter(prefix="/companies", tags=["companies"])
+router = APIRouter(prefix="/companies", tags=["companies"], redirect_slashes=False)
 
 def generate_random_password(length=8):
     return ''.join(random.choices(string.ascii_letters + string.digits, k=length))

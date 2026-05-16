@@ -8,7 +8,7 @@ from app.database import get_db
 from app.models import User, Company, CompanyMember, ChatMessage, Task, TaskStatus, UserChatVisit
 from app.deps import get_current_user
 
-router = APIRouter(prefix="/notifications", tags=["notifications"])
+router = APIRouter(prefix="/notifications", tags=["notifications"],redirect_slashes=False)
 
 
 @router.get("/unread-counts")

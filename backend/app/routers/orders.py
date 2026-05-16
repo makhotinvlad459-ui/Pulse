@@ -21,7 +21,7 @@ from app.schemas import (
 )
 from app.deps import get_current_user
 
-router = APIRouter(prefix="/orders", tags=["orders"])
+router = APIRouter(prefix="/orders", tags=["orders"], redirect_slashes=False)
 
 # ---------- Вспомогательные функции ----------
 
