@@ -16,7 +16,7 @@ class ApiClient {
   const bool isProduction = bool.fromEnvironment('dart.vm.product');
   if (isProduction) {
     // Режим продакшена (release-сборка)
-    if (kIsWeb) return '';  // ← пустая строка, запросы будут идти на /companies и т.д.
+    if (kIsWeb) return '/api';
     if (Platform.isAndroid) return 'http://93.115.19.96:8000';
     return 'http://93.115.19.96:8000';
   } else {
@@ -141,10 +141,14 @@ class ApiClient {
 
   // ========== Методы для работы с API ==========
   Future<List<Company>> getCompanies() async {
-    final response = await get('/companies');
-    final List<dynamic> data = response.data;
-    return data.map((json) => Company.fromJson(json)).toList();
+  final response = await get('/companies');
+  final data = response.data;
+  if (data is! List) {
+    print('Ошибка: получен не список, а ${data.runtimeType}. Ответ: $data');
+    return [];
   }
+  return data.map((json) => Company.fromJson(json)).toList();
+}
 
   Future<FounderOverview> getFounderOverview() async {
     final response = await get('/statistics/founder-overview');
