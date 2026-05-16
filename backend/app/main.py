@@ -7,7 +7,6 @@ import os
 
 app = FastAPI(title="Pulse API", version="0.2.0")
 
-# 1. Собираем все роутеры в один список
 routers = [
     auth_router, companies.router, accounts.router, categories.router,
     transactions.router, statistics.router, admin.router, chat.router,
@@ -17,17 +16,13 @@ routers = [
 ]
 
 for router in routers:
-    # Сначала безопасно собираем дубликаты путей из самого роутера
     routes_to_add = []
     for route in router.routes:
-        # Если эндпоинт в файле (например, accounts.py) заканчивается на "/"
         if route.path.endswith("/") and len(route.path) > 1:
             path_without_slash = route.path[:-1]
             routes_to_add.append((path_without_slash, route))
 
-    # Добавляем бесслешевые зеркала в сам роутер перед его монтированием
     for path, route in routes_to_add:
-        # Проверяем, чтобы разработчик случайно не создал два одинаковых пути
         if path not in [r.path for r in router.routes]:
             router.add_api_route(
                 path,
@@ -40,8 +35,8 @@ for router in routers:
                 description=route.description
             )
             
-    # Теперь монтируем роутер со всеми его оригинальными и дублирующими путями
-    app.include_router(router)
+    # Магия тут: добавляем глобальный префикс /api ко всем роутерам при их подключении!
+    app.include_router(router, prefix="/api")
 
 
 # Статика
