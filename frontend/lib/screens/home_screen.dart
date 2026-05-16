@@ -158,7 +158,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     data: (data) {
                       final companies = data.companies;
                       final overview = data.overview;
-                      final counts = data.counts as Map<String, dynamic>? ?? {};
+                      final counts = data.counts;
                       return ListView(
                         padding: const EdgeInsets.all(16),
                         children: [
