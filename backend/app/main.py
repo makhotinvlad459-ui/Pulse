@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import String, Boolean, DateTime, ForeignKey, Numeric, Enum, Integer, CheckConstraint, Text, UniqueConstraint, JSON
 import os
 
-app = FastAPI(title="Pulse API", version="0.2.0",redirect_slashes=False)
+app = FastAPI(title="Pulse API", version="0.2.0")
 
 # Подключаем маршруты
 app.include_router(auth_router)
