@@ -174,16 +174,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             ),
                           const SizedBox(height: 16),
                           ...companies.map((company) {
-                            final unread = counts[company.id.toString()]['unread_messages'] ?? 0;
-                            final pending = counts[company.id.toString()]['pending_tasks'] ?? 0;
-                            return _CompanyCard(
-                              company: company,
+                          final companyData = counts[company.id.toString()];
+                          int unread = 0;
+                          int pending = 0;
+                          if (companyData is Map) {
+                          unread = companyData['unread_messages'] as int? ?? 0;
+                          pending = companyData['pending_tasks'] as int? ?? 0;
+                                }
+                          return _CompanyCard(
+                            company: company,
                               ref: ref,
                               unreadMessages: unread,
                               pendingTasks: pending,
-                              showBalance: overview.hasAnyAccountsPermission,
-                            );
-                          }),
+                               showBalance: overview.hasAnyAccountsPermission,
+                                );
+                                })
                         ],
                       );
                     },
