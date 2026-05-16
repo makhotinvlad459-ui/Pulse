@@ -50,6 +50,11 @@ dev_dependencies:
   riverpod_generator: ^2.3.9
 
 flutter:
+  web:
+    compiler:
+      dart2js:
+        custom:
+          - --no-minify
   generate: true
   uses-material-design: true
   assets:
