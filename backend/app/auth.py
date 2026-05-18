@@ -1,8 +1,8 @@
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, or_
 from jose import jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel, EmailStr, validator
@@ -17,7 +17,7 @@ from app.deps import get_current_user
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
 # ---------- Настройка почты ----------
 if settings.SMTP_USER and settings.SMTP_FROM:
@@ -43,10 +43,19 @@ class RegisterRequest(BaseModel):
     full_name: str
     password: str
 
+    @validator('email', pre=True)
+    def email_to_lower(cls, v):
+        if isinstance(v, str):
+            return v.lower().strip()
+        return v
+
     @validator('phone', pre=True)
     def empty_phone_to_none(cls, v):
-        # Если передана пустая строка, превращаем её в None
-        return None if v == '' else v
+        if v == '':
+            return None
+        if isinstance(v, str):
+            return v.strip()
+        return v
 
     @validator('password')
     def validate_password(cls, v):
@@ -56,6 +65,12 @@ class RegisterRequest(BaseModel):
 
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
+
+    @validator('email', pre=True)
+    def email_to_lower(cls, v):
+        if isinstance(v, str):
+            return v.lower().strip()
+        return v
 
 class ResetPasswordRequest(BaseModel):
     token: str
@@ -83,14 +98,23 @@ def create_access_token(data: dict):
 # ---------- Регистрация ----------
 @router.post("/register")
 async def register(register_data: RegisterRequest, db: AsyncSession = Depends(get_db)):
-    conditions = [User.email == register_data.email]
+    # Строгая проверка: ищем пользователей с такой же почтой ИЛИ таким же телефоном
+    query_conditions = [User.email == register_data.email]
     if register_data.phone:
-        conditions.append(User.phone == register_data.phone)
-    result = await db.execute(select(User).where(*conditions))
-    if result.scalar_one_or_none():
-        raise HTTPException(400, "User already exists")
+        query_conditions.append(User.phone == register_data.phone)
+        
+    result = await db.execute(select(User).where(or_(*query_conditions)))
+    existing_user = result.scalar_one_or_none()
+    
+    if existing_user:
+        if existing_user.email == register_data.email:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "User with this email already exists")
+        if register_data.phone and existing_user.phone == register_data.phone:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "User with this phone number already exists")
+
     hashed = get_password_hash(register_data.password)
     subscription_until = datetime.utcnow() + timedelta(days=30)
+    
     new_user = User(
         email=register_data.email,
         phone=register_data.phone,
@@ -104,22 +128,36 @@ async def register(register_data: RegisterRequest, db: AsyncSession = Depends(ge
     db.add(new_user)
     await db.commit()
     await db.refresh(new_user)
+    
     token = create_access_token(data={"sub": str(new_user.id), "role": new_user.role.value})
     return {"access_token": token, "token_type": "bearer"}
 
 # ---------- Логин ----------
 @router.post("/login")
 async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
-    user = await db.execute(select(User).where((User.email == form_data.username) | (User.phone == form_data.username)))
+    # Приводим к нижнему регистру логин, если это email
+    username_clean = form_data.username.lower().strip()
+    
+    user = await db.execute(
+        select(User).where(
+            or_(
+                User.email == username_clean, 
+                User.phone == form_data.username.strip()
+            )
+        )
+    )
     user = user.scalar_one_or_none()
+    
     if not user or not verify_password(form_data.password, user.password_hash):
-        raise HTTPException(401, "Invalid credentials")
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid credentials")
     if not user.is_active:
-        raise HTTPException(403, "Account deactivated")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Account deactivated")
     if user.role == UserRole.FOUNDER and user.subscription_until and user.subscription_until < datetime.utcnow():
-        raise HTTPException(403, "Subscription expired")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Subscription expired")
+        
     user.last_login = datetime.utcnow()
     await db.commit()
+    
     token = create_access_token(data={"sub": str(user.id), "role": user.role.value})
     return {"access_token": token, "token_type": "bearer"}
 
@@ -140,7 +178,7 @@ async def get_current_user_info(current_user: User = Depends(get_current_user)):
 @router.post("/forgot-password")
 async def forgot_password(data: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)):
     if not conf:
-        raise HTTPException(500, "Email service not configured")
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Email service not configured")
     user = await db.execute(select(User).where(User.email == data.email))
     user = user.scalar_one_or_none()
     if not user:
@@ -154,7 +192,7 @@ async def forgot_password(data: ForgotPasswordRequest, db: AsyncSession = Depend
     db.add(reset_token)
     await db.commit()
 
-    frontend_url = "http://localhost:4200"  # замените на адрес вашего фронтенда
+    frontend_url = settings.FRONTEND_URL if hasattr(settings, 'FRONTEND_URL') else "http://localhost:4200"
     reset_link = f"{frontend_url}/reset-password?token={token}"
 
     message = MessageSchema(
@@ -178,10 +216,10 @@ async def reset_password(data: ResetPasswordRequest, db: AsyncSession = Depends(
     reset_token = await db.execute(select(PasswordResetToken).where(PasswordResetToken.token == data.token))
     reset_token = reset_token.scalar_one_or_none()
     if not reset_token or reset_token.expires_at < datetime.utcnow():
-        raise HTTPException(400, "Invalid or expired token")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid or expired token")
     user = await db.get(User, reset_token.user_id)
     if not user:
-        raise HTTPException(404, "User not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
     user.password_hash = get_password_hash(data.new_password)
     await db.delete(reset_token)
     await db.commit()
