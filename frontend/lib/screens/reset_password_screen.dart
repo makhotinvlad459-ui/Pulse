@@ -18,7 +18,6 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
   final _passwordController = TextEditingController();
   final _confirmController = TextEditingController();
   bool _loading = false;
-  String? _message;
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
 
@@ -31,10 +30,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
 
   Future<void> _resetPassword() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() {
-      _loading = true;
-      _message = null;
-    });
+    setState(() => _loading = true);
     final api = ApiClient();
     try {
       await api.post('/auth/reset-password', data: {
@@ -42,26 +38,30 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
         'new_password': _passwordController.text.trim(),
       });
       
-      // Показываем сообщение об успехе
+      // Показываем SnackBar об успехе
       if (mounted) {
-        setState(() {
-          _message = AppLocalizations.of(context)!.passwordChangedSuccess;
-          _loading = false;
-        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context)!.passwordChangedSuccess),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
       }
       
-      // Перенаправляем на экран логина через 1.5 секунды
-      Future.delayed(const Duration(milliseconds: 1500), () {
-        if (mounted) {
-          Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
-        }
-      });
+      // Немедленно перенаправляем на логин
+      if (mounted) {
+        Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+      }
     } catch (e) {
       if (mounted) {
-        setState(() {
-          _message = '${AppLocalizations.of(context)!.error}: ${e.toString()}';
-          _loading = false;
-        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${AppLocalizations.of(context)!.error}: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        setState(() => _loading = false);
       }
     }
   }
@@ -111,11 +111,8 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
                   labelText: AppLocalizations.of(context)!.newPasswordLabel,
                   border: const OutlineInputBorder(),
                   suffixIcon: IconButton(
-                    icon: Icon(_obscurePassword
-                        ? Icons.visibility_off
-                        : Icons.visibility),
-                    onPressed: () =>
-                        setState(() => _obscurePassword = !_obscurePassword),
+                    icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
+                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                   ),
                 ),
                 validator: (value) {
@@ -136,11 +133,8 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
                   labelText: AppLocalizations.of(context)!.confirmPasswordLabel,
                   border: const OutlineInputBorder(),
                   suffixIcon: IconButton(
-                    icon: Icon(_obscureConfirm
-                        ? Icons.visibility_off
-                        : Icons.visibility),
-                    onPressed: () =>
-                        setState(() => _obscureConfirm = !_obscureConfirm),
+                    icon: Icon(_obscureConfirm ? Icons.visibility_off : Icons.visibility),
+                    onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
                   ),
                 ),
                 validator: (value) {
@@ -151,24 +145,13 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
                 },
               ),
               const SizedBox(height: 20),
-              if (_loading) const Center(child: CircularProgressIndicator()),
-              if (_message != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: Text(
-                    _message!,
-                    style: TextStyle(
-                      color: _message!.startsWith(AppLocalizations.of(context)!.error)
-                          ? Colors.red
-                          : Colors.green,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
+              if (_loading)
+                const Center(child: CircularProgressIndicator())
+              else
+                ElevatedButton(
+                  onPressed: _resetPassword,
+                  child: Text(AppLocalizations.of(context)!.resetPasswordButton),
                 ),
-              ElevatedButton(
-                onPressed: _loading ? null : _resetPassword,
-                child: Text(AppLocalizations.of(context)!.resetPasswordButton),
-              ),
             ],
           ),
         ),
