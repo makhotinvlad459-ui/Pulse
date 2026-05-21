@@ -5,7 +5,7 @@ import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/register_screen.dart';
 import 'providers/theme_provider.dart';
-import 'providers/locale_provider.dart'; 
+import 'providers/locale_provider.dart';
 import 'screens/forgot_password_screen.dart';
 import 'screens/reset_password_screen.dart';
 import 'package:frontend/l10n/app_localizations.dart';
@@ -24,22 +24,34 @@ class MyApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final appTheme = ref.watch(themeProvider);
     final themeData = getThemeData(appTheme);
-    final locale = ref.watch(localeProvider); // подписываемся на текущую локаль
+    final locale = ref.watch(localeProvider);
 
     return MaterialApp(
       title: 'Pulse',
       theme: themeData,
-      locale: locale, // указываем текущую локаль
+      locale: locale,
       localizationsDelegates: [
-        AppLocalizations.localizationsDelegates.first, // ваш генератор
+        AppLocalizations.localizationsDelegates.first,
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      supportedLocales: const [Locale('ru'), Locale('en')], // без региональных суффиксов (можно оставить ru, en)
+      supportedLocales: const [Locale('ru'), Locale('en')],
       navigatorKey: navigatorKey,
       initialRoute: '/login',
-      onGenerateRoute: (settings) {
+      onGenerateRoute: (RouteSettings settings) {
+        // Пытаемся извлечь токен из URL (для Web)
+        final uri = Uri.base;
+        if (uri.path == '/reset-password') {
+          final token = uri.queryParameters['token'];
+          if (token != null && token.isNotEmpty) {
+            return MaterialPageRoute(
+              builder: (_) => ResetPasswordScreen(token: token),
+            );
+          }
+          return MaterialPageRoute(builder: (_) => const ForgotPasswordScreen());
+        }
+
         switch (settings.name) {
           case '/login':
             return MaterialPageRoute(builder: (_) => const LoginScreen());
@@ -49,14 +61,6 @@ class MyApp extends ConsumerWidget {
             return MaterialPageRoute(builder: (_) => const HomeScreen());
           case '/forgot-password':
             return MaterialPageRoute(builder: (_) => const ForgotPasswordScreen());
-          case '/reset-password':
-            final token = settings.arguments as String?;
-            if (token == null) {
-              return MaterialPageRoute(builder: (_) => const ForgotPasswordScreen());
-            }
-            return MaterialPageRoute(
-              builder: (_) => ResetPasswordScreen(token: token),
-            );
           default:
             return MaterialPageRoute(builder: (_) => const LoginScreen());
         }
