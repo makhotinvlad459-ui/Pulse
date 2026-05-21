@@ -38,16 +38,18 @@ class MyApp extends ConsumerWidget {
       ],
       supportedLocales: const [Locale('ru'), Locale('en')],
       navigatorKey: navigatorKey,
-      initialRoute: '/login',
+      
+      // Инициализируем приложение с корня, чтобы дать вебу распарсить реальный URL
+      initialRoute: '/',
+      
       onGenerateRoute: (RouteSettings settings) {
         final routeName = settings.name ?? '';
 
-        // 1. ХЕНДЛЕР ДЛЯ ССЫЛКИ ИЗ ПИСЬМА (Только при холодном старте или явной ссылке)
-        // Если роут пустой, "/", или явно содержит "reset-password"
+        // 1. ТОЧКА ВХОДА ДЛЯ ССЫЛКИ ИЗ ПИСЬМА И ХОЛОДНОГО СТАРТА
         if (routeName == '/' || routeName.isEmpty || routeName.contains('reset-password')) {
           final uriBase = Uri.base;
           
-          // Проверяем, есть ли реальный маркер сброса в адресной строке браузера
+          // Если в строке браузера РЕАЛЬНО есть 'reset-password'
           if (uriBase.path.contains('reset-password') || uriBase.fragment.contains('reset-password')) {
             final token = uriBase.queryParameters['token'] ?? 
                           Uri.parse(uriBase.fragment).queryParameters['token'];
@@ -58,9 +60,12 @@ class MyApp extends ConsumerWidget {
               );
             }
           }
+          
+          // Если это просто холодный старт без токена, открываем логин
+          return MaterialPageRoute(builder: (_) => const LoginScreen());
         }
 
-        // 2. СТАНДАРТНАЯ НАВИГАЦИЯ (Игнорирует адресную строку браузера при кликах)
+        // 2. ЧИСТАЯ НАВИГАЦИЯ ДЛЯ КЛИКОВ ВНУТРИ ПРИЛОЖЕНИЯ
         switch (routeName) {
           case '/login':
             return MaterialPageRoute(builder: (_) => const LoginScreen());
