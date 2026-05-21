@@ -57,7 +57,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
           // Если токен недействителен, перенаправляем на forgot-password
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(AppLocalizations.of(context)!.tokenExpiredOrInvalid),
+              content: Text(AppLocalizations.of(context)!.linkExpired),
               backgroundColor: Colors.orange,
             ),
           );
