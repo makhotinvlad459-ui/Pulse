@@ -40,32 +40,28 @@ class MyApp extends ConsumerWidget {
       navigatorKey: navigatorKey,
       initialRoute: '/login',
       onGenerateRoute: (RouteSettings settings) {
-        // 1. ПРИНУДИТЕЛЬНЫЙ ПЕРЕХВАТ ДЛЯ ВЕБА (Deep Linking)
-        // Проверяем реальную адресную строку браузера в первую очередь
-        final uriBase = Uri.base;
-        
-        // Проверяем, есть ли слово reset-password в пути или в хэше ссылки
-        final isResetLink = uriBase.path.contains('reset-password') || 
-                            uriBase.fragment.contains('reset-password') ||
-                            (settings.name?.contains('reset-password') ?? false);
+        final routeName = settings.name ?? '';
 
-        if (isResetLink) {
-          // Вытаскиваем токен из любого возможного места в URL
-          final token = uriBase.queryParameters['token'] ?? 
-                        Uri.parse(uriBase.fragment).queryParameters['token'] ??
-                        (settings.name != null ? Uri.parse(settings.name!).queryParameters['token'] : null);
+        // 1. ХЕНДЛЕР ДЛЯ ССЫЛКИ ИЗ ПИСЬМА (Только при холодном старте или явной ссылке)
+        // Если роут пустой, "/", или явно содержит "reset-password"
+        if (routeName == '/' || routeName.isEmpty || routeName.contains('reset-password')) {
+          final uriBase = Uri.base;
+          
+          // Проверяем, есть ли реальный маркер сброса в адресной строке браузера
+          if (uriBase.path.contains('reset-password') || uriBase.fragment.contains('reset-password')) {
+            final token = uriBase.queryParameters['token'] ?? 
+                          Uri.parse(uriBase.fragment).queryParameters['token'];
 
-          // Если токен найден, и мы ТОЛЬКО ЧТО зашли на сайт (не переходим внутри приложения на /login)
-          if (token != null && token.isNotEmpty && settings.name != '/login') {
-            return MaterialPageRoute(
-              builder: (_) => ResetPasswordScreen(token: token),
-            );
+            if (token != null && token.isNotEmpty) {
+              return MaterialPageRoute(
+                builder: (_) => ResetPasswordScreen(token: token),
+              );
+            }
           }
         }
 
-        // 2. СТАНДАРТНАЯ НАВИГАЦИЯ ВНУТРИ ПРИЛОЖЕНИЯ
-        // Срабатывает, когда ты явно вызываешь Navigator.pushNamed
-        switch (settings.name) {
+        // 2. СТАНДАРТНАЯ НАВИГАЦИЯ (Игнорирует адресную строку браузера при кликах)
+        switch (routeName) {
           case '/login':
             return MaterialPageRoute(builder: (_) => const LoginScreen());
           case '/register':
