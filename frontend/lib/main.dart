@@ -40,8 +40,10 @@ class MyApp extends ConsumerWidget {
       navigatorKey: navigatorKey,
       initialRoute: '/login',
       onGenerateRoute: (RouteSettings settings) {
-        // Сначала обрабатываем явные маршруты по имени
-        switch (settings.name) {
+        // Безопасно парсим входящий маршрут (работает и для внутренних переходов, и для Web URL)
+        final uri = Uri.parse(settings.name ?? '/');
+
+        switch (uri.path) {
           case '/login':
             return MaterialPageRoute(builder: (_) => const LoginScreen());
           case '/register':
@@ -50,19 +52,20 @@ class MyApp extends ConsumerWidget {
             return MaterialPageRoute(builder: (_) => const HomeScreen());
           case '/forgot-password':
             return MaterialPageRoute(builder: (_) => const ForgotPasswordScreen());
-          default:
-            // Обработка глубоких ссылок (например, прямой переход по ссылке из письма)
-            final uri = Uri.base;
-            if (uri.path == '/reset-password') {
-              final token = uri.queryParameters['token'];
-              if (token != null && token.isNotEmpty) {
-                return MaterialPageRoute(
-                  builder: (_) => ResetPasswordScreen(token: token),
-                );
-              }
-              return MaterialPageRoute(builder: (_) => const ForgotPasswordScreen());
+          
+          // Обрабатываем сброс пароля как изолированный маршрут
+          case '/reset-password':
+            // Пытаемся взять токен либо из параметров навигатора, либо напрямую из адресной строки браузера
+            final token = uri.queryParameters['token'] ?? Uri.base.queryParameters['token'];
+            if (token != null && token.isNotEmpty) {
+              return MaterialPageRoute(
+                builder: (_) => ResetPasswordScreen(token: token),
+              );
             }
-            // Если ничего не подошло, отправляем на логин
+            return MaterialPageRoute(builder: (_) => const ForgotPasswordScreen());
+
+          // Если маршрут не распознан, отправляем на экран авторизации
+          default:
             return MaterialPageRoute(builder: (_) => const LoginScreen());
         }
       },
