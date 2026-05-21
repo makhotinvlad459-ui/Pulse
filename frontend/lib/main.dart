@@ -40,18 +40,7 @@ class MyApp extends ConsumerWidget {
       navigatorKey: navigatorKey,
       initialRoute: '/login',
       onGenerateRoute: (RouteSettings settings) {
-        // Пытаемся извлечь токен из URL (для Web)
-        final uri = Uri.base;
-        if (uri.path == '/reset-password') {
-          final token = uri.queryParameters['token'];
-          if (token != null && token.isNotEmpty) {
-            return MaterialPageRoute(
-              builder: (_) => ResetPasswordScreen(token: token),
-            );
-          }
-          return MaterialPageRoute(builder: (_) => const ForgotPasswordScreen());
-        }
-
+        // Сначала обрабатываем явные маршруты по имени
         switch (settings.name) {
           case '/login':
             return MaterialPageRoute(builder: (_) => const LoginScreen());
@@ -62,6 +51,18 @@ class MyApp extends ConsumerWidget {
           case '/forgot-password':
             return MaterialPageRoute(builder: (_) => const ForgotPasswordScreen());
           default:
+            // Обработка глубоких ссылок (например, прямой переход по ссылке из письма)
+            final uri = Uri.base;
+            if (uri.path == '/reset-password') {
+              final token = uri.queryParameters['token'];
+              if (token != null && token.isNotEmpty) {
+                return MaterialPageRoute(
+                  builder: (_) => ResetPasswordScreen(token: token),
+                );
+              }
+              return MaterialPageRoute(builder: (_) => const ForgotPasswordScreen());
+            }
+            // Если ничего не подошло, отправляем на логин
             return MaterialPageRoute(builder: (_) => const LoginScreen());
         }
       },
