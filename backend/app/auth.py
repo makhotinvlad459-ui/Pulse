@@ -224,3 +224,27 @@ async def reset_password(data: ResetPasswordRequest, db: AsyncSession = Depends(
     await db.delete(reset_token)
     await db.commit()
     return {"detail": "Password has been reset"}
+
+class ChangePasswordRequest(BaseModel):
+    old_password: str
+    new_password: str
+
+@router.post("/change-password")
+async def change_password(
+    data: ChangePasswordRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Проверяем старый пароль
+    if not verify_password(data.old_password, current_user.password_hash):
+        raise HTTPException(status_code=400, detail="Old password is incorrect")
+    
+    # Проверяем новый пароль (длина)
+    if len(data.new_password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    
+    # Хешируем и сохраняем
+    current_user.password_hash = get_password_hash(data.new_password)
+    await db.commit()
+    
+    return {"detail": "Password changed successfully"}
