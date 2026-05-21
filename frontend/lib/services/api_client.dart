@@ -13,20 +13,22 @@ import '../main.dart';
 
 class ApiClient {
   static String get baseUrl {
-  const bool isProduction = bool.fromEnvironment('dart.vm.product');
-  if (isProduction) {
-    // Режим продакшена (release-сборка)
-    if (kIsWeb) return '/api';
-    // Добавляем /api в конец, так как FastAPI теперь ждет этот префикс глобально
-    if (Platform.isAndroid) return 'http://93.115.19.96:8000/api';
-    return 'http://93.115.19.96:8000/api';
-  } else {
-    // Режим разработки (debug)
-    if (kIsWeb) return 'http://localhost:8000/api';
-    if (Platform.isAndroid) return 'http://10.0.2.2:8000/api';
-    return 'http://localhost:8000/api';
+    const bool isProduction = bool.fromEnvironment('dart.vm.product');
+    if (isProduction) {
+      // Режим продакшена (release-сборка)
+      if (kIsWeb) {
+        
+        return '/api'; 
+      }
+      // Для Android/iOS мобильных приложений прописываем новый защищенный HTTPS домен
+      return 'https://pulse-yourmoney.com/api';
+    } else {
+      // Режим разработки (debug) — тут всё оставляем как было для локальных тестов
+      if (kIsWeb) return 'http://localhost:8000/api';
+      if (Platform.isAndroid) return 'http://10.0.2.2:8000/api';
+      return 'http://localhost:8000/api';
+    }
   }
-}
 
 
   final Dio _dio = Dio();
@@ -264,4 +266,11 @@ class ApiClient {
   Future<void> updateMemberPermissions(int companyId, int memberId, List<String> permissionNames) async {
     await put('/permissions/company/$companyId/member/$memberId', data: {'permission_names': permissionNames});
   }
+
+  Future<void> changePassword(String oldPassword, String newPassword) async {
+  await post('/auth/change-password', data: {
+    'old_password': oldPassword,
+    'new_password': newPassword,
+  });
+}
 }

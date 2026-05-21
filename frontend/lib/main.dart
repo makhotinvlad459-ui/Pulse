@@ -39,7 +39,7 @@ class MyApp extends ConsumerWidget {
       supportedLocales: const [Locale('ru'), Locale('en')],
       navigatorKey: navigatorKey,
       
-      // Инициализируем приложение с корня, чтобы дать вебу распарсить реальный URL
+      // Инициализируем с корня
       initialRoute: '/',
       
       onGenerateRoute: (RouteSettings settings) {
@@ -49,10 +49,14 @@ class MyApp extends ConsumerWidget {
         if (routeName == '/' || routeName.isEmpty || routeName.contains('reset-password')) {
           final uriBase = Uri.base;
           
-          // Если в строке браузера РЕАЛЬНО есть 'reset-password'
-          if (uriBase.path.contains('reset-password') || uriBase.fragment.contains('reset-password')) {
+          // Проверяем, есть ли в строке браузера или в роуте 'reset-password'
+          if (uriBase.path.contains('reset-password') || 
+              uriBase.fragment.contains('reset-password') || 
+              routeName.contains('reset-password')) {
+            
             final token = uriBase.queryParameters['token'] ?? 
-                          Uri.parse(uriBase.fragment).queryParameters['token'];
+                          Uri.parse(uriBase.fragment).queryParameters['token'] ??
+                          Uri.parse(routeName).queryParameters['token'];
 
             if (token != null && token.isNotEmpty) {
               return MaterialPageRoute(
@@ -61,7 +65,7 @@ class MyApp extends ConsumerWidget {
             }
           }
           
-          // Если это просто холодный старт без токена, открываем логин
+          // Если это холодный старт без токена, открываем логин
           return MaterialPageRoute(builder: (_) => const LoginScreen());
         }
 
