@@ -38,8 +38,8 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
         'new_password': _passwordController.text.trim(),
       });
       
-      // Показываем SnackBar об успехе
       if (mounted) {
+        // Показываем SnackBar об успехе
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(AppLocalizations.of(context)!.passwordChangedSuccess),
@@ -47,20 +47,33 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
             duration: const Duration(seconds: 2),
           ),
         );
-      }
-      
-      // Немедленно перенаправляем на логин
-      if (mounted) {
+        // НЕМЕДЛЕННО перенаправляем на логин
         Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${AppLocalizations.of(context)!.error}: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        String errorMsg = e.toString();
+        if (errorMsg.contains('expired') || errorMsg.contains('invalid')) {
+          // Если токен недействителен, перенаправляем на forgot-password
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(AppLocalizations.of(context)!.tokenExpiredOrInvalid),
+              backgroundColor: Colors.orange,
+            ),
+          );
+          Future.delayed(const Duration(seconds: 2), () {
+            if (mounted) {
+              Navigator.pushReplacementNamed(context, '/forgot-password');
+            }
+          });
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('${AppLocalizations.of(context)!.error}: ${e.toString()}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
         setState(() => _loading = false);
       }
     }
