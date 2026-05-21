@@ -41,18 +41,28 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
         'token': widget.token,
         'new_password': _passwordController.text.trim(),
       });
-      setState(() {
-        _message = AppLocalizations.of(context)!.passwordChangedSuccess;
-        _loading = false;
-      });
-      Future.delayed(const Duration(seconds: 2), () {
-        Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+      
+      // Показываем сообщение об успехе
+      if (mounted) {
+        setState(() {
+          _message = AppLocalizations.of(context)!.passwordChangedSuccess;
+          _loading = false;
+        });
+      }
+      
+      // Перенаправляем на экран логина через 1.5 секунды
+      Future.delayed(const Duration(milliseconds: 1500), () {
+        if (mounted) {
+          Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+        }
       });
     } catch (e) {
-      setState(() {
-        _message = '${AppLocalizations.of(context)!.error}: ${e.toString()}';
-        _loading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _message = '${AppLocalizations.of(context)!.error}: ${e.toString()}';
+          _loading = false;
+        });
+      }
     }
   }
 
