@@ -39,6 +39,8 @@ dependencies:
   webview_flutter: ^4.4.0
   in_app_purchase: ^3.2.0
   url_launcher: ^6.3.0
+  flutter_lints: ^3.0.0
+  flutter_launcher_icons: ^0.13.1
   
   flutter_localizations:
     sdk: flutter
@@ -55,8 +57,19 @@ flutter:
   generate: true
   uses-material-design: true
   assets:
+    - assets/logo.png
     - assets/videos/city.mp4
     - assets/videos/for_home.mp4
     - assets/videos/dark1.mp4
     - assets/videos/city_blue.mp4
     - assets/videos/city_green.mp4
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/logo.png"
+  web:
+    generate: true
+    image_path: "assets/logo.png"
+    background_color: "#000000"
+    theme_color: "#000000"    
