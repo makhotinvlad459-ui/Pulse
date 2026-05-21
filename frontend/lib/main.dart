@@ -40,47 +40,43 @@ class MyApp extends ConsumerWidget {
       navigatorKey: navigatorKey,
       initialRoute: '/login',
       onGenerateRoute: (RouteSettings settings) {
-        // 1. Проверяем прямые переходы внутри приложения через Navigator.pushNamed
-        if (settings.name == '/login') {
-          return MaterialPageRoute(builder: (_) => const LoginScreen());
-        }
-        if (settings.name == '/register') {
-          return MaterialPageRoute(builder: (_) => const RegisterScreen());
-        }
-        if (settings.name == '/home') {
-          return MaterialPageRoute(builder: (_) => const HomeScreen());
-        }
-        if (settings.name == '/forgot-password') {
-          return MaterialPageRoute(builder: (_) => const ForgotPasswordScreen());
-        }
-
-        // 2. Проверяем, не является ли это ссылкой сброса пароля (из письма).
-        // Проверяем как Uri.base (реальный URL браузера), так и settings.name
+        // 1. ПРИНУДИТЕЛЬНЫЙ ПЕРЕХВАТ ДЛЯ ВЕБА (Deep Linking)
+        // Проверяем реальную адресную строку браузера в первую очередь
         final uriBase = Uri.base;
         
-        // Ссылка подходит, если путь в браузере содержит '/reset-password' 
-        // или если во Flutter Web роутинг идет через хэш (например, /#/reset-password)
-        final isResetPath = uriBase.path == '/reset-password' || 
-                            uriBase.fragment.startsWith('/reset-password') ||
+        // Проверяем, есть ли слово reset-password в пути или в хэше ссылки
+        final isResetLink = uriBase.path.contains('reset-password') || 
+                            uriBase.fragment.contains('reset-password') ||
                             (settings.name?.contains('reset-password') ?? false);
 
-        if (isResetPath) {
-          // Ищем токен везде, где он может быть: в query, в fragment-query или в самом settings.name
+        if (isResetLink) {
+          // Вытаскиваем токен из любого возможного места в URL
           final token = uriBase.queryParameters['token'] ?? 
                         Uri.parse(uriBase.fragment).queryParameters['token'] ??
-                        Uri.parse(settings.name ?? '').queryParameters['token'];
+                        (settings.name != null ? Uri.parse(settings.name!).queryParameters['token'] : null);
 
-          if (token != null && token.isNotEmpty) {
+          // Если токен найден, и мы ТОЛЬКО ЧТО зашли на сайт (не переходим внутри приложения на /login)
+          if (token != null && token.isNotEmpty && settings.name != '/login') {
             return MaterialPageRoute(
               builder: (_) => ResetPasswordScreen(token: token),
             );
           }
-          // Если зашли на страницу сброса, но токена нет — отправляем на восстановление
-          return MaterialPageRoute(builder: (_) => const ForgotPasswordScreen());
         }
 
-        // 3. Дефолтный роут, если ничего не подошло
-        return MaterialPageRoute(builder: (_) => const LoginScreen());
+        // 2. СТАНДАРТНАЯ НАВИГАЦИЯ ВНУТРИ ПРИЛОЖЕНИЯ
+        // Срабатывает, когда ты явно вызываешь Navigator.pushNamed
+        switch (settings.name) {
+          case '/login':
+            return MaterialPageRoute(builder: (_) => const LoginScreen());
+          case '/register':
+            return MaterialPageRoute(builder: (_) => const RegisterScreen());
+          case '/home':
+            return MaterialPageRoute(builder: (_) => const HomeScreen());
+          case '/forgot-password':
+            return MaterialPageRoute(builder: (_) => const ForgotPasswordScreen());
+          default:
+            return MaterialPageRoute(builder: (_) => const LoginScreen());
+        }
       },
     );
   }
