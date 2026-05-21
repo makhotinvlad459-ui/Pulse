@@ -43,6 +43,8 @@ dependencies:
   flutter_localizations:
     sdk: flutter
 
+  http: any
+  video_player: any
 dev_dependencies:
   flutter_test:
     sdk: flutter

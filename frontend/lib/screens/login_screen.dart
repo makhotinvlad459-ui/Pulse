@@ -39,6 +39,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final TextEditingController _passwordController = TextEditingController();
   final SecureStorage _storage = SecureStorage();
   bool _rememberMe = false;
+  bool _obscurePassword = true;
 
   @override
   void initState() {
@@ -86,7 +87,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         } else {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(_localized('noSavedCredentials', 'Сохранённые данные не найдены'))),
+              SnackBar(
+                  content: Text(_localized(
+                      'noSavedCredentials', 'Сохранённые данные не найдены'))),
             );
           }
         }
@@ -95,34 +98,36 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       debugPrint('Biometric error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_localized('biometricError', 'Ошибка биометрии'))),
+          SnackBar(
+              content: Text(_localized('biometricError', 'Ошибка биометрии'))),
         );
       }
     }
   }
 
   Future<void> _performLogin(String login, String password) async {
-  final authNotifier = ref.read(authProvider.notifier);
-  final success = await authNotifier.login(login, password);
-  if (!mounted) return;
-  if (success) {
-    if (_rememberMe) {
-      await _storage.write(key: 'saved_login', value: login);
-      await _storage.write(key: 'saved_password', value: password);
-      await _storage.write(key: 'remember_me', value: 'true');
+    final authNotifier = ref.read(authProvider.notifier);
+    final success = await authNotifier.login(login, password);
+    if (!mounted) return;
+    if (success) {
+      if (_rememberMe) {
+        await _storage.write(key: 'saved_login', value: login);
+        await _storage.write(key: 'saved_password', value: password);
+        await _storage.write(key: 'remember_me', value: 'true');
+      } else {
+        await _storage.delete(key: 'saved_password');
+        await _storage.write(key: 'saved_login', value: login);
+        await _storage.write(key: 'remember_me', value: 'false');
+      }
+      Navigator.pushReplacementNamed(context, '/home');
     } else {
-      await _storage.delete(key: 'saved_password');
-      await _storage.write(key: 'saved_login', value: login);
-      await _storage.write(key: 'remember_me', value: 'false');
-    }
-    Navigator.pushReplacementNamed(context, '/home');
-  } else {
-    final error = ref.read(authProvider).error ?? 'Неизвестная ошибка';
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
+      final error = ref.read(authProvider).error ?? 'Неизвестная ошибка';
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error)));
+      }
     }
   }
-}
 
   String _getVideoPath(AppTheme theme) {
     switch (theme) {
@@ -229,7 +234,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   color: Colors.white.withOpacity(0.5),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
-                    side: BorderSide(color: Colors.white.withOpacity(0.3), width: 1),
+                    side: BorderSide(
+                        color: Colors.white.withOpacity(0.3), width: 1),
                   ),
                   child: Padding(
                     padding: const EdgeInsets.all(24.0),
@@ -241,39 +247,57 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           decoration: InputDecoration(
                             labelText: t?.loginLabel ?? 'Email или телефон',
                             labelStyle: TextStyle(color: Colors.grey.shade600),
-                            prefixIcon: Icon(Icons.person, color: Colors.grey.shade700),
+                            prefixIcon:
+                                Icon(Icons.person, color: Colors.grey.shade700),
                             filled: true,
                             fillColor: Colors.white.withOpacity(0.9),
                             border: const OutlineInputBorder(
-                              borderRadius: BorderRadius.all(Radius.circular(8)),
+                              borderRadius:
+                                  BorderRadius.all(Radius.circular(8)),
                             ),
                             enabledBorder: OutlineInputBorder(
-                              borderSide: BorderSide(color: Colors.grey.shade400),
+                              borderSide:
+                                  BorderSide(color: Colors.grey.shade400),
                             ),
                             focusedBorder: OutlineInputBorder(
-                              borderSide: BorderSide(color: Colors.grey.shade700, width: 2),
+                              borderSide: BorderSide(
+                                  color: Colors.grey.shade700, width: 2),
                             ),
                           ),
                         ),
                         const SizedBox(height: 16),
                         TextField(
                           controller: _passwordController,
-                          obscureText: true,
+                          obscureText: _obscurePassword,
                           style: const TextStyle(color: Colors.black87),
                           decoration: InputDecoration(
                             labelText: t?.passwordLabel ?? 'Пароль',
                             labelStyle: TextStyle(color: Colors.grey.shade600),
-                            prefixIcon: Icon(Icons.lock, color: Colors.grey.shade700),
+                            prefixIcon:
+                                Icon(Icons.lock, color: Colors.grey.shade700),
+                            suffixIcon: IconButton(
+                              icon: Icon(_obscurePassword
+                                  ? Icons.visibility_off
+                                  : Icons.visibility),
+                              onPressed: () {
+                                setState(() {
+                                  _obscurePassword = !_obscurePassword;
+                                });
+                              },
+                            ),
                             filled: true,
                             fillColor: Colors.white.withOpacity(0.9),
                             border: const OutlineInputBorder(
-                              borderRadius: BorderRadius.all(Radius.circular(8)),
+                              borderRadius:
+                                  BorderRadius.all(Radius.circular(8)),
                             ),
                             enabledBorder: OutlineInputBorder(
-                              borderSide: BorderSide(color: Colors.grey.shade400),
+                              borderSide:
+                                  BorderSide(color: Colors.grey.shade400),
                             ),
                             focusedBorder: OutlineInputBorder(
-                              borderSide: BorderSide(color: Colors.grey.shade700, width: 2),
+                              borderSide: BorderSide(
+                                  color: Colors.grey.shade700, width: 2),
                             ),
                           ),
                         ),
@@ -305,7 +329,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                   );
                                 },
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.grey.shade800.withOpacity(0.8),
+                                  backgroundColor:
+                                      Colors.grey.shade800.withOpacity(0.8),
                                   foregroundColor: Colors.white,
                                   minimumSize: const Size(double.infinity, 48),
                                   shape: RoundedRectangleBorder(
@@ -319,11 +344,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     ? Padding(
                                         padding: const EdgeInsets.only(top: 12),
                                         child: OutlinedButton.icon(
-                                          onPressed: _authenticateWithBiometrics,
+                                          onPressed:
+                                              _authenticateWithBiometrics,
                                           icon: const Icon(Icons.fingerprint),
-                                          label: Text(t?.fingerprintLogin ?? 'Вход по отпечатку'),
+                                          label: Text(t?.fingerprintLogin ??
+                                              'Вход по отпечатку'),
                                           style: OutlinedButton.styleFrom(
-                                            foregroundColor: Colors.grey.shade800,
+                                            foregroundColor:
+                                                Colors.grey.shade800,
                                           ),
                                         ),
                                       )
@@ -334,7 +362,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ),
                         const SizedBox(height: 16),
                         TextButton(
-                          onPressed: () => Navigator.pushNamed(context, '/register'),
+                          onPressed: () =>
+                              Navigator.pushNamed(context, '/register'),
                           style: TextButton.styleFrom(
                             foregroundColor: Colors.grey.shade900,
                           ),
@@ -347,7 +376,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ),
                         ),
                         TextButton(
-                          onPressed: () => Navigator.pushNamed(context, '/forgot-password'),
+                          onPressed: () =>
+                              Navigator.pushNamed(context, '/forgot-password'),
                           style: TextButton.styleFrom(
                             foregroundColor: Colors.grey.shade900,
                           ),

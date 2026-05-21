@@ -50,7 +50,6 @@ ThemeData getThemeData(AppTheme theme) {
           primary: Colors.grey.shade800,
           secondary: Colors.grey.shade600,
           surface: Colors.white,
-          background: const Color(0xFFF2F2F2),
           onSurface: Colors.black87,
         ),
       );
@@ -64,8 +63,7 @@ ThemeData getThemeData(AppTheme theme) {
     colorScheme: ColorScheme.dark(
       primary: Colors.grey.shade300,
       secondary: Colors.grey.shade500,
-      surface: Colors.grey[850]!,     // основа для карточек и вкладок
-      background: Colors.grey[900]!,
+      surface: Colors.grey[850]!,
       onSurface: Colors.white,
     ),
   );
@@ -80,7 +78,6 @@ ThemeData getThemeData(AppTheme theme) {
       primary: Colors.blue.shade700,
       secondary: Colors.blue.shade500,
       surface: Colors.white,
-      background: Colors.blue.shade50,
       onSurface: Colors.black87,
     ),
   );
@@ -96,7 +93,6 @@ ThemeData getThemeData(AppTheme theme) {
       primary: Colors.green.shade400,
       secondary: Colors.green.shade600,
       surface: Colors.grey[900]!,
-      background: Colors.grey[900]!,
       onSurface: Colors.white,
     ),
   );

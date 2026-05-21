@@ -456,18 +456,18 @@ class _EditTransactionDialogState extends ConsumerState<EditTransactionDialog> {
                     child: SegmentedButton<String>(
                       style: ButtonStyle(
                         visualDensity: VisualDensity.compact,
-                        textStyle: MaterialStateProperty.all(
+                        textStyle: WidgetStateProperty.all(
                           TextStyle(fontSize: isSmallScreen ? 11 : 13),
                         ),
-                        padding: MaterialStateProperty.all(
+                        padding: WidgetStateProperty.all(
                           EdgeInsets.symmetric(horizontal: isSmallScreen ? 4 : 8),
                         ),
-                        foregroundColor: MaterialStateProperty.resolveWith((states) {
-                          if (states.contains(MaterialState.selected)) return colorScheme.onSurface;
+                        foregroundColor: WidgetStateProperty.resolveWith((states) {
+                          if (states.contains(WidgetState.selected)) return colorScheme.onSurface;
                           return colorScheme.onSurfaceVariant;
                         }),
-                        backgroundColor: MaterialStateProperty.resolveWith((states) {
-                          if (states.contains(MaterialState.selected)) return colorScheme.primary.withOpacity(0.2);
+                        backgroundColor: WidgetStateProperty.resolveWith((states) {
+                          if (states.contains(WidgetState.selected)) return colorScheme.primary.withOpacity(0.2);
                           return colorScheme.surfaceContainerHighest;
                         }),
                       ),
@@ -563,7 +563,7 @@ class _EditTransactionDialogState extends ConsumerState<EditTransactionDialog> {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<int>(
-                value: _accountId,
+                initialValue: _accountId,
                 items: widget.accounts.map<DropdownMenuItem<int>>((a) => DropdownMenuItem<int>(
                       value: a['id'],
                       child: Text(a['name'], style: TextStyle(color: colorScheme.onSurface)),
@@ -620,7 +620,7 @@ class _EditTransactionDialogState extends ConsumerState<EditTransactionDialog> {
               const SizedBox(height: 12),
               if (_type == 'income' || _type == 'expense')
                 DropdownButtonFormField<int>(
-                  value: _categoryId,
+                  initialValue: _categoryId,
                   items: widget.categories.map<DropdownMenuItem<int>>((c) => DropdownMenuItem<int>(
                         value: c['id'],
                         child: Text('${c['icon'] ?? '📁'} ${_translateCategoryName(c['name'], t)}', style: TextStyle(color: colorScheme.onSurface)),
@@ -638,7 +638,7 @@ class _EditTransactionDialogState extends ConsumerState<EditTransactionDialog> {
                 ),
               if (_type == 'transfer')
                 DropdownButtonFormField<int>(
-                  value: _transferToAccountId,
+                  initialValue: _transferToAccountId,
                   items: widget.accounts.map<DropdownMenuItem<int>>((a) => DropdownMenuItem<int>(
                         value: a['id'],
                         child: Text(a['name'], style: TextStyle(color: colorScheme.onSurface)),

@@ -9,7 +9,7 @@ import random
 import string
 
 from app.database import get_db
-from app.models import User, Company, Account, CompanyMember, UserRole, Category, Permission, CompanyMemberPermission
+from app.models import User, Company,Counterparty, Account, CompanyMember, UserRole, Category, Permission, CompanyMemberPermission
 from app.schemas import CompanyCreate, CompanyResponse, UpdateMemberRole, SetManagerRequest
 from app.deps import get_current_user
 from app.auth import get_password_hash
@@ -398,7 +398,6 @@ async def get_company_members(
         for m in members
     ]
 
-# --- Удаление члена компании ---
 # --- Удаление члена компании ---
 @router.delete("/{company_id}/members/{user_id}")
 async def remove_member(

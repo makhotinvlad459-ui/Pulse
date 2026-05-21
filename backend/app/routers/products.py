@@ -1,13 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
+from sqlalchemy import select, update, func
 from typing import List, Optional
 from enum import Enum
 from datetime import datetime
 from pydantic import BaseModel
 
 from app.database import get_db
-from app.models import User, Company, Product, CompanyMember, UserRole, ProductType, OrderItem, TransactionItem
+from app.models import User, Company, Product, CompanyMember, UserRole, ProductType, OrderItem, TransactionItem, Counterparty
 from app.deps import get_current_user
 from app.routers.orders import _has_permission  
 
@@ -67,7 +67,7 @@ async def _check_company_access(company_id: int, current_user: User, db: AsyncSe
 async def get_products(
     company_id: int,
     type: Optional[ProductTypeEnum] = None,
-    include_deleted: bool = False,   # опционально: явно запрашивать удалённые
+    include_deleted: bool = False,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -104,6 +104,27 @@ async def create_product(
         supplier=product_data.supplier,
     )
     db.add(new_product)
+
+    # ---- ДОБАВЛЯЕМ ПОСТАВЩИКА В СПРАВОЧНИК КОНТРАГЕНТОВ, ЕСЛИ УКАЗАН ----
+    if product_data.supplier:
+        existing_cp = await db.execute(
+            select(Counterparty).where(
+                Counterparty.company_id == company_id,
+                func.lower(Counterparty.name) == product_data.supplier.lower()
+            )
+        )
+        if not existing_cp.scalar_one_or_none():
+            new_cp = Counterparty(
+                company_id=company_id,
+                name=product_data.supplier,
+                inn=None,
+                phone=None,
+                director=None,
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow()
+            )
+            db.add(new_cp)
+
     await db.commit()
     await db.refresh(new_product)
     return ProductResponse.model_validate(new_product)
@@ -151,6 +172,7 @@ async def update_product(
         product.barcode = product_data.barcode
     if product_data.supplier is not None:
         product.supplier = product_data.supplier
+        # При желании можно и здесь синхронизировать контрагента, но для простоты опускаем
     await db.commit()
     await db.refresh(product)
     return ProductResponse.model_validate(product)

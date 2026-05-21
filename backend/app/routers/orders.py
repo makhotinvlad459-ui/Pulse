@@ -433,16 +433,30 @@ async def delete_order(
 ):
     if not await _check_company_access(company_id, current_user, db):
         raise HTTPException(403, "Access denied")
-    order = await db.get(Order, order_id)
-    if not order or order.company_id != company_id:
+    
+    # Загружаем заказ с его элементами (eager)
+    result = await db.execute(
+        select(Order).where(Order.id == order_id, Order.company_id == company_id)
+        .options(selectinload(Order.items))
+    )
+    order = result.scalar_one_or_none()
+    if not order:
         raise HTTPException(404, "Order not found")
+    
     if not await _has_permission(company_id, current_user, db, "edit_orders"):
         raise HTTPException(403, "No permission")
-    # Удаляем заказ (и все связанные материалы, оплаты, вложения каскадно)
+    
+    # Возвращаем товары на склад (если они были списаны)
+    for item in order.items:
+        if item.use_from_stock:
+            product = await db.get(Product, item.product_id)
+            if product:
+                product.current_quantity += item.quantity
+                db.add(product)
+    
     await db.delete(order)
     await db.commit()
     return {"detail": "Order deleted"}
-
 # ---------- POST /{order_id}/status ----------
 @router.post("/{order_id}/status")
 async def update_order_status(

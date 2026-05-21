@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:reorderable_grid/reorderable_grid.dart';
 import '../../services/api_client.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/locale_provider.dart';
@@ -191,7 +190,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                   ),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<int>(
-                    value: categoryId,
+                    initialValue: categoryId,
                     items: [
                       DropdownMenuItem(value: null, child: Text(t.withoutCategory)),
                       ..._categories.map((c) {
@@ -297,7 +296,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                   ),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<int>(
-                    value: categoryId,
+                    initialValue: categoryId,
                     items: [
                       DropdownMenuItem(value: null, child: Text(t.withoutCategory)),
                       ..._categories.map((c) {

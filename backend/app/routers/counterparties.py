@@ -112,3 +112,20 @@ async def delete_counterparty(
     await db.delete(cp)
     await db.commit()
     return {"detail": "Deleted"}
+
+@router.get("/search")
+async def search_counterparties(
+    company_id: int,
+    q: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if not await _check_company_access(company_id, current_user, db):
+        raise HTTPException(403, "Access denied")
+    stmt = select(Counterparty.name).where(
+        Counterparty.company_id == company_id,
+        Counterparty.name.ilike(f"%{q}%")
+    ).limit(10)
+    result = await db.execute(stmt)
+    names = [row[0] for row in result.all()]
+    return names

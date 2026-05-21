@@ -279,7 +279,7 @@ class _OperationsExportWidgetState extends ConsumerState<OperationsExportWidget>
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: DataTable(
-              headingRowColor: MaterialStateProperty.all(colorScheme.primary),
+              headingRowColor: WidgetStateProperty.all(colorScheme.primary),
               headingTextStyle: TextStyle(color: colorScheme.onPrimary, fontWeight: FontWeight.bold),
               columns: [
                 DataColumn(label: Text(t.dateLabel)),

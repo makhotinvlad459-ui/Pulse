@@ -192,7 +192,7 @@ class _AddMaterialDialogState extends ConsumerState<AddMaterialDialog> {
             ),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
-              value: unitDisplay,
+              initialValue: unitDisplay,
               decoration: InputDecoration(labelText: t.unitRequired, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
               dropdownColor: colorScheme.surface,
               style: TextStyle(color: colorScheme.onSurface),

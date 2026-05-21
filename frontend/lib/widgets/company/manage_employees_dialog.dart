@@ -321,7 +321,7 @@ class _ManageEmployeesDialogState extends ConsumerState<ManageEmployeesDialog> {
                                   onPressed: () async {
                                     final api = ApiClient();
                                     final res = await api.getCompanyPermissions(widget.companyId);
-                                    final membersList = res as List;
+                                    final membersList = res;
                                     final thisMember = membersList.firstWhere(
                                       (member) => member['member_id'] == m['id'],
                                       orElse: () => null,

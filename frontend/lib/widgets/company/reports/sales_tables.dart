@@ -107,12 +107,12 @@ class _SalesTablesState extends ConsumerState<SalesTables> {
         const SizedBox(height: 8),
         SegmentedButton<int>(
           style: ButtonStyle(
-            foregroundColor: MaterialStateProperty.resolveWith((states) {
-              if (states.contains(MaterialState.selected)) return colorScheme.onPrimary;
+            foregroundColor: WidgetStateProperty.resolveWith((states) {
+              if (states.contains(WidgetState.selected)) return colorScheme.onPrimary;
               return colorScheme.onSurface;
             }),
-            backgroundColor: MaterialStateProperty.resolveWith((states) {
-              if (states.contains(MaterialState.selected)) return colorScheme.primary;
+            backgroundColor: WidgetStateProperty.resolveWith((states) {
+              if (states.contains(WidgetState.selected)) return colorScheme.primary;
               return colorScheme.surfaceContainerHighest;
             }),
           ),
@@ -145,9 +145,9 @@ class _SalesTablesState extends ConsumerState<SalesTables> {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: DataTable(
-        headingRowColor: MaterialStateProperty.all(colorScheme.primary),
+        headingRowColor: WidgetStateProperty.all(colorScheme.primary),
         headingTextStyle: TextStyle(color: colorScheme.onPrimary, fontWeight: FontWeight.bold),
-        dataRowColor: MaterialStateProperty.all(colorScheme.surface),
+        dataRowColor: WidgetStateProperty.all(colorScheme.surface),
         columns: [
           DataColumn(label: Text(t.productNameLabel)),
           DataColumn(label: Text(t.quantityLabel)),

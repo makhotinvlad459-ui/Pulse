@@ -13,7 +13,6 @@ import '../screens/create_company_screen.dart';
 import '../screens/company_screen.dart';
 import '../services/api_client.dart';
 import '../providers/theme_provider.dart';
-import '../models/user.dart';
 import 'package:frontend/l10n/app_localizations.dart';
 import '../screens/subscription_screen.dart';
 

@@ -185,7 +185,7 @@ class _CounterpartiesTabState extends ConsumerState<CounterpartiesTab> {
               }
               try {
                 if (isEdit) {
-                  await api.put('/counterparties/${existing!['id']}', queryParameters: {'company_id': widget.companyId}, data: {
+                  await api.put('/counterparties/${existing['id']}', queryParameters: {'company_id': widget.companyId}, data: {
                     'name': nameController.text,
                     'inn': innController.text,
                     'phone': phoneController.text,

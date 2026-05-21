@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../services/api_client.dart';
@@ -28,7 +27,10 @@ class _StockTabState extends ConsumerState<StockTab> {
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
 
-  // Маппинг ключа единицы измерения в локализованную строку
+  // Для автодополнения
+  List<String> _existingCounterparties = [];
+  bool _loadingCounterparties = false;
+
   String _unitKeyToDisplay(String key, AppLocalizations t) {
     switch (key) {
       case 'шт': return t.unitPcs;
@@ -40,11 +42,10 @@ class _StockTabState extends ConsumerState<StockTab> {
       case 'см': return t.unitCm;
       case 'дюймы': return t.unitInch;
       case 'упаковка': return t.unitPack;
-      default: return key; // если ключ не найден, показываем как есть
+      default: return key;
     }
   }
 
-  // Обратный маппинг: локализованная строка -> ключ
   String _displayToUnitKey(String display, AppLocalizations t) {
     if (display == t.unitPcs) return 'шт';
     if (display == t.unitKg) return 'кг';
@@ -113,6 +114,22 @@ class _StockTabState extends ConsumerState<StockTab> {
       _activeType = available.first;
     }
     _loadProducts();
+    _loadCounterparties();
+  }
+
+  Future<void> _loadCounterparties() async {
+    setState(() => _loadingCounterparties = true);
+    final api = ApiClient();
+    try {
+      final res = await api.get('/counterparties/', queryParameters: {'company_id': widget.companyId});
+      setState(() {
+        _existingCounterparties = List<String>.from(res.data.map((cp) => cp['name']));
+        _loadingCounterparties = false;
+      });
+    } catch (e) {
+      setState(() => _loadingCounterparties = false);
+      print('Error loading counterparties: $e');
+    }
   }
 
   Future<void> _loadProducts() async {
@@ -185,7 +202,6 @@ class _StockTabState extends ConsumerState<StockTab> {
 
     final t = AppLocalizations.of(context)!;
     final nameController = TextEditingController(text: existing?['name'] ?? '');
-    // Для существующего товара: unit - ключ, преобразуем в отображаемую строку
     final existingUnitKey = existing?['unit'] as String?;
     String? selectedUnitDisplay;
     if (isEdit && existingUnitKey != null) {
@@ -198,10 +214,17 @@ class _StockTabState extends ConsumerState<StockTab> {
 
     final colorScheme = Theme.of(context).colorScheme;
 
-    // Список отображаемых единиц (локализованные строки)
-    final unitsDisplay = _activeType == 'product'
-        ? [t.unitPcs, t.unitKg, t.unitGram, t.unitLiter, t.unitMl, t.unitPack]
-        : [t.unitPcs, t.unitKg, t.unitGram, t.unitLiter, t.unitMl, t.unitMeter, t.unitCm, t.unitInch, t.unitPack];
+    final unitsDisplay = [
+  t.unitPcs,
+  t.unitKg,
+  t.unitGram,
+  t.unitLiter,
+  t.unitMl,
+  t.unitMeter,
+  t.unitCm,
+  t.unitInch,
+  t.unitPack,
+];
 
     await showDialog(
       context: context,
@@ -219,7 +242,7 @@ class _StockTabState extends ConsumerState<StockTab> {
               ),
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
-                value: selectedUnitDisplay,
+                initialValue: selectedUnitDisplay,
                 decoration: InputDecoration(labelText: t.unitRequired, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
                 dropdownColor: colorScheme.surface,
                 style: TextStyle(color: colorScheme.onSurface),
@@ -245,10 +268,70 @@ class _StockTabState extends ConsumerState<StockTab> {
                 style: TextStyle(color: colorScheme.onSurface),
               ),
               const SizedBox(height: 8),
-              TextField(
-                controller: supplierController,
-                decoration: InputDecoration(labelText: t.supplierOptional, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
-                style: TextStyle(color: colorScheme.onSurface),
+              Autocomplete<String>(
+                optionsBuilder: (TextEditingValue textEditingValue) {
+                  if (textEditingValue.text.isEmpty) {
+                    return const Iterable<String>.empty();
+                  }
+                  final lower = textEditingValue.text.toLowerCase();
+                  return _existingCounterparties.where((c) => c.toLowerCase().contains(lower));
+                },
+                onSelected: (String selection) {
+                  supplierController.text = selection;
+                },
+                fieldViewBuilder: (context, textController, focusNode, onFieldSubmitted) {
+                  supplierController.addListener(() {
+                    if (textController.text != supplierController.text) {
+                      textController.text = supplierController.text;
+                    }
+                  });
+                  textController.addListener(() {
+                    if (supplierController.text != textController.text) {
+                      supplierController.text = textController.text;
+                    }
+                  });
+                  return TextFormField(
+                    controller: textController,
+                    focusNode: focusNode,
+                    decoration: InputDecoration(
+                      labelText: t.supplierOptional,
+                      labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+                      border: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
+                      enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
+                      focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.primary)),
+                      suffixIcon: _loadingCounterparties
+                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                          : IconButton(
+                              icon: const Icon(Icons.refresh),
+                              onPressed: _loadCounterparties,
+                              tooltip: t.refreshList,
+                            ),
+                    ),
+                    style: TextStyle(color: colorScheme.onSurface),
+                  );
+                },
+                optionsViewBuilder: (context, onSelected, options) {
+                  return Align(
+                    alignment: Alignment.topLeft,
+                    child: Material(
+                      elevation: 4,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 200),
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: options.length,
+                          itemBuilder: (context, index) {
+                            final option = options.elementAt(index);
+                            return ListTile(
+                              title: Text(option),
+                              onTap: () => onSelected(option),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  );
+                },
               ),
             ],
           ),
@@ -268,7 +351,7 @@ class _StockTabState extends ConsumerState<StockTab> {
               final api = ApiClient();
               try {
                 if (isEdit) {
-                  await api.patch('/products/${existing!['id']}', queryParameters: {'company_id': widget.companyId}, data: {
+                  await api.patch('/products/${existing['id']}', queryParameters: {'company_id': widget.companyId}, data: {
                     'name': nameController.text,
                     'unit': unitKey,
                     'label': labelController.text,
@@ -327,12 +410,12 @@ class _StockTabState extends ConsumerState<StockTab> {
               if (showTypeSelector)
                 SegmentedButton<String>(
                   style: ButtonStyle(
-                    foregroundColor: MaterialStateProperty.resolveWith((states) {
-                      if (states.contains(MaterialState.selected)) return colorScheme.onPrimary;
+                    foregroundColor: WidgetStateProperty.resolveWith((states) {
+                      if (states.contains(WidgetState.selected)) return colorScheme.onPrimary;
                       return colorScheme.onSurface;
                     }),
-                    backgroundColor: MaterialStateProperty.resolveWith((states) {
-                      if (states.contains(MaterialState.selected)) return colorScheme.primary;
+                    backgroundColor: WidgetStateProperty.resolveWith((states) {
+                      if (states.contains(WidgetState.selected)) return colorScheme.primary;
                       return colorScheme.surfaceContainerHighest;
                     }),
                   ),

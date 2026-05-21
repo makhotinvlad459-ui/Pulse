@@ -1,12 +1,8 @@
-import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:file_picker/file_picker.dart';
 import '../../../services/api_client.dart';
 import '../../../services/image_compression.dart';
 import '../../../providers/locale_provider.dart';
@@ -668,7 +664,7 @@ class _OrderDetailsDialogState extends ConsumerState<OrderDetailsDialog> {
                   ),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<int>(
-                    value: selectedAccountId,
+                    initialValue: selectedAccountId,
                     items: accounts.map((acc) => DropdownMenuItem<int>(
                       value: acc['id'],
                       child: Text('${acc['name']} (${acc['balance']}$currency)'),

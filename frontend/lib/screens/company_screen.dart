@@ -478,7 +478,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
 
     if (!_permissionsLoaded) {
       return Scaffold(
-        backgroundColor: colorScheme.background,
+        backgroundColor: colorScheme.surface,
         body: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -507,11 +507,11 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
     }
 
     return Scaffold(
-      backgroundColor: colorScheme.background,
+      backgroundColor: colorScheme.surface,
       body: Stack(
         children: [
           Container(
-            color: colorScheme.background,
+            color: colorScheme.surface,
             child: CustomPaint(
               painter: _LightGridPainter(color: gridColor),
               size: Size.infinite,

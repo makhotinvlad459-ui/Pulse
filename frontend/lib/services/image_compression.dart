@@ -1,9 +1,6 @@
-import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:image_picker/image_picker.dart';
 
 class ImageCompression {
   // Максимальный размер файла после сжатия (в байтах) – 1 МБ
