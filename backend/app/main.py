@@ -3,9 +3,14 @@ from app.auth import router as auth_router
 from app.routers import subscription, counterparties, companies, accounts, categories, transactions, statistics, admin, showcase, chat, tasks, websocket, notifications, products, permissions, orders
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware  # <-- ДОБАВИЛИ ИМПОРТ
 import os
 
 app = FastAPI(title="Pulse API", version="0.2.0")
+
+# 1. СРАЗУ ПОДПИСЫВАЕМ СЕРВЕР НА ДОВЕРИЕ К ПРОКСИ (NGINX)
+# Эта мидлварь должна быть САМОЙ ПЕРВОЙ в списке
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
 
 routers = [
     auth_router, companies.router, accounts.router, categories.router,
@@ -35,7 +40,7 @@ for router in routers:
                 description=route.description
             )
             
-    # Магия тут: добавляем глобальный префикс /api ко всем роутерам при их подключении!
+    # Добавляем глобальный префикс /api ко всем роутерам
     app.include_router(router, prefix="/api")
 
 
@@ -44,7 +49,7 @@ UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
-# CORS
+# CORS (Остается на своем месте, но идет ПОСЛЕ ProxyHeadersMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
