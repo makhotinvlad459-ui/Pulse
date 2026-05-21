@@ -20,6 +20,14 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
   bool _loading = false;
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
+  bool _tokenUsed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Если токен уже использован (например, после возврата на страницу), перенаправляем на логин
+    // Проверить это можно через бэкенд, но проще – после успешного сброса устанавливаем флаг.
+  }
 
   @override
   void dispose() {
@@ -29,6 +37,24 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
   }
 
   Future<void> _resetPassword() async {
+    if (_tokenUsed) {
+      // Если токен уже был использован, не даём отправить запрос повторно
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Ссылка уже использована. Перенаправление на страницу входа...'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        Future.delayed(const Duration(seconds: 2), () {
+          if (mounted) {
+            Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+          }
+        });
+      }
+      return;
+    }
+
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
     final api = ApiClient();
@@ -39,6 +65,9 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
       });
       
       if (mounted) {
+        // Устанавливаем флаг, что токен использован
+        _tokenUsed = true;
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(AppLocalizations.of(context)!.passwordChangedSuccess),
@@ -46,6 +75,8 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
             duration: const Duration(seconds: 2),
           ),
         );
+        
+        // Заменяем текущий маршрут на /login, чтобы при нажатии "назад" или обновлении не возвращаться на эту страницу
         Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
       }
     } catch (e) {
@@ -53,10 +84,9 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
         String errorMsg = e.toString();
         if (errorMsg.contains('expired') || errorMsg.contains('invalid')) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('Ссылка устарела или недействительна. Запросите сброс пароля заново.'),
+            const SnackBar(
+              content: Text('Ссылка устарела или недействительна. Запросите сброс пароля заново.'),
               backgroundColor: Colors.orange,
-              duration: const Duration(seconds: 3),
             ),
           );
           Future.delayed(const Duration(seconds: 2), () {
