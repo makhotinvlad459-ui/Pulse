@@ -39,7 +39,6 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
       });
       
       if (mounted) {
-        // Показываем SnackBar об успехе
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(AppLocalizations.of(context)!.passwordChangedSuccess),
@@ -47,18 +46,17 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
             duration: const Duration(seconds: 2),
           ),
         );
-        // НЕМЕДЛЕННО перенаправляем на логин
         Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
       }
     } catch (e) {
       if (mounted) {
         String errorMsg = e.toString();
         if (errorMsg.contains('expired') || errorMsg.contains('invalid')) {
-          // Если токен недействителен, перенаправляем на forgot-password
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(AppLocalizations.of(context)!.linkExpired),
+              content: const Text('Ссылка устарела или недействительна. Запросите сброс пароля заново.'),
               backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 3),
             ),
           );
           Future.delayed(const Duration(seconds: 2), () {
