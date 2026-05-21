@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
     SMTP_FROM: str = ""
+    FRONTEND_URL: str = "http://localhost:4200"
     # Другие настройки
     BACKEND_PORT: int = 8000
     DB_PORT: int = 5432
