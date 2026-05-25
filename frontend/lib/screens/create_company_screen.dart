@@ -130,10 +130,12 @@ class _CreateCompanyScreenState extends ConsumerState<CreateCompanyScreen> {
             itemBuilder: (context, index) {
               final emp = credentials[index];
               final role = emp['role'] ?? 'employee';
-              final roleText = role == 'manager' ? t.managerRole : t.employeeRole;
+              final roleText =
+                  role == 'manager' ? t.managerRole : t.employeeRole;
               return ListTile(
                 title: Text('${emp['full_name']} ($roleText)'),
-                subtitle: Text('${t.phoneLabel}: ${emp['phone']}\n${t.passwordLabel}: ${emp['password']}'),
+                subtitle: Text(
+                    '${t.phoneLabel}: ${emp['phone']}\n${t.passwordLabel}: ${emp['password']}'),
                 trailing: IconButton(
                   icon: const Icon(Icons.copy),
                   onPressed: () {

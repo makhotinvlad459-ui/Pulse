@@ -10,7 +10,8 @@ class ResetPasswordScreen extends ConsumerStatefulWidget {
   const ResetPasswordScreen({super.key, required this.token});
 
   @override
-  ConsumerState<ResetPasswordScreen> createState() => _ResetPasswordScreenState();
+  ConsumerState<ResetPasswordScreen> createState() =>
+      _ResetPasswordScreenState();
 }
 
 class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
@@ -42,13 +43,15 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Ссылка уже использована. Перенаправление на страницу входа...'),
+            content: Text(
+                'Ссылка уже использована. Перенаправление на страницу входа...'),
             backgroundColor: Colors.orange,
           ),
         );
         Future.delayed(const Duration(seconds: 2), () {
           if (mounted) {
-            Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+            Navigator.pushNamedAndRemoveUntil(
+                context, '/login', (route) => false);
           }
         });
       }
@@ -63,11 +66,11 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
         'token': widget.token,
         'new_password': _passwordController.text.trim(),
       });
-      
+
       if (mounted) {
         // Устанавливаем флаг, что токен использован
         _tokenUsed = true;
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(AppLocalizations.of(context)!.passwordChangedSuccess),
@@ -75,7 +78,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
             duration: const Duration(seconds: 2),
           ),
         );
-        
+
         // Заменяем текущий маршрут на /login, чтобы при нажатии "назад" или обновлении не возвращаться на эту страницу
         Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
       }
@@ -85,7 +88,8 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
         if (errorMsg.contains('expired') || errorMsg.contains('invalid')) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Ссылка устарела или недействительна. Запросите сброс пароля заново.'),
+              content: Text(
+                  'Ссылка устарела или недействительна. Запросите сброс пароля заново.'),
               backgroundColor: Colors.orange,
             ),
           );
@@ -97,7 +101,8 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('${AppLocalizations.of(context)!.error}: ${e.toString()}'),
+              content: Text(
+                  '${AppLocalizations.of(context)!.error}: ${e.toString()}'),
               backgroundColor: Colors.red,
             ),
           );
@@ -152,8 +157,11 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
                   labelText: AppLocalizations.of(context)!.newPasswordLabel,
                   border: const OutlineInputBorder(),
                   suffixIcon: IconButton(
-                    icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
-                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                    icon: Icon(_obscurePassword
+                        ? Icons.visibility_off
+                        : Icons.visibility),
+                    onPressed: () =>
+                        setState(() => _obscurePassword = !_obscurePassword),
                   ),
                 ),
                 validator: (value) {
@@ -174,8 +182,11 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
                   labelText: AppLocalizations.of(context)!.confirmPasswordLabel,
                   border: const OutlineInputBorder(),
                   suffixIcon: IconButton(
-                    icon: Icon(_obscureConfirm ? Icons.visibility_off : Icons.visibility),
-                    onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
+                    icon: Icon(_obscureConfirm
+                        ? Icons.visibility_off
+                        : Icons.visibility),
+                    onPressed: () =>
+                        setState(() => _obscureConfirm = !_obscureConfirm),
                   ),
                 ),
                 validator: (value) {
@@ -191,7 +202,8 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
               else
                 ElevatedButton(
                   onPressed: _resetPassword,
-                  child: Text(AppLocalizations.of(context)!.resetPasswordButton),
+                  child:
+                      Text(AppLocalizations.of(context)!.resetPasswordButton),
                 ),
             ],
           ),

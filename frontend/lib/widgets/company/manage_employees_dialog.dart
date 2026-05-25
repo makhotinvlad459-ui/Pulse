@@ -183,6 +183,88 @@ class _ManageEmployeesDialogState extends ConsumerState<ManageEmployeesDialog> {
     }
   }
 
+  Future<void> _editMember(Map<String, dynamic> member) async {
+    final t = AppLocalizations.of(context)!;
+    final nameController = TextEditingController(text: member['full_name']);
+    final phoneController = TextEditingController(text: member['phone']);
+    String currentRole = member['role_in_company'];
+    String selectedRole = currentRole;
+    final formKey = GlobalKey<FormState>();
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('${t.editEmployee} ${member['full_name']}'),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: nameController,
+                decoration: InputDecoration(labelText: t.fullName),
+                validator: (v) => v == null || v.isEmpty ? t.enterFullName : null,
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: phoneController,
+                decoration: InputDecoration(labelText: t.phoneLabel),
+                validator: (v) => v == null || v.isEmpty ? t.enterPhone : null,
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                value: selectedRole,
+                items: [
+                  DropdownMenuItem(value: 'employee', child: Text(t.employeeRole)),
+                  DropdownMenuItem(value: 'manager', child: Text(t.managerRole)),
+                ],
+                onChanged: (v) => selectedRole = v!,
+                decoration: InputDecoration(labelText: t.roleLabel),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: Text(t.cancel)),
+          ElevatedButton(
+            onPressed: () async {
+              if (!formKey.currentState!.validate()) return;
+              final api = ApiClient();
+              try {
+                await api.put('/companies/${widget.companyId}/members/${member['user_id']}', data: {
+                  'full_name': nameController.text.trim(),
+                  'phone': phoneController.text.trim(),
+                  'role_in_company': selectedRole,
+                });
+                
+                // Обновляем локальный список мгновенно
+                setState(() {
+                  final index = _members.indexWhere((m) => m['user_id'] == member['user_id']);
+                  if (index != -1) {
+                    _members[index]['full_name'] = nameController.text.trim();
+                    _members[index]['phone'] = phoneController.text.trim();
+                    _members[index]['role_in_company'] = selectedRole;
+                  }
+                });
+                
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(t.employeeUpdated)),
+                );
+                Navigator.pop(context);
+                widget.onSuccess();
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('${t.error}: $e')),
+                );
+              }
+            },
+            child: Text(t.save),
+          ),
+        ],
+      ),
+    );
+  }
+
   bool get _canManageEmployees => _currentUserPermissions.contains('manage_employees');
   bool get _canManagePermissions => _currentUserPermissions.contains('manage_permissions');
 
@@ -193,12 +275,15 @@ class _ManageEmployeesDialogState extends ConsumerState<ManageEmployeesDialog> {
     final colorScheme = Theme.of(context).colorScheme;
     final authState = ref.read(authProvider);
     final isFounder = authState.user?.role == UserRole.founder;
+    final isSmallScreen = MediaQuery.of(context).size.width < 600;
 
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       child: Container(
-        width: 600,
-        constraints: const BoxConstraints(maxHeight: 600),
+        width: isSmallScreen ? double.infinity : 600,
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height - 100,
+        ),
         color: colorScheme.surface,
         child: Column(
           children: [
@@ -217,12 +302,10 @@ class _ManageEmployeesDialogState extends ConsumerState<ManageEmployeesDialog> {
               padding: const EdgeInsets.all(16),
               child: Form(
                 key: _formKey,
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextFormField(
+                child: isSmallScreen
+                    ? Column(
+                        children: [
+                          TextFormField(
                             controller: _fullNameController,
                             style: TextStyle(color: colorScheme.onSurface),
                             decoration: InputDecoration(
@@ -231,20 +314,11 @@ class _ManageEmployeesDialogState extends ConsumerState<ManageEmployeesDialog> {
                               border: OutlineInputBorder(
                                 borderSide: BorderSide(color: colorScheme.outline),
                               ),
-                              enabledBorder: OutlineInputBorder(
-                                borderSide: BorderSide(color: colorScheme.outline),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderSide: BorderSide(color: colorScheme.primary),
-                              ),
                             ),
-                            validator: (v) =>
-                                v == null || v.isEmpty ? t.enterFullName : null,
+                            validator: (v) => v == null || v.isEmpty ? t.enterFullName : null,
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: TextFormField(
+                          const SizedBox(height: 8),
+                          TextFormField(
                             controller: _phoneController,
                             style: TextStyle(color: colorScheme.onSurface),
                             decoration: InputDecoration(
@@ -253,50 +327,106 @@ class _ManageEmployeesDialogState extends ConsumerState<ManageEmployeesDialog> {
                               border: OutlineInputBorder(
                                 borderSide: BorderSide(color: colorScheme.outline),
                               ),
-                              enabledBorder: OutlineInputBorder(
-                                borderSide: BorderSide(color: colorScheme.outline),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderSide: BorderSide(color: colorScheme.primary),
-                              ),
                             ),
-                            validator: (v) => v == null || v.isEmpty
-                                ? t.enterPhone
-                                : null,
+                            validator: (v) => v == null || v.isEmpty ? t.enterPhone : null,
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        DropdownButton<String>(
-                          value: _selectedRole,
-                          items: [
-                            DropdownMenuItem(
-                                value: 'employee', child: Text(t.employeeRole)),
-                            DropdownMenuItem(
-                                value: 'manager', child: Text(t.managerRole)),
-                          ],
-                          onChanged: (v) => setState(() => _selectedRole = v!),
-                          dropdownColor: colorScheme.surface,
-                          style: TextStyle(color: colorScheme.onSurface),
-                        ),
-                        const SizedBox(width: 8),
-                        ElevatedButton(
-                          onPressed: _adding ? null : _addMember,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: colorScheme.primary,
-                            foregroundColor: colorScheme.onPrimary,
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: DropdownButtonFormField<String>(
+                                  value: _selectedRole,
+                                  items: [
+                                    DropdownMenuItem(value: 'employee', child: Text(t.employeeRole)),
+                                    DropdownMenuItem(value: 'manager', child: Text(t.managerRole)),
+                                  ],
+                                  onChanged: (v) => setState(() => _selectedRole = v!),
+                                  decoration: InputDecoration(
+                                    labelText: t.roleLabel,
+                                    border: OutlineInputBorder(
+                                      borderSide: BorderSide(color: colorScheme.outline),
+                                    ),
+                                  ),
+                                  dropdownColor: colorScheme.surface,
+                                  style: TextStyle(color: colorScheme.onSurface),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              ElevatedButton(
+                                onPressed: _adding ? null : _addMember,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: colorScheme.primary,
+                                  foregroundColor: colorScheme.onPrimary,
+                                ),
+                                child: _adding
+                                    ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(strokeWidth: 2))
+                                    : Text(t.add),
+                              ),
+                            ],
                           ),
-                          child: _adding
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child:
-                                      CircularProgressIndicator(strokeWidth: 2))
-                              : Text(t.add),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+                        ],
+                      )
+                    : Row(
+                        children: [
+                          Expanded(
+                            child: TextFormField(
+                              controller: _fullNameController,
+                              style: TextStyle(color: colorScheme.onSurface),
+                              decoration: InputDecoration(
+                                labelText: t.fullName,
+                                labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+                                border: OutlineInputBorder(
+                                  borderSide: BorderSide(color: colorScheme.outline),
+                                ),
+                              ),
+                              validator: (v) => v == null || v.isEmpty ? t.enterFullName : null,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextFormField(
+                              controller: _phoneController,
+                              style: TextStyle(color: colorScheme.onSurface),
+                              decoration: InputDecoration(
+                                labelText: t.phoneLabel,
+                                labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+                                border: OutlineInputBorder(
+                                  borderSide: BorderSide(color: colorScheme.outline),
+                                ),
+                              ),
+                              validator: (v) => v == null || v.isEmpty ? t.enterPhone : null,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          DropdownButton<String>(
+                            value: _selectedRole,
+                            items: [
+                              DropdownMenuItem(value: 'employee', child: Text(t.employeeRole)),
+                              DropdownMenuItem(value: 'manager', child: Text(t.managerRole)),
+                            ],
+                            onChanged: (v) => setState(() => _selectedRole = v!),
+                            dropdownColor: colorScheme.surface,
+                            style: TextStyle(color: colorScheme.onSurface),
+                          ),
+                          const SizedBox(width: 8),
+                          ElevatedButton(
+                            onPressed: _adding ? null : _addMember,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: colorScheme.primary,
+                              foregroundColor: colorScheme.onPrimary,
+                            ),
+                            child: _adding
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(strokeWidth: 2))
+                                : Text(t.add),
+                          ),
+                        ],
+                      ),
               ),
             ),
             const Divider(),
@@ -309,59 +439,68 @@ class _ManageEmployeesDialogState extends ConsumerState<ManageEmployeesDialog> {
                         final m = _members[index];
                         final isManager = m['role_in_company'] == 'manager';
                         final roleText = isManager ? t.managerRole : t.employeeRole;
-                        return ListTile(
-                          title: Text(m['full_name'], style: TextStyle(color: colorScheme.onSurface)),
-                          subtitle: Text('${m['phone']} • $roleText', style: TextStyle(color: colorScheme.onSurfaceVariant)),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (_canManagePermissions || isFounder)
-                                IconButton(
-                                  icon: Icon(Icons.security, color: Colors.blue),
-                                  onPressed: () async {
-                                    final api = ApiClient();
-                                    final res = await api.getCompanyPermissions(widget.companyId);
-                                    final membersList = res;
-                                    final thisMember = membersList.firstWhere(
-                                      (member) => member['member_id'] == m['id'],
-                                      orElse: () => null,
-                                    );
-                                    if (thisMember == null) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(content: Text(t.failedToLoadPermissions)));
-                                      return;
-                                    }
-                                    final currentPermissions = List<String>.from(thisMember['permissions'] ?? []);
-                                    await showDialog(
-                                      context: context,
-                                      builder: (_) => MemberPermissionsDialog(
-                                        companyId: widget.companyId,
-                                        memberId: m['id'],
-                                        memberName: m['full_name'],
-                                        currentPermissions: currentPermissions,
-                                        onSuccess: () {
-                                          widget.onSuccess();
-                                        },
-                                        isFounder: false,
-                                        currentUserPermissions: _currentUserPermissions,
-                                      ),
-                                    );
-                                  },
-                                  tooltip: t.managePermissionsTooltip,
-                                ),
-                              if (_canManageEmployees || isFounder)
-                                IconButton(
-                                  icon: Icon(Icons.refresh, color: Colors.blueGrey),
-                                  onPressed: () => _resetPassword(m['user_id'], m['full_name']),
-                                  tooltip: t.resetPasswordTooltip,
-                                ),
-                              if (_canManageEmployees || isFounder)
-                                IconButton(
-                                  icon: const Icon(Icons.delete, color: Colors.red),
-                                  onPressed: () => _removeMember(m['user_id'], m['full_name']),
-                                  tooltip: t.deleteEmployeeTooltip,
-                                ),
-                            ],
+                        return Card(
+                          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          child: ListTile(
+                            title: Text(m['full_name'], style: TextStyle(color: colorScheme.onSurface)),
+                            subtitle: Text('${m['phone']} • $roleText', style: TextStyle(color: colorScheme.onSurfaceVariant)),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (_canManageEmployees || isFounder)
+                                  IconButton(
+                                    icon: Icon(Icons.edit, color: Colors.blue),
+                                    onPressed: () => _editMember(m),
+                                    tooltip: t.editEmployee,
+                                  ),
+                                if (_canManagePermissions || isFounder)
+                                  IconButton(
+                                    icon: Icon(Icons.security, color: Colors.blue),
+                                    onPressed: () async {
+                                      final api = ApiClient();
+                                      final res = await api.getCompanyPermissions(widget.companyId);
+                                      final membersList = res;
+                                      final thisMember = membersList.firstWhere(
+                                        (member) => member['member_id'] == m['id'],
+                                        orElse: () => null,
+                                      );
+                                      if (thisMember == null) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(content: Text(t.failedToLoadPermissions)));
+                                        return;
+                                      }
+                                      final currentPermissions = List<String>.from(thisMember['permissions'] ?? []);
+                                      await showDialog(
+                                        context: context,
+                                        builder: (_) => MemberPermissionsDialog(
+                                          companyId: widget.companyId,
+                                          memberId: m['id'],
+                                          memberName: m['full_name'],
+                                          currentPermissions: currentPermissions,
+                                          onSuccess: () {
+                                            widget.onSuccess();
+                                          },
+                                          isFounder: false,
+                                          currentUserPermissions: _currentUserPermissions,
+                                        ),
+                                      );
+                                    },
+                                    tooltip: t.managePermissionsTooltip,
+                                  ),
+                                if (_canManageEmployees || isFounder)
+                                  IconButton(
+                                    icon: Icon(Icons.refresh, color: Colors.blueGrey),
+                                    onPressed: () => _resetPassword(m['user_id'], m['full_name']),
+                                    tooltip: t.resetPasswordTooltip,
+                                  ),
+                                if (_canManageEmployees || isFounder)
+                                  IconButton(
+                                    icon: const Icon(Icons.delete, color: Colors.red),
+                                    onPressed: () => _removeMember(m['user_id'], m['full_name']),
+                                    tooltip: t.deleteEmployeeTooltip,
+                                  ),
+                              ],
+                            ),
                           ),
                         );
                       },

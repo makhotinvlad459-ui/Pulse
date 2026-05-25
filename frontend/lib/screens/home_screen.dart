@@ -15,6 +15,7 @@ import '../services/api_client.dart';
 import '../providers/theme_provider.dart';
 import 'package:frontend/l10n/app_localizations.dart';
 import '../screens/subscription_screen.dart';
+import '../widgets/company/change_password_dialog.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -97,7 +98,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -107,19 +109,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       period: const Duration(seconds: 2),
                       child: Text(
                         t.appTitle,
-                        style: GoogleFonts.caveat(fontSize: 32, color: colorScheme.onSurface),
+                        style: GoogleFonts.caveat(
+                            fontSize: 32, color: colorScheme.onSurface),
                       ),
                     ),
                     Builder(
                       builder: (context) => Column(
                         children: [
                           IconButton(
-                            icon: Icon(Icons.settings, color: colorScheme.onSurface),
+                            icon: Icon(Icons.settings,
+                                color: colorScheme.onSurface),
                             onPressed: () => Scaffold.of(context).openDrawer(),
                           ),
                           Text(
                             t.settings,
-                            style: TextStyle(fontSize: 10, color: colorScheme.onSurface),
+                            style: TextStyle(
+                                fontSize: 10, color: colorScheme.onSurface),
                           ),
                         ],
                       ),
@@ -164,34 +169,43 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           if (overview.hasAnyAccountsPermission)
                             Row(
                               children: [
-                                _StatCard(title: t.totalAll, amount: overview.totalAll),
+                                _StatCard(
+                                    title: t.totalAll,
+                                    amount: overview.totalAll),
                                 const SizedBox(width: 8),
-                                _StatCard(title: t.totalCash, amount: overview.totalCash),
+                                _StatCard(
+                                    title: t.totalCash,
+                                    amount: overview.totalCash),
                                 const SizedBox(width: 8),
-                                _StatCard(title: t.totalBank, amount: overview.totalBank),
+                                _StatCard(
+                                    title: t.totalBank,
+                                    amount: overview.totalBank),
                               ],
                             ),
                           const SizedBox(height: 16),
                           ...companies.map((company) {
-                          final companyData = counts[company.id.toString()];
-                          int unread = 0;
-                          int pending = 0;
-                          if (companyData is Map) {
-                          unread = companyData['unread_messages'] as int? ?? 0;
-                          pending = companyData['pending_tasks'] as int? ?? 0;
-                                }
-                          return _CompanyCard(
-                            company: company,
+                            final companyData = counts[company.id.toString()];
+                            int unread = 0;
+                            int pending = 0;
+                            if (companyData is Map) {
+                              unread =
+                                  companyData['unread_messages'] as int? ?? 0;
+                              pending =
+                                  companyData['pending_tasks'] as int? ?? 0;
+                            }
+                            return _CompanyCard(
+                              company: company,
                               ref: ref,
                               unreadMessages: unread,
                               pendingTasks: pending,
-                               showBalance: overview.hasAnyAccountsPermission,
-                                );
-                                })
+                              showBalance: overview.hasAnyAccountsPermission,
+                            );
+                          })
                         ],
                       );
                     },
-                    loading: () => const Center(child: CircularProgressIndicator()),
+                    loading: () =>
+                        const Center(child: CircularProgressIndicator()),
                     error: (error, stack) {
                       // Диагностика в консоль
                       print('Home error: $error\n$stack');
@@ -317,9 +331,8 @@ class _CompanyCardState extends State<_CompanyCard>
     final isDark = colorScheme.brightness == Brightness.dark;
     final borderBase = isDark ? Colors.grey.shade600 : Colors.grey.shade400;
     final borderLight = isDark ? Colors.grey.shade500 : Colors.grey.shade300;
-    final highlight = isDark
-        ? Colors.white.withOpacity(0.6)
-        : Colors.white.withOpacity(0.8);
+    final highlight =
+        isDark ? Colors.white.withOpacity(0.6) : Colors.white.withOpacity(0.8);
     final t = AppLocalizations.of(context)!;
     final currency = t.currencySymbol;
 
@@ -369,7 +382,8 @@ class _CompanyCardState extends State<_CompanyCard>
                 splashColor: colorScheme.primary.withOpacity(0.2),
                 highlightColor: colorScheme.primary.withOpacity(0.1),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -388,7 +402,8 @@ class _CompanyCardState extends State<_CompanyCard>
                               ),
                             ),
                           ),
-                          if (widget.unreadMessages > 0 || widget.pendingTasks > 0)
+                          if (widget.unreadMessages > 0 ||
+                              widget.pendingTasks > 0)
                             Row(
                               children: [
                                 if (widget.unreadMessages > 0)
@@ -426,9 +441,11 @@ class _CompanyCardState extends State<_CompanyCard>
                       ),
                       const SizedBox(height: 4),
                       Text('${t.manager}: ${widget.company.managerFullName}',
-                          style: TextStyle(color: colorScheme.onSurfaceVariant)),
+                          style:
+                              TextStyle(color: colorScheme.onSurfaceVariant)),
                       Text('${t.phone}: ${widget.company.managerPhone}',
-                          style: TextStyle(color: colorScheme.onSurfaceVariant)),
+                          style:
+                              TextStyle(color: colorScheme.onSurfaceVariant)),
                       const SizedBox(height: 4),
                       if (widget.showBalance)
                         Text(
@@ -501,7 +518,8 @@ class SettingsDrawer extends StatelessWidget {
   const SettingsDrawer({super.key});
 
   void _setLanguage(BuildContext context, Locale locale) {
-    final ref = ProviderScope.containerOf(context).read(localeProvider.notifier);
+    final ref =
+        ProviderScope.containerOf(context).read(localeProvider.notifier);
     ref.setLocale(locale);
   }
 
@@ -545,14 +563,16 @@ class SettingsDrawer extends StatelessWidget {
           ),
           const Divider(),
           ListTile(
-            leading: Icon(Icons.help_outline, color: colorScheme.onSurfaceVariant),
+            leading:
+                Icon(Icons.help_outline, color: colorScheme.onSurfaceVariant),
             title: Text(t.userGuide,
                 style: TextStyle(color: colorScheme.onSurfaceVariant)),
             onTap: () {
               showDialog(
                 context: context,
                 builder: (context) => AlertDialog(
-                  title: Text(t.userGuide, style: TextStyle(color: colorScheme.onSurface)),
+                  title: Text(t.userGuide,
+                      style: TextStyle(color: colorScheme.onSurface)),
                   content: SingleChildScrollView(
                     child: Text(
                       t.userGuideText,
@@ -562,7 +582,9 @@ class SettingsDrawer extends StatelessWidget {
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.pop(context),
-                      child: Text(t.close, style: TextStyle(color: colorScheme.onSurfaceVariant)),
+                      child: Text(t.close,
+                          style:
+                              TextStyle(color: colorScheme.onSurfaceVariant)),
                     ),
                   ],
                 ),
@@ -624,10 +646,22 @@ class SettingsDrawer extends StatelessWidget {
               );
             },
           ),
+          ListTile(
+            leading: const Icon(Icons.lock_outline),
+            title: Text(t.changePassword),
+            onTap: () {
+              showDialog(
+                context: context,
+                builder: (context) => const ChangePasswordDialog(),
+              );
+            },
+          ),
           ExpansionTile(
             title: Text(t.support,
                 style: TextStyle(color: colorScheme.onSurfaceVariant)),
-            children: [ListTile(title: Text('${t.emailSupport}: support@pulse.ru'))],
+            children: [
+              ListTile(title: Text('${t.emailSupport}: support@pulse.ru'))
+            ],
           ),
           const Divider(),
           ListTile(

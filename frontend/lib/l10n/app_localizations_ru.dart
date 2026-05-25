@@ -139,7 +139,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get resetPasswordInstruction => 'Введите новый пароль.';
 
   @override
-  String get newPasswordLabel => 'Новый пароль (мин. 8 символов)';
+  String get newPasswordLabel => 'Новый пароль';
 
   @override
   String get confirmPasswordLabel => 'Подтвердите пароль';
@@ -151,8 +151,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get resetPasswordButton => 'Сбросить пароль';
 
   @override
-  String get passwordChangedSuccess =>
-      'Пароль успешно изменён. Теперь вы можете войти.';
+  String get passwordChangedSuccess => 'Пароль успешно изменён';
 
   @override
   String get settings => 'Настройки';
@@ -617,7 +616,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get managerFullName => 'Управляющий (ФИО)*';
 
   @override
-  String get enterFullName => 'Введите ФИО';
+  String get enterFullName => 'Введите полное имя';
 
   @override
   String get managerPhoneLogin => 'Телефон управляющего (логин)*';
@@ -632,7 +631,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get employeesOptional => 'Сотрудники (необязательно):';
 
   @override
-  String get fullName => 'ФИО';
+  String get fullName => 'Полное имя';
 
   @override
   String get phoneLogin => 'Телефон (логин)';
@@ -1705,4 +1704,28 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get buySubscription => 'Купить подписку';
+
+  @override
+  String get changePassword => 'Сменить пароль';
+
+  @override
+  String get oldPassword => 'Старый пароль';
+
+  @override
+  String get enterOldPassword => 'Введите старый пароль';
+
+  @override
+  String get enterNewPassword => 'Введите новый пароль';
+
+  @override
+  String get oldPasswordIncorrect => 'Неверный старый пароль';
+
+  @override
+  String get editEmployee => 'Редактировать сотрудника';
+
+  @override
+  String get employeeUpdated => 'Сотрудник обновлён';
+
+  @override
+  String get roleLabel => 'Роль';
 }

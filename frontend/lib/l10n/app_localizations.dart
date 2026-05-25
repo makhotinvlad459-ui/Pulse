@@ -353,13 +353,13 @@ abstract class AppLocalizations {
   /// No description provided for @newPasswordLabel.
   ///
   /// In en, this message translates to:
-  /// **'New password (min. 8 characters)'**
+  /// **'New Password'**
   String get newPasswordLabel;
 
   /// No description provided for @confirmPasswordLabel.
   ///
   /// In en, this message translates to:
-  /// **'Confirm password'**
+  /// **'Confirm Password'**
   String get confirmPasswordLabel;
 
   /// No description provided for @enterPassword.
@@ -377,7 +377,7 @@ abstract class AppLocalizations {
   /// No description provided for @passwordChangedSuccess.
   ///
   /// In en, this message translates to:
-  /// **'Password changed successfully. You can now log in.'**
+  /// **'Password changed successfully'**
   String get passwordChangedSuccess;
 
   /// No description provided for @settings.
@@ -3445,6 +3445,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Buy subscription'**
   String get buySubscription;
+
+  /// No description provided for @changePassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Change Password'**
+  String get changePassword;
+
+  /// No description provided for @oldPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Old Password'**
+  String get oldPassword;
+
+  /// No description provided for @enterOldPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter old password'**
+  String get enterOldPassword;
+
+  /// No description provided for @enterNewPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter new password'**
+  String get enterNewPassword;
+
+  /// No description provided for @oldPasswordIncorrect.
+  ///
+  /// In en, this message translates to:
+  /// **'Old password is incorrect'**
+  String get oldPasswordIncorrect;
+
+  /// No description provided for @editEmployee.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit Employee'**
+  String get editEmployee;
+
+  /// No description provided for @employeeUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Employee updated'**
+  String get employeeUpdated;
+
+  /// No description provided for @roleLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Role'**
+  String get roleLabel;
 }
 
 class _AppLocalizationsDelegate

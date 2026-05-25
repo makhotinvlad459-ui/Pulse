@@ -632,5 +632,22 @@
   "paymentNote": "Оплата проходит через защищённый шлюз. После оплаты статус обновится автоматически.",
   "companyLimitReached": "Достигнут лимит компаний",
   "companyLimitMessage": "Вы достигли лимита бесплатных компаний. Пожалуйста, купите подписку или дополнительный слот, чтобы продолжить.",
-  "buySubscription": "Купить подписку"
+  "buySubscription": "Купить подписку",
+  "changePassword": "Сменить пароль",
+  "oldPassword": "Старый пароль",
+  "enterOldPassword": "Введите старый пароль",
+  "enterNewPassword": "Введите новый пароль",
+  "oldPasswordIncorrect": "Неверный старый пароль",
+  "newPasswordLabel": "Новый пароль",
+  "confirmPasswordLabel": "Подтвердите пароль",
+  "enterPassword": "Введите пароль",
+  "passwordsDoNotMatch": "Пароли не совпадают",
+  "passwordTooShort": "Пароль должен содержать не менее 8 символов",
+  "passwordChangedSuccess": "Пароль успешно изменён",
+  "error": "Ошибка",
+  "editEmployee": "Редактировать сотрудника",
+  "employeeUpdated": "Сотрудник обновлён",
+  "roleLabel": "Роль",
+  "fullName": "Полное имя",
+  "enterFullName": "Введите полное имя"
 }

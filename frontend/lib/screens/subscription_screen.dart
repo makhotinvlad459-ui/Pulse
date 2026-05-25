@@ -41,7 +41,8 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
   Future<void> _buyWithYooKassa(String plan) async {
     final api = ApiClient();
     try {
-      final res = await api.post('/subscription/create-payment', data: {'plan': plan});
+      final res =
+          await api.post('/subscription/create-payment', data: {'plan': plan});
       final url = res.data['confirmation_url'];
       // Открыть URL в браузере (на мобильных устройствах — внешний браузер, на вебе — новая вкладка)
       await _openUrl(url);
@@ -53,16 +54,17 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
   }
 
   Future<void> _openUrl(String url) async {
-  final Uri uri = Uri.parse(url);
-  if (await canLaunchUrl(uri)) {
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
-  } else {
-    String shortUrl = url.length > 50 ? '${url.substring(0, 50)}...' : url;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Не удалось открыть ссылку: $shortUrl')),
-    );
+    final Uri uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      String shortUrl = url.length > 50 ? '${url.substring(0, 50)}...' : url;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось открыть ссылку: $shortUrl')),
+      );
+    }
   }
-}
+
   @override
   Widget build(BuildContext context) {
     ref.watch(localeProvider);
@@ -94,27 +96,37 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                       _status['has_active_subscription']
                           ? '✅ ${t.activeSubscription}'
                           : '❌ ${t.noActiveSubscription}',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      style:
+                          TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                     ),
                     if (_status['subscription_expires_at'] != null)
-                      Text('${t.expiresAt}: ${_status['subscription_expires_at']}'),
-                    Text('${t.companiesCount}: ${_status['companies_count']} / ${_status['free_companies_limit']}'),
-                    Text('${t.remainingFreeCompanies}: ${_status['remaining_free_companies']}'),
+                      Text(
+                          '${t.expiresAt}: ${_status['subscription_expires_at']}'),
+                    Text(
+                        '${t.companiesCount}: ${_status['companies_count']} / ${_status['free_companies_limit']}'),
+                    Text(
+                        '${t.remainingFreeCompanies}: ${_status['remaining_free_companies']}'),
                   ],
                 ),
               ),
             ),
             const SizedBox(height: 24),
-            Text(t.chooseTariff, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            Text(t.chooseTariff,
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
-            _buildTariffCard(t.monthly, '480 ₽', () => _buyWithYooKassa('monthly')),
-            _buildTariffCard(t.halfYear, '2400 ₽', () => _buyWithYooKassa('half_year')),
-            _buildTariffCard(t.yearly, '4000 ₽', () => _buyWithYooKassa('yearly')),
-            _buildTariffCard(t.extraCompany, '200 ₽', () => _buyWithYooKassa('extra_company')),
+            _buildTariffCard(
+                t.monthly, '480 ₽', () => _buyWithYooKassa('monthly')),
+            _buildTariffCard(
+                t.halfYear, '2400 ₽', () => _buyWithYooKassa('half_year')),
+            _buildTariffCard(
+                t.yearly, '4000 ₽', () => _buyWithYooKassa('yearly')),
+            _buildTariffCard(t.extraCompany, '200 ₽',
+                () => _buyWithYooKassa('extra_company')),
             const SizedBox(height: 16),
             Text(
               t.paymentNote,
-              style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 12),
+              style:
+                  TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 12),
             ),
           ],
         ),

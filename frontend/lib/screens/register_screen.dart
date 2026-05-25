@@ -51,7 +51,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       return;
     }
     if (password.length < 8) {
-      _showSnackBar(_localized('passwordTooShort', 'Пароль должен быть не менее 8 символов'));
+      _showSnackBar(_localized(
+          'passwordTooShort', 'Пароль должен быть не менее 8 символов'));
       return;
     }
     if (password != confirm) {
@@ -60,19 +61,22 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     }
 
     final authNotifier = ref.read(authProvider.notifier);
-    final success = await authNotifier.register(email, null, fullName, password);
+    final success =
+        await authNotifier.register(email, null, fullName, password);
     if (!mounted) return;
     if (success) {
       await Future.delayed(const Duration(milliseconds: 100));
       Navigator.pushReplacementNamed(context, '/home');
     } else {
-      final error = ref.read(authProvider).error ?? _localized('registrationError', 'Ошибка регистрации');
+      final error = ref.read(authProvider).error ??
+          _localized('registrationError', 'Ошибка регистрации');
       if (mounted) _showSnackBar(error);
     }
   }
 
   void _showSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _setLanguage(Locale locale) {
@@ -160,7 +164,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   color: Colors.white.withOpacity(0.5),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
-                    side: BorderSide(color: Colors.white.withOpacity(0.3), width: 1),
+                    side: BorderSide(
+                        color: Colors.white.withOpacity(0.3), width: 1),
                   ),
                   child: Padding(
                     padding: const EdgeInsets.all(24.0),
@@ -172,17 +177,21 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           decoration: InputDecoration(
                             labelText: t?.emailRequired ?? 'Email',
                             labelStyle: TextStyle(color: Colors.grey.shade600),
-                            prefixIcon: Icon(Icons.email, color: Colors.grey.shade700),
+                            prefixIcon:
+                                Icon(Icons.email, color: Colors.grey.shade700),
                             filled: true,
                             fillColor: Colors.white,
                             border: const OutlineInputBorder(
-                              borderRadius: BorderRadius.all(Radius.circular(8)),
+                              borderRadius:
+                                  BorderRadius.all(Radius.circular(8)),
                             ),
                             enabledBorder: OutlineInputBorder(
-                              borderSide: BorderSide(color: Colors.grey.shade400),
+                              borderSide:
+                                  BorderSide(color: Colors.grey.shade400),
                             ),
                             focusedBorder: OutlineInputBorder(
-                              borderSide: BorderSide(color: Colors.grey.shade700, width: 2),
+                              borderSide: BorderSide(
+                                  color: Colors.grey.shade700, width: 2),
                             ),
                           ),
                         ),
@@ -193,17 +202,21 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           decoration: InputDecoration(
                             labelText: t?.nameRequired ?? 'Имя',
                             labelStyle: TextStyle(color: Colors.grey.shade600),
-                            prefixIcon: Icon(Icons.person, color: Colors.grey.shade700),
+                            prefixIcon:
+                                Icon(Icons.person, color: Colors.grey.shade700),
                             filled: true,
                             fillColor: Colors.white,
                             border: const OutlineInputBorder(
-                              borderRadius: BorderRadius.all(Radius.circular(8)),
+                              borderRadius:
+                                  BorderRadius.all(Radius.circular(8)),
                             ),
                             enabledBorder: OutlineInputBorder(
-                              borderSide: BorderSide(color: Colors.grey.shade400),
+                              borderSide:
+                                  BorderSide(color: Colors.grey.shade400),
                             ),
                             focusedBorder: OutlineInputBorder(
-                              borderSide: BorderSide(color: Colors.grey.shade700, width: 2),
+                              borderSide: BorderSide(
+                                  color: Colors.grey.shade700, width: 2),
                             ),
                           ),
                         ),
@@ -213,23 +226,31 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           obscureText: _obscurePassword,
                           style: const TextStyle(color: Colors.black87),
                           decoration: InputDecoration(
-                            labelText: t?.passwordMin8 ?? 'Пароль (мин. 8 символов)',
+                            labelText:
+                                t?.passwordMin8 ?? 'Пароль (мин. 8 символов)',
                             labelStyle: TextStyle(color: Colors.grey.shade600),
-                            prefixIcon: Icon(Icons.lock, color: Colors.grey.shade700),
+                            prefixIcon:
+                                Icon(Icons.lock, color: Colors.grey.shade700),
                             suffixIcon: IconButton(
-                              icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
-                              onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                              icon: Icon(_obscurePassword
+                                  ? Icons.visibility_off
+                                  : Icons.visibility),
+                              onPressed: () => setState(
+                                  () => _obscurePassword = !_obscurePassword),
                             ),
                             filled: true,
                             fillColor: Colors.white,
                             border: const OutlineInputBorder(
-                              borderRadius: BorderRadius.all(Radius.circular(8)),
+                              borderRadius:
+                                  BorderRadius.all(Radius.circular(8)),
                             ),
                             enabledBorder: OutlineInputBorder(
-                              borderSide: BorderSide(color: Colors.grey.shade400),
+                              borderSide:
+                                  BorderSide(color: Colors.grey.shade400),
                             ),
                             focusedBorder: OutlineInputBorder(
-                              borderSide: BorderSide(color: Colors.grey.shade700, width: 2),
+                              borderSide: BorderSide(
+                                  color: Colors.grey.shade700, width: 2),
                             ),
                           ),
                         ),
@@ -239,23 +260,31 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           obscureText: _obscureConfirm,
                           style: const TextStyle(color: Colors.black87),
                           decoration: InputDecoration(
-                            labelText: t?.confirmPassword ?? 'Подтвердите пароль',
+                            labelText:
+                                t?.confirmPassword ?? 'Подтвердите пароль',
                             labelStyle: TextStyle(color: Colors.grey.shade600),
-                            prefixIcon: Icon(Icons.lock_outline, color: Colors.grey.shade700),
+                            prefixIcon: Icon(Icons.lock_outline,
+                                color: Colors.grey.shade700),
                             suffixIcon: IconButton(
-                              icon: Icon(_obscureConfirm ? Icons.visibility_off : Icons.visibility),
-                              onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
+                              icon: Icon(_obscureConfirm
+                                  ? Icons.visibility_off
+                                  : Icons.visibility),
+                              onPressed: () => setState(
+                                  () => _obscureConfirm = !_obscureConfirm),
                             ),
                             filled: true,
                             fillColor: Colors.white,
                             border: const OutlineInputBorder(
-                              borderRadius: BorderRadius.all(Radius.circular(8)),
+                              borderRadius:
+                                  BorderRadius.all(Radius.circular(8)),
                             ),
                             enabledBorder: OutlineInputBorder(
-                              borderSide: BorderSide(color: Colors.grey.shade400),
+                              borderSide:
+                                  BorderSide(color: Colors.grey.shade400),
                             ),
                             focusedBorder: OutlineInputBorder(
-                              borderSide: BorderSide(color: Colors.grey.shade700, width: 2),
+                              borderSide: BorderSide(
+                                  color: Colors.grey.shade700, width: 2),
                             ),
                           ),
                         ),
@@ -266,14 +295,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           ElevatedButton(
                             onPressed: _register,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.grey.shade800.withOpacity(0.8),
+                              backgroundColor:
+                                  Colors.grey.shade800.withOpacity(0.8),
                               foregroundColor: Colors.white,
                               minimumSize: const Size(double.infinity, 48),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(8),
                               ),
                             ),
-                            child: Text(t?.registerButton ?? 'Зарегистрироваться'),
+                            child:
+                                Text(t?.registerButton ?? 'Зарегистрироваться'),
                           ),
                         const SizedBox(height: 16),
                         Row(
@@ -284,20 +315,23 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                               style: TextStyle(color: Colors.grey.shade700),
                             ),
                             TextButton(
-                              onPressed: () => Navigator.pushReplacementNamed(context, '/login'),
+                              onPressed: () => Navigator.pushReplacementNamed(
+                                  context, '/login'),
                               style: TextButton.styleFrom(
                                 foregroundColor: Colors.grey.shade900,
                               ),
                               child: Text(
                                 t?.signIn ?? 'Войти',
-                                style: const TextStyle(fontWeight: FontWeight.bold),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold),
                               ),
                             ),
                           ],
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          t?.passwordWarning ?? 'Пароль должен содержать не менее 8 символов',
+                          t?.passwordWarning ??
+                              'Пароль должен содержать не менее 8 символов',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: Colors.grey.shade700,

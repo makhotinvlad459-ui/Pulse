@@ -31,7 +31,8 @@ class RainTheme {
   final Color color;
   final double opacity;
   final double speed;
-  const RainTheme({required this.color, required this.opacity, required this.speed});
+  const RainTheme(
+      {required this.color, required this.opacity, required this.speed});
 }
 
 RainTheme getRainTheme(AppTheme theme) {
@@ -81,7 +82,8 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
   int _unreadMessagesCount = 0;
   WebSocketChannel? _userChannel;
 
-  final GlobalKey<ReportsTabState> _reportsTabKey = GlobalKey<ReportsTabState>();
+  final GlobalKey<ReportsTabState> _reportsTabKey =
+      GlobalKey<ReportsTabState>();
 
   Set<String> _myPermissions = {};
   bool _permissionsLoaded = false;
@@ -103,14 +105,22 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
 
   String _getTabTitle(String key, AppLocalizations t) {
     switch (key) {
-      case 'operations': return t.tabOperations;
-      case 'showcase': return t.tabShowcase;
-      case 'chat_tasks': return t.tabChatTasks;
-      case 'stock': return t.tabStock;
-      case 'reports': return t.tabReports;
-      case 'orders': return t.tabOrders;
-      case 'counterparties': return t.tabCounterparties;
-      default: return key;
+      case 'operations':
+        return t.tabOperations;
+      case 'showcase':
+        return t.tabShowcase;
+      case 'chat_tasks':
+        return t.tabChatTasks;
+      case 'stock':
+        return t.tabStock;
+      case 'reports':
+        return t.tabReports;
+      case 'orders':
+        return t.tabOrders;
+      case 'counterparties':
+        return t.tabCounterparties;
+      default:
+        return key;
     }
   }
 
@@ -118,7 +128,8 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
     final prefs = await SharedPreferences.getInstance();
     final saved = prefs.getStringList('tab_order_${widget.company.id}');
     if (saved != null && saved.isNotEmpty) {
-      final validKeys = saved.where((key) => _allTabKeys.contains(key)).toList();
+      final validKeys =
+          saved.where((key) => _allTabKeys.contains(key)).toList();
       for (var key in _allTabKeys) {
         if (!validKeys.contains(key)) validKeys.add(key);
       }
@@ -161,11 +172,13 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                   tempOrder.insert(newIndex, item);
                   setStateDialog(() {});
                 },
-                children: tempOrder.map((key) => ListTile(
-                  key: Key(key),
-                  leading: const Icon(Icons.drag_handle),
-                  title: Text(_getTabTitle(key, t)),
-                )).toList(),
+                children: tempOrder
+                    .map((key) => ListTile(
+                          key: Key(key),
+                          leading: const Icon(Icons.drag_handle),
+                          title: Text(_getTabTitle(key, t)),
+                        ))
+                    .toList(),
               ),
             ),
             actions: [
@@ -194,9 +207,19 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
     Set<String> effectivePermissions;
     if (isFounder) {
       effectivePermissions = {
-        'view_operations', 'view_showcase', 'view_chat', 'view_tasks',
-        'view_products', 'view_reports', 'view_documents', 'view_requests',
-        'view_orders', 'edit_orders', 'view_accounts', 'view_counterparties', 'edit_counterparties'
+        'view_operations',
+        'view_showcase',
+        'view_chat',
+        'view_tasks',
+        'view_products',
+        'view_reports',
+        'view_documents',
+        'view_requests',
+        'view_orders',
+        'edit_orders',
+        'view_accounts',
+        'view_counterparties',
+        'edit_counterparties'
       };
     } else {
       effectivePermissions = _myPermissions;
@@ -209,7 +232,8 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
       switch (key) {
         case 'operations':
           if (effectivePermissions.contains('view_operations')) {
-            newTabs.add(Tab(icon: const Icon(Icons.receipt), text: t.tabOperations));
+            newTabs.add(
+                Tab(icon: const Icon(Icons.receipt), text: t.tabOperations));
             newWidgets.add(TransactionsTab(
               companyId: widget.company.id,
               onRefresh: _refresh,
@@ -222,7 +246,8 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
           break;
         case 'showcase':
           if (effectivePermissions.contains('view_showcase')) {
-            newTabs.add(Tab(icon: const Icon(Icons.storefront), text: t.tabShowcase));
+            newTabs.add(
+                Tab(icon: const Icon(Icons.storefront), text: t.tabShowcase));
             newWidgets.add(ShowcaseTab(
               companyId: widget.company.id,
               onRefresh: _refresh,
@@ -231,8 +256,10 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
           }
           break;
         case 'chat_tasks':
-          if (effectivePermissions.contains('view_chat') || effectivePermissions.contains('view_tasks')) {
-            newTabs.add(Tab(icon: const Icon(Icons.chat_bubble), text: t.tabChatTasks));
+          if (effectivePermissions.contains('view_chat') ||
+              effectivePermissions.contains('view_tasks')) {
+            newTabs.add(
+                Tab(icon: const Icon(Icons.chat_bubble), text: t.tabChatTasks));
             newWidgets.add(ChatAndTasksTab(
               companyId: widget.company.id,
               isManager: widget.company.currentUserRole == 'manager',
@@ -243,7 +270,8 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
           break;
         case 'stock':
           if (effectivePermissions.contains('view_products')) {
-            newTabs.add(Tab(icon: const Icon(Icons.inventory), text: t.tabStock));
+            newTabs
+                .add(Tab(icon: const Icon(Icons.inventory), text: t.tabStock));
             newWidgets.add(StockTab(
               companyId: widget.company.id,
               permissions: effectivePermissions,
@@ -252,7 +280,8 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
           break;
         case 'reports':
           if (effectivePermissions.contains('view_reports')) {
-            newTabs.add(Tab(icon: const Icon(Icons.bar_chart), text: t.tabReports));
+            newTabs.add(
+                Tab(icon: const Icon(Icons.bar_chart), text: t.tabReports));
             newWidgets.add(ReportsTab(
               key: _reportsTabKey,
               companyId: widget.company.id,
@@ -262,7 +291,8 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
           break;
         case 'orders':
           if (effectivePermissions.contains('view_orders')) {
-            newTabs.add(Tab(icon: const Icon(Icons.assignment), text: t.tabOrders));
+            newTabs.add(
+                Tab(icon: const Icon(Icons.assignment), text: t.tabOrders));
             newWidgets.add(OrdersTab(
               companyId: widget.company.id,
               permissions: effectivePermissions,
@@ -273,7 +303,8 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
           break;
         case 'counterparties':
           if (effectivePermissions.contains('view_counterparties')) {
-            newTabs.add(Tab(icon: const Icon(Icons.people), text: t.tabCounterparties));
+            newTabs.add(
+                Tab(icon: const Icon(Icons.people), text: t.tabCounterparties));
             newWidgets.add(CounterpartiesTab(
               companyId: widget.company.id,
               permissions: effectivePermissions,
@@ -407,8 +438,8 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
     } catch (e) {
       setState(() => _loading = false);
       if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('${AppLocalizations.of(context)!.error}: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('${AppLocalizations.of(context)!.error}: $e')));
     }
   }
 
@@ -486,19 +517,38 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
     Set<String> effectivePermissions = _myPermissions;
     if (isFounder) {
       effectivePermissions = {
-        'view_operations', 'view_showcase', 'view_chat', 'view_tasks',
-        'view_products', 'view_reports', 'view_documents', 'view_requests',
-        'view_orders', 'edit_orders', 'view_accounts', 'view_counterparties', 'edit_counterparties'
+        'view_operations',
+        'view_showcase',
+        'view_chat',
+        'view_tasks',
+        'view_products',
+        'view_reports',
+        'view_documents',
+        'view_requests',
+        'view_orders',
+        'edit_orders',
+        'view_accounts',
+        'view_counterparties',
+        'edit_counterparties'
       };
     }
 
-    final showMenu = isFounder || effectivePermissions.contains('manage_employees') || effectivePermissions.contains('manage_permissions');
-    final showReorderTabs = isFounder || effectivePermissions.contains('edit_company');
-    final showEditCompany = isFounder || effectivePermissions.contains('edit_company');
-    final showAddAccount = isFounder || effectivePermissions.contains('create_account');
-    final showManageCategories = isFounder || effectivePermissions.contains('manage_categories');
-    final showManageEmployees = isFounder || effectivePermissions.contains('manage_employees');
-    final showArchive = (isFounder || effectivePermissions.contains('view_archive')) && _archiveAccountId != null;
+    final showMenu = isFounder ||
+        effectivePermissions.contains('manage_employees') ||
+        effectivePermissions.contains('manage_permissions');
+    final showReorderTabs =
+        isFounder || effectivePermissions.contains('edit_company');
+    final showEditCompany =
+        isFounder || effectivePermissions.contains('edit_company');
+    final showAddAccount =
+        isFounder || effectivePermissions.contains('create_account');
+    final showManageCategories =
+        isFounder || effectivePermissions.contains('manage_categories');
+    final showManageEmployees =
+        isFounder || effectivePermissions.contains('manage_employees');
+    final showArchive =
+        (isFounder || effectivePermissions.contains('view_archive')) &&
+            _archiveAccountId != null;
     final showDeleteCompany = isFounder;
 
     // Перестраиваем вкладки при получении прав
@@ -532,11 +582,13 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
             child: Column(
               children: [
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   child: Row(
                     children: [
                       IconButton(
-                        icon: Icon(Icons.arrow_back, color: colorScheme.onSurface),
+                        icon: Icon(Icons.arrow_back,
+                            color: colorScheme.onSurface),
                         onPressed: () => Navigator.pop(context, _hasChanges),
                       ),
                       const Spacer(),
@@ -563,7 +615,8 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                                       companyId: widget.company.id,
                                       onSuccess: _refresh,
                                       categories: _categories));
-                            if (value == 'manage_employees' && showManageEmployees)
+                            if (value == 'manage_employees' &&
+                                showManageEmployees)
                               await showDialog(
                                   context: context,
                                   builder: (_) => ManageEmployeesDialog(
@@ -580,8 +633,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                             final items = <PopupMenuItem<String>>[];
                             if (showEditCompany) {
                               items.add(PopupMenuItem(
-                                  value: 'edit',
-                                  child: Text(t.editCompany)));
+                                  value: 'edit', child: Text(t.editCompany)));
                             }
                             if (showAddAccount) {
                               items.add(PopupMenuItem(
@@ -611,7 +663,8 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                               items.add(PopupMenuItem(
                                   value: 'delete',
                                   child: Text(t.deleteCompany,
-                                      style: TextStyle(color: colorScheme.error))));
+                                      style: TextStyle(
+                                          color: colorScheme.error))));
                             }
                             return items;
                           },
@@ -621,14 +674,16 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                               color: colorScheme.primary.withOpacity(0.2),
                               shape: BoxShape.circle,
                             ),
-                            child: Icon(Icons.menu, color: colorScheme.onSurface),
+                            child:
+                                Icon(Icons.menu, color: colorScheme.onSurface),
                           ),
                         ),
                     ],
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   child: Text(
                     widget.company.name,
                     style: GoogleFonts.orbitron(
@@ -648,26 +703,30 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                         if (_unreadMessagesCount > 0)
                           Container(
                             margin: const EdgeInsets.only(right: 8),
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
                             decoration: BoxDecoration(
                               color: Colors.red,
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Text(
                               '${t.messages}: $_unreadMessagesCount',
-                              style: const TextStyle(color: Colors.white, fontSize: 12),
+                              style: const TextStyle(
+                                  color: Colors.white, fontSize: 12),
                             ),
                           ),
                         if (_pendingTasksCount > 0)
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
                             decoration: BoxDecoration(
                               color: Colors.orange,
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Text(
                               '${t.tasks}: $_pendingTasksCount',
-                              style: const TextStyle(color: Colors.white, fontSize: 12),
+                              style: const TextStyle(
+                                  color: Colors.white, fontSize: 12),
                             ),
                           ),
                       ],
@@ -688,14 +747,17 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                                     onDelete: () async {
                                       final api = ApiClient();
                                       try {
-                                        await api.delete('/accounts/${acc['id']}',
+                                        await api.delete(
+                                            '/accounts/${acc['id']}',
                                             queryParameters: {
                                               'company_id': widget.company.id
                                             });
                                         await _refresh();
                                       } catch (e) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(content: Text('${t.error}: $e')));
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(SnackBar(
+                                                content:
+                                                    Text('${t.error}: $e')));
                                       }
                                     },
                                     isFounder: isFounder,
@@ -715,7 +777,8 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                           indicatorColor: colorScheme.primary,
                           labelColor: colorScheme.primary,
                           unselectedLabelColor: colorScheme.onSurfaceVariant,
-                          labelStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                          labelStyle: const TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.w600),
                           unselectedLabelStyle: const TextStyle(fontSize: 14),
                           tabs: _tabs,
                         ),

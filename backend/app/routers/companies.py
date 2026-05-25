@@ -660,3 +660,42 @@ async def delete_company(
     await db.delete(company)
     await db.commit()
     return {"detail": "Company deleted"}
+
+@router.put("/{company_id}/members/{user_id}")
+async def update_member(
+    company_id: int,
+    user_id: int,
+    data: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if not await _can_manage_employees(company_id, current_user, db):
+        raise HTTPException(403, "No permission")
+    
+    # Проверяем, что пользователь является членом компании
+    member = await db.execute(
+        select(CompanyMember).where(
+            CompanyMember.company_id == company_id,
+            CompanyMember.user_id == user_id
+        )
+    )
+    member = member.scalar_one_or_none()
+    if not member:
+        raise HTTPException(404, "Member not found")
+    
+    # Обновляем роль, если передана
+    if "role_in_company" in data:
+        if data["role_in_company"] not in ('manager', 'employee'):
+            raise HTTPException(400, "Invalid role")
+        member.role_in_company = data["role_in_company"]
+    
+    # Обновляем имя и телефон в модели User
+    user = await db.get(User, user_id)
+    if user:
+        if "full_name" in data:
+            user.full_name = data["full_name"]
+        if "phone" in data:
+            user.phone = data["phone"]
+    
+    await db.commit()
+    return {"detail": "Member updated"}

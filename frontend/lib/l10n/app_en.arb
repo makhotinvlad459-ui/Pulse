@@ -632,5 +632,22 @@
   "paymentNote": "Payment is processed via secure gateway. After payment, the status will update automatically.",
   "companyLimitReached": "Company limit reached",
   "companyLimitMessage": "You have reached the limit of free companies. Please buy a subscription or an extra company slot to continue.",
-  "buySubscription": "Buy subscription"
+  "buySubscription": "Buy subscription",
+  "changePassword": "Change Password",
+  "oldPassword": "Old Password",
+  "enterOldPassword": "Enter old password",
+  "enterNewPassword": "Enter new password",
+  "oldPasswordIncorrect": "Old password is incorrect",
+  "newPasswordLabel": "New Password",
+  "confirmPasswordLabel": "Confirm Password",
+  "enterPassword": "Enter password",
+  "passwordsDoNotMatch": "Passwords do not match",
+  "passwordTooShort": "Password must be at least 8 characters",
+  "passwordChangedSuccess": "Password changed successfully",
+  "error": "Error",
+  "editEmployee": "Edit Employee",
+  "employeeUpdated": "Employee updated",
+  "roleLabel": "Role",
+  "fullName": "Full name",
+  "enterFullName": "Enter full name"
 }

@@ -57,10 +57,14 @@ class _ArchiveScreenState extends ConsumerState<ArchiveScreen> {
 
   String _typeName(String type, AppLocalizations t) {
     switch (type) {
-      case 'income': return t.income;
-      case 'expense': return t.expense;
-      case 'transfer': return t.transfer;
-      default: return type;
+      case 'income':
+        return t.income;
+      case 'expense':
+        return t.expense;
+      case 'transfer':
+        return t.transfer;
+      default:
+        return type;
     }
   }
 
@@ -97,7 +101,8 @@ class _ArchiveScreenState extends ConsumerState<ArchiveScreen> {
                             subtitle: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('${_typeName(tx.type, t)} • ${tx.description ?? ''}'),
+                                Text(
+                                    '${_typeName(tx.type, t)} • ${tx.description ?? ''}'),
                                 if (tx.creatorName != null)
                                   Text('${t.createdBy}: ${tx.creatorName}',
                                       style: TextStyle(

@@ -101,15 +101,15 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                 },
               ),
               const SizedBox(height: 20),
-              if (_loading)
-                const Center(child: CircularProgressIndicator()),
+              if (_loading) const Center(child: CircularProgressIndicator()),
               if (_message != null)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 16),
                   child: Text(
                     _message!,
                     style: TextStyle(
-                      color: _message!.startsWith(AppLocalizations.of(context)!.error)
+                      color: _message!
+                              .startsWith(AppLocalizations.of(context)!.error)
                           ? Colors.red
                           : Colors.green,
                     ),

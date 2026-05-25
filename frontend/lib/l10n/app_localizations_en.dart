@@ -138,10 +138,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get resetPasswordInstruction => 'Enter a new password.';
 
   @override
-  String get newPasswordLabel => 'New password (min. 8 characters)';
+  String get newPasswordLabel => 'New Password';
 
   @override
-  String get confirmPasswordLabel => 'Confirm password';
+  String get confirmPasswordLabel => 'Confirm Password';
 
   @override
   String get enterPassword => 'Enter password';
@@ -150,8 +150,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get resetPasswordButton => 'Reset password';
 
   @override
-  String get passwordChangedSuccess =>
-      'Password changed successfully. You can now log in.';
+  String get passwordChangedSuccess => 'Password changed successfully';
 
   @override
   String get settings => 'Settings';
@@ -1707,4 +1706,28 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get buySubscription => 'Buy subscription';
+
+  @override
+  String get changePassword => 'Change Password';
+
+  @override
+  String get oldPassword => 'Old Password';
+
+  @override
+  String get enterOldPassword => 'Enter old password';
+
+  @override
+  String get enterNewPassword => 'Enter new password';
+
+  @override
+  String get oldPasswordIncorrect => 'Old password is incorrect';
+
+  @override
+  String get editEmployee => 'Edit Employee';
+
+  @override
+  String get employeeUpdated => 'Employee updated';
+
+  @override
+  String get roleLabel => 'Role';
 }
