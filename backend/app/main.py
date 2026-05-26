@@ -1,15 +1,41 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
-from app.auth import router as auth_router
-from app.routers import subscription, counterparties, companies, accounts, categories, transactions, statistics, admin, showcase, chat, tasks, websocket, notifications, products, permissions, orders
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware  # <-- ДОБАВИЛИ ИМПОРТ
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 import os
+import asyncio
 
-app = FastAPI(title="Pulse API", version="0.2.0")
+from app.auth import router as auth_router
+from app.routers import subscription, counterparties, companies, accounts, categories, transactions, statistics, admin, showcase, chat, tasks, websocket, notifications, products, permissions, orders
+from app.websocket_manager import manager
 
-# 1. СРАЗУ ПОДПИСЫВАЕМ СЕРВЕР НА ДОВЕРИЕ К ПРОКСИ (NGINX)
-# Эта мидлварь должна быть САМОЙ ПЕРВОЙ в списке
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Управление жизненным циклом приложения"""
+    print("🚀 [Startup] Инициализация Redis клиента...")
+    await manager.init_redis()
+    
+    # Запускаем фоновую задачу прослушивания Redis
+    redis_listener_task = asyncio.create_task(manager.listen_redis_channels())
+    print("✅ [Startup] Фоновое прослушивание Redis Pub/Sub запущено")
+    
+    yield
+    
+    print("🛑 [Shutdown] Закрытие ресурсов...")
+    redis_listener_task.cancel()
+    await manager.close_redis()
+    print("✅ [Shutdown] Ресурсы закрыты")
+
+
+app = FastAPI(
+    title="Pulse API",
+    version="0.2.0",
+    lifespan=lifespan
+)
+
+# 1. Прокси заголовки (должна быть САМОЙ ПЕРВОЙ)
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
 
 routers = [
@@ -39,17 +65,15 @@ for router in routers:
                 summary=route.summary,
                 description=route.description
             )
-            
-    # Добавляем глобальный префикс /api ко всем роутерам
+    
     app.include_router(router, prefix="/api")
-
 
 # Статика
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
-# CORS (Остается на своем месте, но идет ПОСЛЕ ProxyHeadersMiddleware)
+# CORS (после ProxyHeadersMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

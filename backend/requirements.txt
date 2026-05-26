@@ -14,3 +14,4 @@ python-multipart==0.0.6
 apscheduler==3.10.4
 fastapi-mail
 httpx
+redis>=5.0.0

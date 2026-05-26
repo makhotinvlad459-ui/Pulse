@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     BACKEND_PORT: int = 8000
     DB_PORT: int = 5432
     DB_VOLUME: str = "postgres_data"
+    REDIS_URL: str = "redis://redis:6379/0"
 
     class Config:
         env_file = ".env"
