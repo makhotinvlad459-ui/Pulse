@@ -8,6 +8,7 @@ import 'providers/theme_provider.dart';
 import 'providers/locale_provider.dart';
 import 'screens/forgot_password_screen.dart';
 import 'screens/reset_password_screen.dart';
+import 'services/websocket_service.dart';
 import 'package:frontend/l10n/app_localizations.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -39,17 +40,14 @@ class MyApp extends ConsumerWidget {
       supportedLocales: const [Locale('ru'), Locale('en')],
       navigatorKey: navigatorKey,
       
-      // Инициализируем с корня
       initialRoute: '/',
       
       onGenerateRoute: (RouteSettings settings) {
         final routeName = settings.name ?? '';
 
-        // 1. ТОЧКА ВХОДА ДЛЯ ССЫЛКИ ИЗ ПИСЬМА И ХОЛОДНОГО СТАРТА
         if (routeName == '/' || routeName.isEmpty || routeName.contains('reset-password')) {
           final uriBase = Uri.base;
           
-          // Проверяем, есть ли в строке браузера или в роуте 'reset-password'
           if (uriBase.path.contains('reset-password') || 
               uriBase.fragment.contains('reset-password') || 
               routeName.contains('reset-password')) {
@@ -65,11 +63,9 @@ class MyApp extends ConsumerWidget {
             }
           }
           
-          // Если это холодный старт без токена, открываем логин
           return MaterialPageRoute(builder: (_) => const LoginScreen());
         }
 
-        // 2. ЧИСТАЯ НАВИГАЦИЯ ДЛЯ КЛИКОВ ВНУТРИ ПРИЛОЖЕНИЯ
         switch (routeName) {
           case '/login':
             return MaterialPageRoute(builder: (_) => const LoginScreen());

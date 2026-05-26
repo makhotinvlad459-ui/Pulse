@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:shimmer/shimmer.dart';
 import '../providers/home_provider.dart';
 import '../providers/auth_provider.dart';
@@ -13,9 +12,11 @@ import '../screens/create_company_screen.dart';
 import '../screens/company_screen.dart';
 import '../services/api_client.dart';
 import '../providers/theme_provider.dart';
+import '../services/websocket_service.dart';
 import 'package:frontend/l10n/app_localizations.dart';
 import '../screens/subscription_screen.dart';
 import '../widgets/company/change_password_dialog.dart';
+import '../services/websocket_service.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -25,43 +26,27 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  WebSocketChannel? _userChannel;
-
   @override
   void initState() {
     super.initState();
-    _connectUserWebSocket();
+    _initWebSocket();
   }
 
-  @override
-  void dispose() {
-    _userChannel?.sink.close();
-    super.dispose();
-  }
-
-  Future<void> _connectUserWebSocket() async {
+  Future<void> _initWebSocket() async {
     final authState = ref.read(authProvider);
     final user = authState.user;
     if (user == null) return;
     final api = ApiClient();
     final token = await api.getToken();
     if (token == null) return;
+    
+    WebSocketService().connectUser(user.id, token);
+  }
 
-    final baseUrl = ApiClient.baseUrl;
-    final wsBase = baseUrl.replaceFirst('http', 'ws');
-    final wsUrl = '$wsBase/ws/user/${user.id}?token=$token';
-    print('🟢 Connecting to user WS: $wsUrl');
-
-    _userChannel = WebSocketChannel.connect(Uri.parse(wsUrl));
-    _userChannel!.stream.listen((message) {
-      print('🟢 User WS message: $message');
-      final data = jsonDecode(message);
-      if (data['type'] == 'update_counters') {
-        ref.invalidate(homeProvider);
-      }
-    }, onError: (error) {
-      print('🔴 User WS error: $error');
-    });
+  @override
+  void dispose() {
+    // Не закрываем здесь, потому что другие экраны могут использовать
+    super.dispose();
   }
 
   String _getVideoPath(AppTheme theme) {
@@ -85,6 +70,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final colorScheme = Theme.of(context).colorScheme;
     final t = AppLocalizations.of(context)!;
 
+    // Подписываемся на userStream для обновления счетчиков
+    ref.listen(StreamProvider((ref) => WebSocketService().userStream), (previous, next) {
+      next.whenData((data) {
+        if (data['type'] == 'update_counters') {
+          ref.invalidate(homeProvider);
+        }
+      });
+    });
+
     return VideoBackground(
       key: ValueKey(videoPath),
       videoPath: videoPath,
@@ -98,8 +92,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           child: Column(
             children: [
               Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -109,22 +102,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       period: const Duration(seconds: 2),
                       child: Text(
                         t.appTitle,
-                        style: GoogleFonts.caveat(
-                            fontSize: 32, color: colorScheme.onSurface),
+                        style: GoogleFonts.caveat(fontSize: 32, color: colorScheme.onSurface),
                       ),
                     ),
                     Builder(
                       builder: (context) => Column(
                         children: [
                           IconButton(
-                            icon: Icon(Icons.settings,
-                                color: colorScheme.onSurface),
+                            icon: Icon(Icons.settings, color: colorScheme.onSurface),
                             onPressed: () => Scaffold.of(context).openDrawer(),
                           ),
                           Text(
                             t.settings,
-                            style: TextStyle(
-                                fontSize: 10, color: colorScheme.onSurface),
+                            style: TextStyle(fontSize: 10, color: colorScheme.onSurface),
                           ),
                         ],
                       ),
@@ -169,17 +159,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           if (overview.hasAnyAccountsPermission)
                             Row(
                               children: [
-                                _StatCard(
-                                    title: t.totalAll,
-                                    amount: overview.totalAll),
+                                _StatCard(title: t.totalAll, amount: overview.totalAll),
                                 const SizedBox(width: 8),
-                                _StatCard(
-                                    title: t.totalCash,
-                                    amount: overview.totalCash),
+                                _StatCard(title: t.totalCash, amount: overview.totalCash),
                                 const SizedBox(width: 8),
-                                _StatCard(
-                                    title: t.totalBank,
-                                    amount: overview.totalBank),
+                                _StatCard(title: t.totalBank, amount: overview.totalBank),
                               ],
                             ),
                           const SizedBox(height: 16),
@@ -188,10 +172,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             int unread = 0;
                             int pending = 0;
                             if (companyData is Map) {
-                              unread =
-                                  companyData['unread_messages'] as int? ?? 0;
-                              pending =
-                                  companyData['pending_tasks'] as int? ?? 0;
+                              unread = companyData['unread_messages'] as int? ?? 0;
+                              pending = companyData['pending_tasks'] as int? ?? 0;
                             }
                             return _CompanyCard(
                               company: company,
@@ -204,12 +186,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         ],
                       );
                     },
-                    loading: () =>
-                        const Center(child: CircularProgressIndicator()),
+                    loading: () => const Center(child: CircularProgressIndicator()),
                     error: (error, stack) {
-                      // Диагностика в консоль
                       print('Home error: $error\n$stack');
-                      // Безопасное приведение к строке
                       final errorMessage = error is String
                           ? error
                           : error is Exception
@@ -245,7 +224,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 }
 
-// Далее идут отдельные виджеты (за пределами _HomeScreenState)
 
 class _StatCard extends StatelessWidget {
   final String title;
@@ -669,6 +647,10 @@ class SettingsDrawer extends StatelessWidget {
             title: Text(t.logout, style: const TextStyle(color: Colors.red)),
             onTap: () async {
               Navigator.pop(context);
+              
+              // 👇 ЗАКРЫВАЕМ ВСЕ WEBSOCKET СОЕДИНЕНИЯ
+              WebSocketService().disconnectAll();
+              
               await ref.logout();
               if (context.mounted) {
                 Navigator.pushReplacementNamed(context, '/login');

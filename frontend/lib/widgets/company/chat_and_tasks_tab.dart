@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -13,6 +12,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:photo_view/photo_view.dart';
 import '../../services/api_client.dart';
 import '../../services/image_compression.dart';
+import '../../services/websocket_service.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/locale_provider.dart';
 import '../../models/user.dart';
@@ -50,9 +50,6 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
   final ScrollController _scrollController = ScrollController();
   DateTime? _lastVisit;
 
-  WebSocketChannel? _chatChannel;
-  WebSocketChannel? _tasksChannel;
-
   XFile? _attachmentFile;
   PlatformFile? _webFile;
 
@@ -66,7 +63,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
     _loadEmployees().then((_) async {
       await _loadChatMessages();
       await _loadTasks();
-      _connectWebSockets();
+      _subscribeToWebSockets();
       if (_tabController.index == 0) {
         await _markChatRead();
         _lastVisit = DateTime.now();
@@ -85,10 +82,97 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
 
   @override
   void dispose() {
-    _chatChannel?.sink.close();
-    _tasksChannel?.sink.close();
     _tabController.dispose();
     super.dispose();
+  }
+
+  // ==================== ПОДПИСКА НА WEB SOCKETS ====================
+  void _subscribeToWebSockets() async {
+    final api = ApiClient();
+    final token = await api.getToken();
+    if (token == null) return;
+    
+    WebSocketService().connectChat(widget.companyId, token);
+    WebSocketService().connectTasks(widget.companyId, token);
+    
+    WebSocketService().chatStream.listen((data) {
+      _handleChatEvent(data);
+    });
+    
+    WebSocketService().taskStream.listen((data) {
+      _handleTaskEvent(data);
+    });
+  }
+
+  void _handleChatEvent(Map<String, dynamic> data) {
+    final type = data['type'];
+    setState(() {
+      switch (type) {
+        case 'new_message':
+          _messages.add(data['message']);
+          _scrollToBottom();
+          break;
+        case 'edit_message':
+          final messageId = data['message_id'];
+          final newText = data['new_message'];
+          final index = _messages.indexWhere((m) => m['id'] == messageId);
+          if (index != -1) {
+            _messages[index]['message'] = newText;
+            _messages[index]['edited'] = true;
+            _messages[index]['updated_at'] = data['updated_at'];
+          }
+          break;
+        case 'delete_message':
+          final messageId = data['message_id'];
+          _messages.removeWhere((m) => m['id'] == messageId);
+          break;
+        case 'clear_chat':
+          _messages.clear();
+          break;
+      }
+      _updateUnreadCount();
+    });
+  }
+
+  void _handleTaskEvent(Map<String, dynamic> data) {
+    final type = data['type'];
+    setState(() {
+      switch (type) {
+        case 'new_task':
+          final newTask = data['task'];
+          _tasks.insert(0, newTask);
+          break;
+        case 'update_task_status':
+          final taskId = data['task_id'];
+          final newStatus = data['new_status'];
+          final index = _tasks.indexWhere((t) => t['id'] == taskId);
+          if (index != -1) {
+            _tasks[index]['status'] = newStatus;
+            _tasks[index]['updated_at'] = data['updated_at'];
+          }
+          break;
+        case 'delete_task':
+          final taskId = data['task_id'];
+          _tasks.removeWhere((t) => t['id'] == taskId);
+          break;
+      }
+      _updatePendingCount();
+    });
+  }
+
+  void _updateUnreadCount() {
+    int unread = 0;
+    if (_lastVisit != null) {
+      unread = _messages
+          .where((msg) => DateTime.parse(msg['created_at']).isAfter(_lastVisit!))
+          .length;
+    }
+    widget.onUnreadMessagesChanged?.call(unread);
+  }
+
+  void _updatePendingCount() {
+    final pendingCount = _tasks.where((t) => t['status'] == 'pending').length;
+    widget.onPendingTasksChanged?.call(pendingCount);
   }
 
   // ==================== ВЛОЖЕНИЯ ====================
@@ -225,104 +309,6 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
   }
 
   // ==================== ОСНОВНЫЕ МЕТОДЫ ====================
-  Future<void> _connectWebSockets() async {
-    final api = ApiClient();
-    final token = await api.getToken();
-    if (token == null) return;
-
-    final baseUrl = ApiClient.baseUrl;
-    final wsBase = baseUrl.replaceFirst('http', 'ws');
-    final chatUrl = '$wsBase/ws/chat/${widget.companyId}?token=$token';
-    final tasksUrl = '$wsBase/ws/tasks/${widget.companyId}?token=$token';
-
-    _chatChannel = WebSocketChannel.connect(Uri.parse(chatUrl));
-    _chatChannel!.stream.listen((data) {
-      _handleChatEvent(data);
-    }, onError: (error) {
-      print('Chat WebSocket error: $error');
-    });
-
-    _tasksChannel = WebSocketChannel.connect(Uri.parse(tasksUrl));
-    _tasksChannel!.stream.listen((data) {
-      _handleTaskEvent(data);
-    }, onError: (error) {
-      print('Tasks WebSocket error: $error');
-    });
-  }
-
-  void _handleChatEvent(dynamic rawData) {
-    final data = rawData is String ? jsonDecode(rawData) : rawData;
-    final type = data['type'];
-    setState(() {
-      switch (type) {
-        case 'new_message':
-          _messages.add(data['message']);
-          _scrollToBottom();
-          break;
-        case 'edit_message':
-          final messageId = data['message_id'];
-          final newText = data['new_message'];
-          final index = _messages.indexWhere((m) => m['id'] == messageId);
-          if (index != -1) {
-            _messages[index]['message'] = newText;
-            _messages[index]['edited'] = true;
-            _messages[index]['updated_at'] = data['updated_at'];
-          }
-          break;
-        case 'delete_message':
-          final messageId = data['message_id'];
-          _messages.removeWhere((m) => m['id'] == messageId);
-          break;
-        case 'clear_chat':
-          _messages.clear();
-          break;
-      }
-      _updateUnreadCount();
-    });
-  }
-
-  void _handleTaskEvent(dynamic rawData) {
-    final data = rawData is String ? jsonDecode(rawData) : rawData;
-    final type = data['type'];
-    setState(() {
-      switch (type) {
-        case 'new_task':
-          final newTask = data['task'];
-          _tasks.insert(0, newTask);
-          break;
-        case 'update_task_status':
-          final taskId = data['task_id'];
-          final newStatus = data['new_status'];
-          final index = _tasks.indexWhere((t) => t['id'] == taskId);
-          if (index != -1) {
-            _tasks[index]['status'] = newStatus;
-            _tasks[index]['updated_at'] = data['updated_at'];
-          }
-          break;
-        case 'delete_task':
-          final taskId = data['task_id'];
-          _tasks.removeWhere((t) => t['id'] == taskId);
-          break;
-      }
-      _updatePendingCount();
-    });
-  }
-
-  void _updateUnreadCount() {
-    int unread = 0;
-    if (_lastVisit != null) {
-      unread = _messages
-          .where((msg) => DateTime.parse(msg['created_at']).isAfter(_lastVisit!))
-          .length;
-    }
-    widget.onUnreadMessagesChanged?.call(unread);
-  }
-
-  void _updatePendingCount() {
-    final pendingCount = _tasks.where((t) => t['status'] == 'pending').length;
-    widget.onPendingTasksChanged?.call(pendingCount);
-  }
-
   Future<void> _markChatRead() async {
     final api = ApiClient();
     try {
@@ -395,45 +381,47 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
   }
 
   Future<void> _sendMessage() async {
-    final t = AppLocalizations.of(context)!;
-    final text = _messageController.text.trim();
-    if (text.isEmpty && _attachmentFile == null && _webFile == null) return;
+  final t = AppLocalizations.of(context)!;
+  final text = _messageController.text.trim();
+  if (text.isEmpty && _attachmentFile == null && _webFile == null) return;
 
-    setState(() => _loadingMessages = true);
-    final api = ApiClient();
-    try {
-      String? attachmentUrl;
-      if (_attachmentFile != null || _webFile != null) {
-        final uploadRes = await api.uploadChatFile(
-          _attachmentFile,
-          _webFile,
-          widget.companyId,
-        );
-        attachmentUrl = uploadRes['url'];
-      }
-
-      await api.post('/chat/company/${widget.companyId}', data: {
-        'message': text,
-        'attachment_url': attachmentUrl,
-      });
-
-      _messageController.clear();
-      setState(() {
-        _attachmentFile = null;
-        _webFile = null;
-      });
-
-      await _loadChatMessages();
-      widget.onUnreadMessagesChanged?.call(0);
-      await _markChatRead();
-      _lastVisit = DateTime.now();
-    } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('${t.sendError}: $e')));
-    } finally {
-      if (mounted) setState(() => _loadingMessages = false);
+  setState(() => _loadingMessages = true);
+  final api = ApiClient();
+  try {
+    String? attachmentUrl;
+    if (_attachmentFile != null || _webFile != null) {
+      final uploadRes = await api.uploadChatFile(
+        _attachmentFile,
+        _webFile,
+        widget.companyId,
+      );
+      attachmentUrl = uploadRes['url'];
     }
+
+    await api.post('/chat/company/${widget.companyId}', data: {
+      'message': text,
+      'attachment_url': attachmentUrl,
+    });
+
+    _messageController.clear();
+    setState(() {
+      _attachmentFile = null;
+      _webFile = null;
+    });
+
+    // 👇 ВОЗВРАЩАЕМ ЗАГРУЗКУ СООБЩЕНИЙ
+    await _loadChatMessages();
+    
+    widget.onUnreadMessagesChanged?.call(0);
+    await _markChatRead();
+    _lastVisit = DateTime.now();
+  } catch (e) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('${t.sendError}: $e')));
+  } finally {
+    if (mounted) setState(() => _loadingMessages = false);
   }
+}
 
   Future<void> _clearChat() async {
     final t = AppLocalizations.of(context)!;
@@ -456,7 +444,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
     final api = ApiClient();
     try {
       await api.delete('/chat/company/${widget.companyId}/clear');
-      await _loadChatMessages();
+      // Не вызываем _loadChatMessages - очистка придёт через WebSocket
     } catch (e) {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text('${t.error}: $e')));
@@ -561,10 +549,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
     final api = ApiClient();
     try {
       await api.delete('/chat/message/${msg['id']}');
-      setState(() {
-        _messages.removeWhere((m) => m['id'] == msg['id']);
-      });
-      _updateUnreadCount();
+      // Не удаляем локально - сообщение удалится через WebSocket
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
     }
@@ -797,48 +782,48 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
                           ),
                   ),
                   Padding(
-  padding: EdgeInsets.only(
-    left: 12.0,
-    right: 12.0,
-    top: 12.0,
-    bottom: MediaQuery.of(context).viewInsets.bottom,
-  ),
-  child: Row(
-    children: [
-      IconButton(
-        icon: const Icon(Icons.attach_file),
-        onPressed: () => _showAttachmentPicker(context),
-        tooltip: t.attachFileTooltip,
-      ),
-      const SizedBox(width: 8),
-      Expanded(
-        child: TextField(
-          controller: _messageController,
-          style: TextStyle(color: colorScheme.onSurface),
-          decoration: InputDecoration(
-            hintText: t.enterMessageHint,
-            hintStyle: TextStyle(color: colorScheme.onSurfaceVariant),
-            filled: true,
-            fillColor: colorScheme.surfaceContainerHighest,
-            border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(30),
-                borderSide: BorderSide.none),
-            contentPadding: const EdgeInsets.symmetric(
-                horizontal: 20, vertical: 12),
-          ),
-        ),
-      ),
-      const SizedBox(width: 8),
-      CircleAvatar(
-        backgroundColor: colorScheme.primaryContainer,
-        child: IconButton(
-          icon: Icon(Icons.send, color: colorScheme.onPrimaryContainer),
-          onPressed: _sendMessage,
-        ),
-      ),
-    ],
-  ),
-),
+                    padding: EdgeInsets.only(
+                      left: 12.0,
+                      right: 12.0,
+                      top: 12.0,
+                      bottom: MediaQuery.of(context).viewInsets.bottom,
+                    ),
+                    child: Row(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.attach_file),
+                          onPressed: () => _showAttachmentPicker(context),
+                          tooltip: t.attachFileTooltip,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: _messageController,
+                            style: TextStyle(color: colorScheme.onSurface),
+                            decoration: InputDecoration(
+                              hintText: t.enterMessageHint,
+                              hintStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+                              filled: true,
+                              fillColor: colorScheme.surfaceContainerHighest,
+                              border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(30),
+                                  borderSide: BorderSide.none),
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 20, vertical: 12),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        CircleAvatar(
+                          backgroundColor: colorScheme.primaryContainer,
+                          child: IconButton(
+                            icon: Icon(Icons.send, color: colorScheme.onPrimaryContainer),
+                            onPressed: _sendMessage,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
               // ==================== ЗАДАЧИ ====================

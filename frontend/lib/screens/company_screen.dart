@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_client.dart';
 import '../providers/auth_provider.dart';
@@ -25,6 +24,7 @@ import '../widgets/matrix_rain.dart';
 import '../providers/theme_provider.dart';
 import '../widgets/company/orders_tab.dart';
 import '../widgets/company/counterparties_tab.dart';
+import '../services/websocket_service.dart';
 import 'package:frontend/l10n/app_localizations.dart';
 
 class RainTheme {
@@ -81,7 +81,6 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
   int? _archiveAccountId;
   int _pendingTasksCount = 0;
   int _unreadMessagesCount = 0;
-  WebSocketChannel? _userChannel;
 
   final GlobalKey<ReportsTabState> _reportsTabKey =
       GlobalKey<ReportsTabState>();
@@ -333,43 +332,26 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
     initializeDateFormatting('ru_RU', null);
     _tabController = TabController(length: 0, vsync: this);
     _loadData();
-    _connectUserWebSocket();
+    _initWebSocket();
     _loadTabOrder();
   }
 
   @override
   void dispose() {
     _tabController.dispose();
-    _userChannel?.sink.close();
     if (_hasChanges) Navigator.pop(context, true);
     super.dispose();
   }
 
-  Future<void> _connectUserWebSocket() async {
+  Future<void> _initWebSocket() async {
     final authState = ref.read(authProvider);
     final user = authState.user;
     if (user == null) return;
     final api = ApiClient();
     final token = await api.getToken();
     if (token == null) return;
-
-    final baseUrl = ApiClient.baseUrl;
-    final wsBase = baseUrl.replaceFirst('http', 'ws');
-    final wsUrl = '$wsBase/ws/user/${user.id}?token=$token';
-    print('🟢 CompanyScreen connecting user WS: $wsUrl');
-
-    _userChannel = WebSocketChannel.connect(Uri.parse(wsUrl));
-    _userChannel!.stream.listen((message) {
-      print('🟢 CompanyScreen user WS message: $message');
-      final data = jsonDecode(message);
-      if (data['type'] == 'update_counters') {
-        if (data['company_id'] == _company.id) {
-          _refreshCounters();
-        }
-      }
-    }, onError: (error) {
-      print('🔴 CompanyScreen user WS error: $error');
-    });
+    
+    WebSocketService().connectUser(user.id, token);
   }
 
   Future<void> _refreshCounters() async {
@@ -407,10 +389,8 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
   setState(() => _loading = true);
   final api = ApiClient();
   try {
-    // 1. Загружаем актуальные данные компании напрямую (бэкенд вернет CompanyResponse)
     final updatedCompany = await api.getCompany(_company.id);
     
-    // Загружаем счета, транзакции и категории
     final accountsRes = await api
         .get('/accounts', queryParameters: {'company_id': _company.id});
     final transactionsRes = await api.get('/transactions',
@@ -419,10 +399,8 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
         queryParameters: {'company_id': _company.id});
     
     setState(() {
-      // 2. ОБНОВЛЯЕМ КОМПАНИЮ (новое название применится здесь)
       _company = updatedCompany;
       
-      // Твоя оригинальная логика сортировки счетов
       final accountsList =
           (accountsRes.data as List).cast<Map<String, dynamic>>();
       accountsList.sort((a, b) {
@@ -440,19 +418,15 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
         }
       }
       
-      // Сохраняем ID архива и чистим список счетов от него
       _archiveAccountId = archive?['id'];
       _accounts = accountsList.where((a) => a['name'] != 'Архив').toList();
       
-      // Обновляем транзакции и категории
       _transactions = transactionsRes.data;
       _categories = categoriesRes.data;
       
-      // Выключаем индикатор загрузки
       _loading = false;
     });
     
-    // Обновляем счетчики и права
     await _refreshCounters();
     await _loadMyPermissions();
   } catch (e) {
@@ -528,6 +502,15 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
     final rain = getRainTheme(currentTheme);
     final double rainHeight = 260;
 
+    // Подписка на userStream для обновления счетчиков
+    ref.listen(StreamProvider((ref) => WebSocketService().userStream), (previous, next) {
+      next.whenData((data) {
+        if (data['type'] == 'update_counters' && data['company_id'] == _company.id) {
+          _refreshCounters();
+        }
+      });
+    });
+
     if (!_permissionsLoaded) {
       return Scaffold(
         backgroundColor: colorScheme.surface,
@@ -572,7 +555,6 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
             _archiveAccountId != null;
     final showDeleteCompany = isFounder;
 
-    // Перестраиваем вкладки при получении прав
     if (_tabOrder.isNotEmpty) {
       _rebuildTabs();
     }
@@ -622,7 +604,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
         builder: (_) => EditCompanyDialog(
           company: _company,
           onSuccess: () {
-            _loadData(); // Запускает твою полную синхронизацию данных и обновляет экран
+            _loadData();
           },
         ),
       );
