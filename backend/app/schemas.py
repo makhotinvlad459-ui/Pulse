@@ -1,6 +1,6 @@
 from pydantic import BaseModel, field_validator
-from datetime import datetime
 from typing import Optional, List
+from datetime import datetime
 from enum import Enum
 
 class UserRole(str, Enum):
@@ -12,36 +12,42 @@ class TransactionType(str, Enum):
     EXPENSE = "expense"
     TRANSFER = "transfer"
 
-# Company
+# --- COMPANY ---
+
+
 class CompanyCreate(BaseModel):
     name: str
-    manager_full_name: str
-    manager_phone: str
-    inn: str | None = None          
-    bank_account: str | None = None  
-    employees: List[dict] = []
+    inn: Optional[str] = None
+    bank_account: Optional[str] = None
+
+class CompanyUpdate(BaseModel):
+    name: str
+    inn: Optional[str] = None
+    bank_account: Optional[str] = None
+    manager_full_name: Optional[str] = None
+    manager_phone: Optional[str] = None
 
     @field_validator('manager_phone')
-    def validate_phone_length(cls, v: str) -> str:
-        if len(v) < 6:
+    def validate_phone_length(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and len(v) < 6:
             raise ValueError('Телефон должен содержать не менее 6 символов')
         return v
-    
 
 class CompanyResponse(BaseModel):
     id: int
-    inn: str
+    inn: Optional[str] = None  # Сделали Optional на случай, если в базе Null
     name: str
-    bank_account: str
-    manager_full_name: str
-    manager_phone: str
-    total_balance: float
+    bank_account: Optional[str] = None  # Сделали Optional
+    manager_full_name: Optional[str] = None  # Сделали Optional
+    manager_phone: Optional[str] = None  # Сделали Optional
+    total_balance: float = 0.0
     employees_credentials: List[dict] = []
     current_user_role: Optional[str] = None  
+    
     class Config:
         from_attributes = True
 
-# Account
+# --- ACCOUNT ---
 class AccountCreate(BaseModel):
     name: str
     type: str  # 'cash', 'bank', 'other'
@@ -56,7 +62,7 @@ class AccountResponse(BaseModel):
     class Config:
         from_attributes = True
 
-# Category
+# --- CATEGORY ---
 class CategoryCreate(BaseModel):
     name: str
     type: TransactionType
@@ -71,8 +77,7 @@ class CategoryResponse(BaseModel):
     class Config:
         from_attributes = True
 
-# Transaction
-# Transaction
+# --- TRANSACTION ---
 class TransactionItemCreate(BaseModel):
     product_id: int
     quantity: float
@@ -130,6 +135,7 @@ class UpdateMemberRole(BaseModel):
 class SetManagerRequest(BaseModel):
     user_id: int
 
+# --- SHOWCASE ---
 class ShowcaseItemCreate(BaseModel):
     name: str
     price: float
@@ -160,11 +166,7 @@ class ShowcaseItemResponse(BaseModel):
     class Config:
         from_attributes = True    
 
-from typing import List, Optional
-from datetime import datetime
-
-# ... внутри файла добавить:
-
+# --- ORDERS ---
 class OrderItemCreate(BaseModel):
     product_id: int
     quantity: float
@@ -247,4 +249,4 @@ class OrderResponse(BaseModel):
     work_price: float
 
     class Config:
-        from_attributes = True        
+        from_attributes = True

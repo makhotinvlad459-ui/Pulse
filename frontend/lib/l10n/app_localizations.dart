@@ -3493,6 +3493,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Role'**
   String get roleLabel;
+
+  /// No description provided for @bankAccountLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Bank account'**
+  String get bankAccountLabel;
 }
 
 class _AppLocalizationsDelegate

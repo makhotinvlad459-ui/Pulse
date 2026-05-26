@@ -72,6 +72,7 @@ class CompanyScreen extends ConsumerStatefulWidget {
 class _CompanyScreenState extends ConsumerState<CompanyScreen>
     with TickerProviderStateMixin {
   late TabController _tabController;
+  late Company _company;
   List<dynamic> _accounts = [];
   List<dynamic> _transactions = [];
   List<dynamic> _categories = [];
@@ -126,7 +127,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
 
   Future<void> _loadTabOrder() async {
     final prefs = await SharedPreferences.getInstance();
-    final saved = prefs.getStringList('tab_order_${widget.company.id}');
+    final saved = prefs.getStringList('tab_order_${_company.id}');
     if (saved != null && saved.isNotEmpty) {
       final validKeys =
           saved.where((key) => _allTabKeys.contains(key)).toList();
@@ -146,7 +147,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
 
   Future<void> _saveTabOrder(List<String> newOrder) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList('tab_order_${widget.company.id}', newOrder);
+    await prefs.setStringList('tab_order_${_company.id}', newOrder);
     setState(() {
       _tabOrder = newOrder;
     });
@@ -235,7 +236,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
             newTabs.add(
                 Tab(icon: const Icon(Icons.receipt), text: t.tabOperations));
             newWidgets.add(TransactionsTab(
-              companyId: widget.company.id,
+              companyId: _company.id,
               onRefresh: _refresh,
               accounts: _accounts,
               categories: _categories,
@@ -249,7 +250,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
             newTabs.add(
                 Tab(icon: const Icon(Icons.storefront), text: t.tabShowcase));
             newWidgets.add(ShowcaseTab(
-              companyId: widget.company.id,
+              companyId: _company.id,
               onRefresh: _refresh,
               permissions: effectivePermissions,
             ));
@@ -261,8 +262,8 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
             newTabs.add(
                 Tab(icon: const Icon(Icons.chat_bubble), text: t.tabChatTasks));
             newWidgets.add(ChatAndTasksTab(
-              companyId: widget.company.id,
-              isManager: widget.company.currentUserRole == 'manager',
+              companyId: _company.id,
+              isManager: _company.currentUserRole == 'manager',
               onPendingTasksChanged: _onPendingTasksChanged,
               onUnreadMessagesChanged: _onUnreadMessagesChanged,
             ));
@@ -273,7 +274,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
             newTabs
                 .add(Tab(icon: const Icon(Icons.inventory), text: t.tabStock));
             newWidgets.add(StockTab(
-              companyId: widget.company.id,
+              companyId: _company.id,
               permissions: effectivePermissions,
             ));
           }
@@ -284,7 +285,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                 Tab(icon: const Icon(Icons.bar_chart), text: t.tabReports));
             newWidgets.add(ReportsTab(
               key: _reportsTabKey,
-              companyId: widget.company.id,
+              companyId: _company.id,
               categories: _categories,
             ));
           }
@@ -294,7 +295,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
             newTabs.add(
                 Tab(icon: const Icon(Icons.assignment), text: t.tabOrders));
             newWidgets.add(OrdersTab(
-              companyId: widget.company.id,
+              companyId: _company.id,
               permissions: effectivePermissions,
               isFounder: isFounder,
               onDataChanged: _updateAll,
@@ -306,7 +307,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
             newTabs.add(
                 Tab(icon: const Icon(Icons.people), text: t.tabCounterparties));
             newWidgets.add(CounterpartiesTab(
-              companyId: widget.company.id,
+              companyId: _company.id,
               permissions: effectivePermissions,
             ));
           }
@@ -328,6 +329,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
   @override
   void initState() {
     super.initState();
+    _company = widget.company;
     initializeDateFormatting('ru_RU', null);
     _tabController = TabController(length: 0, vsync: this);
     _loadData();
@@ -361,7 +363,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
       print('🟢 CompanyScreen user WS message: $message');
       final data = jsonDecode(message);
       if (data['type'] == 'update_counters') {
-        if (data['company_id'] == widget.company.id) {
+        if (data['company_id'] == _company.id) {
           _refreshCounters();
         }
       }
@@ -375,7 +377,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
     try {
       final countsRes = await api.get('/notifications/unread-counts/');
       final counts = countsRes.data as Map<String, dynamic>;
-      final companyIdStr = widget.company.id.toString();
+      final companyIdStr = _company.id.toString();
       if (counts.containsKey(companyIdStr)) {
         final companyCounts = counts[companyIdStr] as Map<String, dynamic>;
         setState(() {
@@ -402,51 +404,70 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
   }
 
   Future<void> _loadData() async {
-    setState(() => _loading = true);
-    final api = ApiClient();
-    try {
-      final accountsRes = await api
-          .get('/accounts', queryParameters: {'company_id': widget.company.id});
-      final transactionsRes = await api.get('/transactions',
-          queryParameters: {'company_id': widget.company.id});
-      final categoriesRes = await api.get('/categories',
-          queryParameters: {'company_id': widget.company.id});
-      setState(() {
-        final accountsList =
-            (accountsRes.data as List).cast<Map<String, dynamic>>();
-        accountsList.sort((a, b) {
-          int orderA = a['type'] == 'cash' ? 0 : (a['type'] == 'bank' ? 1 : 2);
-          int orderB = b['type'] == 'cash' ? 0 : (b['type'] == 'bank' ? 1 : 2);
-          if (orderA != orderB) return orderA.compareTo(orderB);
-          return a['id'].compareTo(b['id']);
-        });
-        Map<String, dynamic>? archive;
-        for (var acc in accountsList) {
-          if (acc['name'] == 'Архив') {
-            archive = acc;
-            break;
-          }
-        }
-        _archiveAccountId = archive?['id'];
-        _accounts = accountsList.where((a) => a['name'] != 'Архив').toList();
-        _transactions = transactionsRes.data;
-        _categories = categoriesRes.data;
-        _loading = false;
+  setState(() => _loading = true);
+  final api = ApiClient();
+  try {
+    // 1. Загружаем актуальные данные компании напрямую (бэкенд вернет CompanyResponse)
+    final updatedCompany = await api.getCompany(_company.id);
+    
+    // Загружаем счета, транзакции и категории
+    final accountsRes = await api
+        .get('/accounts', queryParameters: {'company_id': _company.id});
+    final transactionsRes = await api.get('/transactions',
+        queryParameters: {'company_id': _company.id});
+    final categoriesRes = await api.get('/categories',
+        queryParameters: {'company_id': _company.id});
+    
+    setState(() {
+      // 2. ОБНОВЛЯЕМ КОМПАНИЮ (новое название применится здесь)
+      _company = updatedCompany;
+      
+      // Твоя оригинальная логика сортировки счетов
+      final accountsList =
+          (accountsRes.data as List).cast<Map<String, dynamic>>();
+      accountsList.sort((a, b) {
+        int orderA = a['type'] == 'cash' ? 0 : (a['type'] == 'bank' ? 1 : 2);
+        int orderB = b['type'] == 'cash' ? 0 : (b['type'] == 'bank' ? 1 : 2);
+        if (orderA != orderB) return orderA.compareTo(orderB);
+        return a['id'].compareTo(b['id']);
       });
-      await _refreshCounters();
-      await _loadMyPermissions();
-    } catch (e) {
-      setState(() => _loading = false);
-      if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('${AppLocalizations.of(context)!.error}: $e')));
+      
+      Map<String, dynamic>? archive;
+      for (var acc in accountsList) {
+        if (acc['name'] == 'Архив') {
+          archive = acc;
+          break;
+        }
+      }
+      
+      // Сохраняем ID архива и чистим список счетов от него
+      _archiveAccountId = archive?['id'];
+      _accounts = accountsList.where((a) => a['name'] != 'Архив').toList();
+      
+      // Обновляем транзакции и категории
+      _transactions = transactionsRes.data;
+      _categories = categoriesRes.data;
+      
+      // Выключаем индикатор загрузки
+      _loading = false;
+    });
+    
+    // Обновляем счетчики и права
+    await _refreshCounters();
+    await _loadMyPermissions();
+  } catch (e) {
+    setState(() => _loading = false);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('${AppLocalizations.of(context)!.error}: $e')));
     }
   }
+}
 
   Future<void> _loadMyPermissions() async {
     final api = ApiClient();
     try {
-      final res = await api.getMyPermissions(widget.company.id);
+      final res = await api.getMyPermissions(_company.id);
       final perms = res['permissions'] as List?;
       setState(() {
         _myPermissions = (perms ?? []).cast<String>().toSet();
@@ -478,7 +499,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
       context,
       MaterialPageRoute(
         builder: (_) => ArchiveScreen(
-          companyId: widget.company.id,
+          companyId: _company.id,
           archiveAccountId: _archiveAccountId!,
         ),
       ),
@@ -500,7 +521,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
     final t = AppLocalizations.of(context)!;
 
     final isFounder = authState.user?.role == UserRole.founder;
-    final currentUserRole = widget.company.currentUserRole;
+    final currentUserRole = _company.currentUserRole;
     final isManager = currentUserRole == 'manager';
 
     final gridColor = getGridColor(currentTheme, colorScheme);
@@ -594,25 +615,30 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                       const Spacer(),
                       if (showMenu)
                         PopupMenuButton<String>(
-                          onSelected: (value) async {
-                            if (value == 'edit' && showEditCompany)
-                              await showDialog(
-                                  context: context,
-                                  builder: (_) => EditCompanyDialog(
-                                      company: widget.company,
-                                      onSuccess: _refresh));
+  onSelected: (value) async {
+    if (value == 'edit' && showEditCompany) {
+      await showDialog(
+        context: context,
+        builder: (_) => EditCompanyDialog(
+          company: _company,
+          onSuccess: () {
+            _loadData(); // Запускает твою полную синхронизацию данных и обновляет экран
+          },
+        ),
+      );
+    }
                             if (value == 'add_account' && showAddAccount)
                               await showDialog(
                                   context: context,
                                   builder: (_) => AddAccountDialog(
-                                      companyId: widget.company.id,
+                                      companyId: _company.id,
                                       onSuccess: _refresh));
                             if (value == 'manage_categories' &&
                                 showManageCategories)
                               await showDialog(
                                   context: context,
                                   builder: (_) => ManageCategoriesDialog(
-                                      companyId: widget.company.id,
+                                      companyId: _company.id,
                                       onSuccess: _refresh,
                                       categories: _categories));
                             if (value == 'manage_employees' &&
@@ -620,7 +646,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                               await showDialog(
                                   context: context,
                                   builder: (_) => ManageEmployeesDialog(
-                                      companyId: widget.company.id,
+                                      companyId: _company.id,
                                       onSuccess: _refresh));
                             if (value == 'archive' && showArchive)
                               _openArchive();
@@ -685,7 +711,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                   padding:
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   child: Text(
-                    widget.company.name,
+                    _company.name,
                     style: GoogleFonts.orbitron(
                       fontSize: 24,
                       fontWeight: FontWeight.w600,
@@ -750,7 +776,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                                         await api.delete(
                                             '/accounts/${acc['id']}',
                                             queryParameters: {
-                                              'company_id': widget.company.id
+                                              'company_id': _company.id
                                             });
                                         await _refresh();
                                       } catch (e) {
@@ -821,7 +847,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
     if (confirm == true) {
       final api = ApiClient();
       try {
-        await api.delete('/companies/${widget.company.id}');
+        await api.delete('/companies/${_company.id}');
         if (mounted) {
           ScaffoldMessenger.of(context)
               .showSnackBar(SnackBar(content: Text(t.companyDeleted)));

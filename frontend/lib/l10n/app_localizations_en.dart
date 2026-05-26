@@ -1730,4 +1730,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get roleLabel => 'Role';
+
+  @override
+  String get bankAccountLabel => 'Bank account';
 }

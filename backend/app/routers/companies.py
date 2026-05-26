@@ -10,7 +10,7 @@ import string
 
 from app.database import get_db
 from app.models import User, Company,Counterparty, Account, CompanyMember, UserRole, Category, Permission, CompanyMemberPermission
-from app.schemas import CompanyCreate, CompanyResponse, UpdateMemberRole, SetManagerRequest
+from app.schemas import CompanyCreate, CompanyResponse, UpdateMemberRole, SetManagerRequest, CompanyUpdate
 from app.deps import get_current_user
 from app.auth import get_password_hash
 
@@ -523,7 +523,7 @@ async def reset_member_password(
 @router.put("/{company_id}", response_model=CompanyResponse)
 async def update_company(
     company_id: int,
-    company_data: CompanyCreate,
+    company_data: CompanyUpdate,  # Используем новую схему апдейта!
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -535,11 +535,19 @@ async def update_company(
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
     
-    company.inn = company_data.inn
+    # Обновляем основные поля
     company.name = company_data.name
-    company.bank_account = company_data.bank_account
-    company.manager_full_name = company_data.manager_full_name
-    company.manager_phone = company_data.manager_phone
+    if company_data.inn is not None:
+        company.inn = company_data.inn
+    if company_data.bank_account is not None:
+        company.bank_account = company_data.bank_account
+        
+    # Если во Flutter-диалоге мы их вообще не передали (пришел None), 
+    # то оставляем старые значения, которые уже лежали в базе!
+    if company_data.manager_full_name is not None:
+        company.manager_full_name = company_data.manager_full_name
+    if company_data.manager_phone is not None:
+        company.manager_phone = company_data.manager_phone
     
     await db.commit()
     await db.refresh(company)
@@ -597,9 +605,7 @@ async def set_company_manager(
     
     # Назначаем новую роль (управляющий получает роль manager)
     member.role_in_company = 'manager'
-    
-    # Права больше не выдаём автоматически – они управляются через интерфейс прав.
-    # Если нужно, чтобы новый управляющий имел какие-то права, выдайте их через отдельный эндпоинт.
+   
     
     await db.commit()
     return {"detail": "Manager updated", "manager_full_name": user.full_name, "manager_phone": user.phone}
@@ -699,3 +705,36 @@ async def update_member(
     
     await db.commit()
     return {"detail": "Member updated"}
+
+@router.get("/{company_id}")
+async def get_company(
+    company_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Проверка доступа
+    if current_user.role == UserRole.FOUNDER:
+        result = await db.execute(select(Company).where(Company.id == company_id, Company.founder_id == current_user.id))
+        company = result.scalar_one_or_none()
+    else:
+        result = await db.execute(select(Company).join(CompanyMember).where(Company.id == company_id, CompanyMember.user_id == current_user.id))
+        company = result.scalar_one_or_none()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found or access denied")
+    
+    # Загружаем счета для баланса
+    accounts_result = await db.execute(select(Account).where(Account.company_id == company_id))
+    accounts = accounts_result.scalars().all()
+    total_balance = sum(acc.balance for acc in accounts)
+    
+    return CompanyResponse(
+        id=company.id,
+        inn=company.inn,
+        name=company.name,
+        bank_account=company.bank_account,
+        manager_full_name=company.manager_full_name,
+        manager_phone=company.manager_phone,
+        total_balance=total_balance,
+        employees_credentials=[],
+        current_user_role=None
+    )

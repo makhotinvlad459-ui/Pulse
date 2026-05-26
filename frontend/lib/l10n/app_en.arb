@@ -649,5 +649,7 @@
   "employeeUpdated": "Employee updated",
   "roleLabel": "Role",
   "fullName": "Full name",
-  "enterFullName": "Enter full name"
+  "enterFullName": "Enter full name",
+  "innLabel": "INN",
+  "bankAccountLabel": "Bank account"
 }

@@ -649,5 +649,7 @@
   "employeeUpdated": "Сотрудник обновлён",
   "roleLabel": "Роль",
   "fullName": "Полное имя",
-  "enterFullName": "Введите полное имя"
+  "enterFullName": "Введите полное имя",
+  "innLabel": "ИНН",
+  "bankAccountLabel": "Расчётный счёт"
 }

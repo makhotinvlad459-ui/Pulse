@@ -267,6 +267,11 @@ class ApiClient {
     await put('/permissions/company/$companyId/member/$memberId', data: {'permission_names': permissionNames});
   }
 
+  Future<Company> getCompany(int companyId) async {
+  final response = await get('/companies/$companyId');
+  return Company.fromJson(response.data);
+}
+
   Future<void> changePassword(String oldPassword, String newPassword) async {
   await post('/auth/change-password', data: {
     'old_password': oldPassword,

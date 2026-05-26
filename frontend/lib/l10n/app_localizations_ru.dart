@@ -1728,4 +1728,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get roleLabel => 'Роль';
+
+  @override
+  String get bankAccountLabel => 'Расчётный счёт';
 }
