@@ -129,11 +129,13 @@ class _OrderDetailsDialogState extends ConsumerState<OrderDetailsDialog> {
     final ImagePicker picker = ImagePicker();
     final XFile? pickedFile = await picker.pickImage(source: source);
     if (pickedFile == null) return;
-    final compressed = await ImageCompression.compressImage(pickedFile);
+    final compressed = await ImageCompression.compressXFile(picked);
     final api = ApiClient();
     try {
-      await api.uploadPhoto('/orders/${widget.order['id']}/attachments',
-          compressed, queryParameters: {'company_id': widget.companyId});
+      await _apiClient.uploadOrderFile(
+      compressedXFile, 
+      queryParameters: {'company_id': widget.companyId},
+      );
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(t.fileAttached)));
       await _refreshOrder();

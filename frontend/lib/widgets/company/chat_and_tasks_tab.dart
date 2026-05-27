@@ -207,15 +207,18 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab> with SingleTi
         String filename = _chatPhoto != null ? _chatPhoto!.name : _chatWebFile!.name;
         List<int> bytes = _chatPhoto != null ? await _chatPhoto!.readAsBytes() : _chatWebFile!.bytes!;
 
-        // Исправлено сжатие с правильной передачей Uint8List
+        // Сжимаем байты
         final compressedBytes = await ImageCompression.compressImage(Uint8List.fromList(bytes));
 
-        // Вызов загрузчика с правильной сигнатурой аргументов
-        uploadedUrl = await _apiClient.uploadChatFile(
+        // Вызываем загрузчик. Передаем путь/эндпоинт, байты и имя файла
+        final Map<String, dynamic> uploadResult = await _apiClient.uploadChatFile(
           '/chat/upload',
           compressedBytes,
           filename,
         );
+        
+        // Достаем url из ответа бэкенда (поменяй 'url' на свой ключ, если он другой, например 'attachment_url')
+        uploadedUrl = uploadResult['url'] ?? uploadResult['attachment_url'];
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Ошибка загрузки файла: $e")),
@@ -227,13 +230,16 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab> with SingleTi
 
     try {
       if (_editingMessageId != null) {
-        await _apiClient.patch('/chat/message/$_editingMessageId');
+        await _apiClient.patch('/chat/message/$_editingMessageId', data: {'message': text});
         setState(() {
           _editingMessageId = null;
           _messageController.clear();
         });
       } else {
-        await _apiClient.post('/chat/company/${widget.companyId}');
+        await _apiClient.post('/chat/company/${widget.companyId}', data: {
+          'message': text,
+          'attachment_url': uploadedUrl,
+        });
         _messageController.clear();
         setState(() {
           _chatPhoto = null;

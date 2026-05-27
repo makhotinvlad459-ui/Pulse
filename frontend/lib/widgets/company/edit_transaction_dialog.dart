@@ -123,7 +123,7 @@ class _EditTransactionDialogState extends ConsumerState<EditTransactionDialog> {
       final picker = ImagePicker();
       final picked = await picker.pickImage(source: ImageSource.gallery);
       if (picked != null) {
-        final compressed = await ImageCompression.compressImage(picked);
+        final compressed = await ImageCompression.compressXFile(picked);
         setState(() {
           _photo = compressed;
           _hasExistingAttachment = false;
