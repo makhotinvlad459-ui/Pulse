@@ -1,12 +1,12 @@
 import os
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 from sqlalchemy.orm import selectinload
 from pydantic import BaseModel
-from firebase_admin import storage, messaging  # Подключаем Firebase Storage и пуши
+from firebase_admin import storage, messaging
 
 from app.database import get_db
 from app.models import User, Company, ChatMessage, TransactionComment, Transaction, CompanyMember, UserRole, UserChatVisit
@@ -58,7 +58,7 @@ async def _check_company_access(company_id: int, current_user: User, db: AsyncSe
         result = await db.execute(select(Company).join(CompanyMember).where(Company.id == company_id, CompanyMember.user_id == current_user.id))
     return result.scalar_one_or_none() is not None
 
-# ========== Загрузка файлов СРАЗУ В FIREBASE STORAGE С SIGNED URL ==========
+# ========== Загрузка файлов В FIREBASE STORAGE ==========
 @router.post("/upload")
 async def upload_chat_file(
     company_id: int = Form(...),
@@ -66,29 +66,22 @@ async def upload_chat_file(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # 1. Проверяем доступ пользователя к компании
     if not await _check_company_access(company_id, current_user, db):
         raise HTTPException(status_code=403, detail="Access denied to this company")
 
     try:
-        # 2. Формируем уникальное имя файла для облака
         timestamp = int(datetime.utcnow().timestamp())
         blob_name = f"chat_{company_id}/{timestamp}_{file.filename}"
 
-        # 3. Подключаемся к бакету Firebase
         bucket = storage.bucket()
         blob = bucket.blob(blob_name)
 
-        # 4. Читаем файл и заливаем в Firebase Storage
         file_content = await file.read()
         blob.upload_from_string(file_content, content_type=file.content_type)
 
-        # 5. Генерируем безопасную временную подписанную ссылку (Signed URL) на 7 дней.
-        # Flutter Web сможет отобразить её напрямую без ошибок CORS.
-        file_url = blob.generate_signed_url(
-            expiration=timedelta(days=7),
-            method="GET"
-        )
+        # Делаем файл публичным в Firebase Storage
+        blob.make_public()
+        file_url = blob.public_url
 
         return {"url": file_url}
 
@@ -110,37 +103,34 @@ async def send_chat_message(
         company_id=company_id,
         user_id=current_user.id,
         message=msg.message,
-        attachment_url=msg.attachment_url,   # Сохраняем готовую Signed URL ссылку
+        attachment_url=msg.attachment_url,
         edited=False
     )
     db.add(new_msg)
     await db.commit()
     await db.refresh(new_msg)
     
-    # Готовим пакет данных для реалтайма
     ws_message_data = {
         "id": new_msg.id,
         "user_id": current_user.id,
         "user_full_name": current_user.display_name,
         "message": new_msg.message,
-        "attachment_url": new_msg.attachment_url,  # Ссылка летит в WebSocket
+        "attachment_url": new_msg.attachment_url,
         "created_at": new_msg.created_at.isoformat(),
         "edited": False,
         "updated_at": None,
     }
 
-    # Отправляем через WebSocket всем, кто ОНЛАЙН в чате этой компании
     await manager.broadcast_chat(company_id, {
         "type": "new_message",
         "message": ws_message_data
     })
     
-    # Обновляем красные точки (счётчики) непрочитанных у всей компании
     await manager.notify_company_members(company_id, {
         "type": "update_counters",
         "company_id": company_id
     }, db)
-
+    
     return ChatMessageResponse(
         id=new_msg.id,
         user_id=current_user.id,
@@ -262,7 +252,6 @@ async def clear_chat(
     
     return {"detail": "Chat cleared"}
 
-# ========== Комментарии к операциям ==========
 @router.post("/transaction/{transaction_id}", response_model=CommentResponse)
 async def add_transaction_comment(
     transaction_id: int,
