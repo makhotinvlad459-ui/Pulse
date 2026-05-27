@@ -328,52 +328,56 @@ class _EditTransactionDialogState extends ConsumerState<EditTransactionDialog> {
   Future<void> _save() async {
     setState(() => _loading = true);
     final api = ApiClient();
-    Map<String, dynamic> data = {
-      'type': _type,
-      'amount': _amount,
-      'date': _date.toIso8601String(),
-      'account_id': _accountId,
-      'description': _description,
-      'counterparty': _counterparty.isNotEmpty ? _counterparty : null,
-      'delete_attachment': !_hasExistingAttachment && _photo == null && _webFile == null,
-    };
-    if (_type == 'income' || _type == 'expense') {
-      if (_categoryId != null) data['category_id'] = _categoryId;
-      if (_selectedProducts.isNotEmpty) {
-        data['items'] = _selectedProducts.map((p) => {
-          'product_id': p['product_id'],
-          'quantity': p['quantity'],
-          'price_per_unit': p['price_per_unit'],
-        }).toList();
-      }
-    } else if (_type == 'transfer') {
-      data['transfer_to_account_id'] = _transferToAccountId;
-    }
+
     try {
-      await api.patch('/transactions/${widget.transaction['id']}',
-          queryParameters: {'company_id': widget.companyId}, data: data);
-      if ((_photo != null || _webFile != null) && !_hasExistingAttachment) {
-        if (_photo != null) {
-          await api.uploadPhoto('/transactions/${widget.transaction['id']}/upload', _photo!,
-              queryParameters: {'company_id': widget.companyId});
-        } else if (_webFile != null && _webFile!.bytes != null) {
-          await api.uploadPhotoBytes('/transactions/${widget.transaction['id']}/upload',
-              _webFile!.bytes!, _webFile!.name,
-              queryParameters: {'company_id': widget.companyId});
-        }
+      // 1. По умолчанию сохраняем текущий URL, который уже был у транзакции
+      String? finalUrl = widget.transaction['attachment_url'];
+
+      // 2. Если выбран новый файл, загружаем его отдельно и получаем URL строку
+      if (kIsWeb && _webFile != null && _webFile!.bytes != null) {
+        finalUrl = await api.uploadPhotoBytes(
+          '/transactions/upload',
+          _webFile!.bytes!,
+          _webFile!.name,
+          queryParameters: {'company_id': widget.companyId},
+        );
+      } else if (!kIsWeb && _photo != null) {
+        finalUrl = await api.uploadPhoto(
+          '/transactions/upload',
+          _photo!,
+          queryParameters: {'company_id': widget.companyId},
+        );
+      } else if (_photo == null && _webFile == null) {
+        // Если пользователь очистил выбранный файл (нажал на крестик удаления)
+        // и мы хотим убрать прикрепление у транзакции, ставим null
+        finalUrl = null;
       }
+
+      // 3. Отправляем чистый предсказуемый JSON на бэкенд
+      final body = {
+        'type': _type,
+        'amount': _amount,
+        'date': _date.toIso8601String(),
+        'account_id': _accountId,
+        'category_id': _type == 'transfer' ? null : _categoryId,
+        'transfer_to_account_id': _type == 'transfer' ? _transferToAccountId : null,
+        'description': _description,
+        'counterparty': _counterparty.trim().isEmpty ? null : _counterparty.trim(),
+        'attachment_url': finalUrl, // Обычная строка URL или null
+      };
+
+      await api.put(
+        '/transactions/${widget.transaction['id']}?company_id=${widget.companyId}', 
+        data: body
+      );
+
       await widget.onSuccess();
       if (mounted) Navigator.pop(context);
     } catch (e) {
-      if (mounted) {
-        String errorMessage = e.toString();
-        final t = AppLocalizations.of(context)!;
-        if (errorMessage.contains('Insufficient stock')) {
-          errorMessage = t.insufficientStock;
-        }
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('${t.error}: $errorMessage')));
-      }
+      print("Ошибка обновления транзакции: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка обновления: $e')),
+      );
     } finally {
       if (mounted) setState(() => _loading = false);
     }

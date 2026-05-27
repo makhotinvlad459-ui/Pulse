@@ -8,10 +8,11 @@ import os
 import shutil
 from fastapi.responses import FileResponse
 from decimal import Decimal
-from app.models import OrderPayment 
+import uuid
+from firebase_admin import storage
 
 from app.database import get_db
-from app.models import User, Company, Counterparty, Account, Category, Transaction, TransactionType, CompanyMember, UserRole, Product, TransactionItem
+from app.models import User, Company, Counterparty, Account, Category, Transaction, TransactionType, CompanyMember, UserRole, Product, TransactionItem, OrderPayment 
 from app.schemas import TransactionCreate, TransactionResponse, TransactionItemResponse
 from app.deps import get_current_user
 
@@ -133,13 +134,10 @@ async def create_transaction(
             if not result.scalar_one_or_none():
                 raise HTTPException(status_code=404, detail="Category not found")
     
-    # НОРМАЛИЗАЦИЯ КОНТРАГЕНТА (теперь с проверкой Counterparty)
+    # НОРМАЛИЗАЦИЯ КОНТРАГЕНТА
     normalized_counterparty = await _normalize_counterparty(company_id, trans_data.counterparty, db)
     
-    # ---- ДОБАВЛЯЕМ НОВОГО КОНТРАГЕНТА В ТАБЛИЦУ Counterparty, ЕСЛИ ЕГО ЕЩЁ НЕТ ----
-    from app.models import Counterparty
     if normalized_counterparty:
-        # Проверяем, есть ли уже такой контрагент в таблице Counterparty
         existing_cp = await db.execute(
             select(Counterparty).where(
                 Counterparty.company_id == company_id,
@@ -156,7 +154,6 @@ async def create_transaction(
             )
             db.add(new_cp)
             await db.flush()
-    # ------------------------------------------------------------------
     
     # Генерация номера операции
     last_num_result = await db.execute(select(func.max(Transaction.number)).where(Transaction.company_id == company_id))
@@ -167,7 +164,7 @@ async def create_transaction(
     if trans_data.date.tzinfo is not None:
         trans_data.date = trans_data.date.replace(tzinfo=None)
     
-    # Создаём транзакцию
+    # Создаём транзакцию (Берем attachment_url, присланный с фронтенда)
     new_trans = Transaction(
         company_id=company_id,
         account_id=trans_data.account_id,
@@ -176,6 +173,7 @@ async def create_transaction(
         date=trans_data.date,
         category_id=trans_data.category_id,
         description=trans_data.description,
+        attachment_url=trans_data.attachment_url,  # <-- СОХРАНЯЕМ URL СТРОКУ
         created_by=current_user.id,
         transfer_to_account_id=trans_data.transfer_to_account_id if is_transfer else None,
         number=new_number,
@@ -420,10 +418,9 @@ async def update_transaction(
     if trans_data.date.tzinfo is not None:
         trans_data.date = trans_data.date.replace(tzinfo=None)
     
-    # НОРМАЛИЗАЦИЯ КОНТРАГЕНТА (теперь с проверкой Counterparty)
+    # НОРМАЛИЗАЦИЯ КОНТРАГЕНТА
     normalized_counterparty = await _normalize_counterparty(company_id, trans_data.counterparty, db)
     
-    # ---- ДОБАВЛЯЕМ НОВОГО КОНТРАГЕНТА В ТАБЛИЦУ Counterparty, ЕСЛИ ЕГО ЕЩЁ НЕТ ----
     from app.models import Counterparty
     if normalized_counterparty:
         existing_cp = await db.execute(
@@ -442,7 +439,6 @@ async def update_transaction(
             )
             db.add(new_cp)
             await db.flush()
-    # ------------------------------------------------------------------
     
     # Обновляем основные поля
     transaction.account_id = trans_data.account_id
@@ -461,14 +457,12 @@ async def update_transaction(
     else:
         transaction.transfer_to_account_id = None
 
-    if trans_data.delete_attachment:
-        if transaction.attachment_url and os.path.exists(transaction.attachment_url):
-            try:
-                os.remove(transaction.attachment_url)
-            except Exception as e:
-                print(f"Error deleting file: {e}")
+    # ОБНОВЛЕНИЕ ССЫЛКИ ВЛОЖЕНИЯ (Firebase Cloud)
+    if trans_data.delete_attachment or trans_data.attachment_url is None:
         transaction.attachment_url = None
         transaction.attachment_uploaded_at = None
+    else:
+        transaction.attachment_url = trans_data.attachment_url
     
     await db.flush()
     
@@ -561,7 +555,6 @@ async def delete_transaction(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # Проверка доступа к компании
     if current_user.role == UserRole.FOUNDER:
         result = await db.execute(select(Company).where(Company.id == company_id, Company.founder_id == current_user.id))
     else:
@@ -570,20 +563,17 @@ async def delete_transaction(
     if not company:
         raise HTTPException(status_code=404, detail="Company not found or access denied")
     
-    # Находим транзакцию
     result = await db.execute(select(Transaction).where(Transaction.id == transaction_id, Transaction.company_id == company_id))
     transaction = result.scalar_one_or_none()
     if not transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
     
-    # Загружаем товары транзакции (нужны для отката остатков при жёстком удалении)
     items_result = await db.execute(
         select(TransactionItem).where(TransactionItem.transaction_id == transaction_id)
         .options(selectinload(TransactionItem.product))
     )
     items = items_result.scalars().all()
     
-    # Проверяем, связана ли транзакция с оплатой заказа
     order_payment = await db.execute(
         select(OrderPayment).where(OrderPayment.transaction_id == transaction_id)
     )
@@ -592,38 +582,26 @@ async def delete_transaction(
         order_id = order_payment.order_id
     
     if current_user.role == UserRole.FOUNDER:
-    # Полное удаление (жёсткое)
-    # Если транзакция связана с оплатой заказа, удаляем оплату и пересчитываем сумму оплат заказа
         if order_payment:
             await db.delete(order_payment)
             await _recalc_paid_amount(order_id, db)
     
-    # Откатываем остатки товаров
         for item in items:
             product = item.product
             if transaction.type == 'income':
                 product.current_quantity += Decimal(str(item.quantity))
-            else:  # expense
+            else:
                 product.current_quantity -= Decimal(str(item.quantity))
     
-    # Удаляем файл вложения, если есть
-        if transaction.attachment_url and os.path.exists(transaction.attachment_url):
-            try:
-                os.remove(transaction.attachment_url)
-            except Exception as e:
-                print(f"Error deleting file: {e}")
-    
+        # Файлы теперь в Firebase Cloud, локально ничего удалять не нужно
         await db.delete(transaction)
-    # Пересчитываем балансы счетов (до коммита, но после удаления)
         await recalc_account_balance(transaction.account_id, db)
         if transaction.transfer_to_account_id:
             await recalc_account_balance(transaction.transfer_to_account_id, db)
-    # ОДИН коммит в конце
         await db.commit()
         return {"detail": "Transaction permanently deleted"}
     
     else:
-        # Мягкое удаление (не трогаем оплаты заказов)
         if transaction.is_deleted:
             raise HTTPException(status_code=400, detail="Transaction already deleted")
         transaction.is_deleted = True
@@ -671,13 +649,12 @@ async def restore_transaction(
     await db.commit()
     return {"detail": "Transaction restored"}
 
-@router.post("/{transaction_id}/upload")
-async def upload_transaction_photo(
-    transaction_id: int,
+@router.post("/upload")
+async def upload_general_transaction_file(
     company_id: int,
     file: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
 ):
     if current_user.role == UserRole.FOUNDER:
         result = await db.execute(select(Company).where(Company.id == company_id, Company.founder_id == current_user.id))
@@ -686,17 +663,6 @@ async def upload_transaction_photo(
     company = result.scalar_one_or_none()
     if not company:
         raise HTTPException(status_code=404, detail="Company not found or access denied")
-
-    result = await db.execute(select(Transaction).where(Transaction.id == transaction_id, Transaction.company_id == company_id))
-    transaction = result.scalar_one_or_none()
-    if not transaction:
-        raise HTTPException(status_code=404, detail="Transaction not found")
-
-    if transaction.attachment_url and os.path.exists(transaction.attachment_url):
-        try:
-            os.remove(transaction.attachment_url)
-        except Exception as e:
-            print(f"Error deleting old file: {e}")
 
     file.file.seek(0, 2)
     size = file.file.tell()
@@ -706,55 +672,27 @@ async def upload_transaction_photo(
 
     ext = os.path.splitext(file.filename)[1].lower()
     if ext not in ALLOWED_EXTENSIONS:
-        raise HTTPException(status_code=400, detail="Only JPG, PNG, PDF files are allowed")
+        raise HTTPException(status_code=400, detail="Only JPG, JPEG, PNG, PDF files are allowed")
 
-    upload_dir = f"uploads/company_{company_id}"
-    os.makedirs(upload_dir, exist_ok=True)
+    try:
+        contents = await file.read()
+        bucket = storage.bucket()
+        blob_path = f"companies/{company_id}/transactions/{uuid.uuid4()}{ext}"
+        blob = bucket.blob(blob_path)
 
-    timestamp = int(datetime.utcnow().timestamp())
-    safe_filename = f"{transaction_id}_{timestamp}{ext}"
-    file_path = os.path.join(upload_dir, safe_filename)
+        blob.upload_from_string(contents, content_type=file.content_type)
+        blob.make_public()
+        public_url = blob.public_url
 
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+        return {"url": public_url}
 
-    transaction.attachment_url = file_path
-    transaction.attachment_uploaded_at = datetime.utcnow()
-    await db.commit()
-
-    return {"detail": "File uploaded", "url": file_path}
-
-@router.get("/{transaction_id}/photo")
-async def get_transaction_photo(
-    transaction_id: int,
-    company_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    if current_user.role == UserRole.FOUNDER:
-        result = await db.execute(select(Company).where(Company.id == company_id, Company.founder_id == current_user.id))
-    else:
-        result = await db.execute(select(Company).join(CompanyMember).where(Company.id == company_id, CompanyMember.user_id == current_user.id))
-    company = result.scalar_one_or_none()
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found or access denied")
-    
-    result = await db.execute(select(Transaction).where(Transaction.id == transaction_id, Transaction.company_id == company_id))
-    transaction = result.scalar_one_or_none()
-    if not transaction or not transaction.attachment_url:
-        raise HTTPException(status_code=404, detail="File not found")
-    
-    file_path = transaction.attachment_url
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="File not found")
-    
-    return FileResponse(file_path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки в Firebase Storage: {str(e)}")
 
 async def _sync_counterparty(company_id: int, name: str | None, db: AsyncSession, user_id: int) -> None:
     """Создаёт запись в таблице counterparties, если контрагент ещё не существует (без учёта регистра)."""
     if not name:
         return
-    # Приводим к нижнему регистру для сравнения
     from sqlalchemy import func
     existing = await db.execute(
         select(Counterparty).where(

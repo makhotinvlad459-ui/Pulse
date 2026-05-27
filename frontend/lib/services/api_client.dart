@@ -106,22 +106,29 @@ class ApiClient {
   }
 
   // Загрузка фото (мобильное устройство)
-  Future<void> uploadPhoto(String path, XFile photo,
+  Future<String> uploadPhoto(String path, XFile photo,
       {Map<String, dynamic>? queryParameters}) async {
     final bytes = await photo.readAsBytes();
     final multipartFile = MultipartFile.fromBytes(bytes, filename: photo.name);
     final formData = FormData.fromMap({'file': multipartFile});
-    await _dio.post(path, data: formData, queryParameters: queryParameters);
+    
+    final response = await _dio.post(path, data: formData, queryParameters: queryParameters);
+    
+    // Возвращаем URL, который прислал бэкенд
+    return response.data['url'] ?? response.data['attachment_url'] ?? '';
   }
 
   // Загрузка байтов (для веб‑файлов)
-  Future<void> uploadPhotoBytes(String path, List<int> bytes, String filename,
+  Future<String> uploadPhotoBytes(String path, List<int> bytes, String filename,
       {Map<String, dynamic>? queryParameters}) async {
     final multipartFile = MultipartFile.fromBytes(bytes, filename: filename);
     final formData = FormData.fromMap({'file': multipartFile});
-    await _dio.post(path, data: formData, queryParameters: queryParameters);
+    
+    final response = await _dio.post(path, data: formData, queryParameters: queryParameters);
+    
+    // Возвращаем URL, который прислал бэкенд
+    return response.data['url'] ?? response.data['attachment_url'] ?? '';
   }
-
   // Получение файла
   Future<Response> getFile(String path,
       {Map<String, dynamic>? queryParameters}) async {

@@ -91,7 +91,8 @@ class TransactionCreate(BaseModel):
     category_id: Optional[int] = None
     description: Optional[str] = None
     transfer_to_account_id: Optional[int] = None
-    delete_attachment: bool = False
+    attachment_url: Optional[str] = None  # Ссылка на файл в Firebase Storage
+    delete_attachment: bool = False       # Сохранили для обратной совместимости при редактировании
     items: Optional[List[TransactionItemCreate]] = []
     counterparty: Optional[str] = None  
     showcase_item_id: Optional[int] = None

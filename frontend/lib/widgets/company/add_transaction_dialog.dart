@@ -258,71 +258,61 @@ class _AddTransactionDialogState extends ConsumerState<AddTransactionDialog> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_selectedProducts.isNotEmpty) {
-      _amount = _calculatedAmount;
-    }
-    if (_amount <= 0 && _selectedProducts.isEmpty) {
-      final t = AppLocalizations.of(context)!;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.enterAmountOrProducts)));
-      return;
-    }
+    _formKey.currentState!.save();
+
     setState(() => _loading = true);
     final api = ApiClient();
-    Map<String, dynamic> data = {
-      'type': _type,
-      'amount': _amount,
-      'date': _date.toIso8601String(),
-      'account_id': _accountId,
-      'description': _description,
-      'counterparty': _counterparty.isNotEmpty ? _counterparty : null,
-    };
-    if (_type == 'income' || _type == 'expense') {
-      if (_categoryId != null) data['category_id'] = _categoryId;
-      if (_selectedProducts.isNotEmpty) {
-        data['items'] = _selectedProducts.map((p) => {
-          'product_id': p['product_id'],
-          'quantity': p['quantity'],
-          'price_per_unit': p['price_per_unit'],
-        }).toList();
-      }
-    } else if (_type == 'transfer') {
-      final t = AppLocalizations.of(context)!;
-      if (_transferToAccountId == null) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.selectDestAccount)));
-        setState(() => _loading = false);
-        return;
-      }
-      if (_transferToAccountId == _accountId) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.cannotTransferSame)));
-        setState(() => _loading = false);
-        return;
-      }
-      data['transfer_to_account_id'] = _transferToAccountId;
-    }
+
     try {
-      final response = await api.post('/transactions/',
-          queryParameters: {'company_id': widget.companyId}, data: data);
-      final transactionId = response.data['id'];
-      if (_photo != null) {
-        await api.uploadPhoto('/transactions/$transactionId/upload', _photo!,
-            queryParameters: {'company_id': widget.companyId});
-      } else if (_webFile != null && _webFile!.bytes != null) {
-        await api.uploadPhotoBytes('/transactions/$transactionId/upload/',
-            _webFile!.bytes!, _webFile!.name,
-            queryParameters: {'company_id': widget.companyId});
+      String? uploadedUrl;
+
+      // Если прикреплен файл (для мобилок _photo, для Web _webFile)
+      if (kIsWeb && _webFile != null && _webFile!.bytes != null) {
+        uploadedUrl = await api.uploadPhotoBytes(
+          '/transactions/upload',
+          _webFile!.bytes!,
+          _webFile!.name,
+          queryParameters: {'company_id': widget.companyId},
+        );
+      } else if (!kIsWeb && _photo != null) {
+        uploadedUrl = await api.uploadPhoto(
+          '/transactions/upload',
+          _photo!,
+          queryParameters: {'company_id': widget.companyId},
+        );
       }
+
+      final itemsJson = _selectedProducts.map((p) => {
+        'product_id': p['product_id'],
+        'quantity': p['quantity'],
+        'price_per_unit': p['price_per_unit'],
+      }).toList();
+
+      // Отправляем чистый JSON, где attachment_url — это просто строка URL
+      final body = {
+        'type': _type,
+        'amount': _type == 'transfer'
+            ? _amount
+            : (_selectedProducts.isEmpty ? _amount : _calculatedAmount),
+        'date': _date.toIso8601String(),
+        'account_id': _accountId,
+        'category_id': _type == 'transfer' ? null : _categoryId,
+        'transfer_to_account_id': _type == 'transfer' ? _transferToAccountId : null,
+        'description': _description,
+        'counterparty': _counterparty.trim().isEmpty ? null : _counterparty.trim(),
+        'attachment_url': uploadedUrl, // Наша строка
+        'items': itemsJson,
+      };
+
+      await api.post('/transactions?company_id=${widget.companyId}', data: body);
+
       await widget.onSuccess();
       if (mounted) Navigator.pop(context);
     } catch (e) {
-      if (mounted) {
-        String errorMessage = e.toString();
-        final t = AppLocalizations.of(context)!;
-        if (errorMessage.contains('Insufficient stock')) {
-          errorMessage = t.insufficientStock;
-        }
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('${t.error}: $errorMessage')));
-      }
+      print("Ошибка при сохранении транзакции: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка при сохранении: $e')),
+      );
     } finally {
       if (mounted) setState(() => _loading = false);
     }
