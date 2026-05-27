@@ -326,62 +326,48 @@ class _EditTransactionDialogState extends ConsumerState<EditTransactionDialog> {
   }
 
   Future<void> _save() async {
-    setState(() => _loading = true);
-    final api = ApiClient();
+  if (!_formKey.currentState!.validate()) return;
+  setState(() => _loading = true);
 
-    try {
-      // 1. По умолчанию сохраняем текущий URL, который уже был у транзакции
-      String? finalUrl = widget.transaction['attachment_url'];
+  try {
+    String? finalLogoUrl = widget.companyData['logo_url']; // Старый URL по умолчанию
 
-      // 2. Если выбран новый файл, загружаем его отдельно и получаем URL строку
-      if (kIsWeb && _webFile != null && _webFile!.bytes != null) {
-        finalUrl = await api.uploadPhotoBytes(
-          '/transactions/upload',
-          _webFile!.bytes!,
-          _webFile!.name,
-          queryParameters: {'company_id': widget.companyId},
-        );
-      } else if (!kIsWeb && _photo != null) {
-        finalUrl = await api.uploadPhoto(
-          '/transactions/upload',
-          _photo!,
-          queryParameters: {'company_id': widget.companyId},
-        );
-      } else if (_photo == null && _webFile == null) {
-        // Если пользователь очистил выбранный файл (нажал на крестик удаления)
-        // и мы хотим убрать прикрепление у транзакции, ставим null
-        finalUrl = null;
-      }
-
-      // 3. Отправляем чистый предсказуемый JSON на бэкенд
-      final body = {
-        'type': _type,
-        'amount': _amount,
-        'date': _date.toIso8601String(),
-        'account_id': _accountId,
-        'category_id': _type == 'transfer' ? null : _categoryId,
-        'transfer_to_account_id': _type == 'transfer' ? _transferToAccountId : null,
-        'description': _description,
-        'counterparty': _counterparty.trim().isEmpty ? null : _counterparty.trim(),
-        'attachment_url': finalUrl, // Обычная строка URL или null
-      };
-
-      await api.put(
-        '/transactions/${widget.transaction['id']}?company_id=${widget.companyId}', 
-        data: body
+    // 1. Если пользователь выбрал новый файл
+    if (_logoFile != null) {
+      // Преобразуем XFile в байты
+      final bytes = await _logoFile!.readAsBytes();
+      // Сжимаем
+      final compressedBytes = await ImageCompression.compressImage(bytes);
+      
+      // Отправляем на сервер
+      final response = await ApiClient().uploadCompanyLogo(
+        companyId: widget.companyData['id'],
+        bytes: compressedBytes,
+        filename: _logoFile!.name,
       );
-
-      await widget.onSuccess();
-      if (mounted) Navigator.pop(context);
-    } catch (e) {
-      print("Ошибка обновления транзакции: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка обновления: $e')),
-      );
-    } finally {
-      if (mounted) setState(() => _loading = false);
+      finalLogoUrl = response['url']; // Получаем новый URL от сервера
     }
+
+    // 2. Отправляем данные компании
+    final data = {
+      "name": _nameController.text,
+      "logo_url": finalLogoUrl,
+      // ... остальные поля компании
+    };
+
+    await ApiClient().patch('/companies/${widget.companyData['id']}', data: data);
+    
+    await widget.onSuccess();
+    if (mounted) Navigator.pop(context);
+  } catch (e) {
+    print('Save error: $e');
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка сохранения: $e')));
+    }
+  } finally {
+    if (mounted) setState(() => _loading = false);
   }
+}
 
   Future<void> _deleteTransaction() async {
     final t = AppLocalizations.of(context)!;

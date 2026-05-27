@@ -115,18 +115,14 @@ class _AddTransactionDialogState extends ConsumerState<AddTransactionDialog> {
   }
 
   Future<void> _pickFile() async {
-    if (kIsWeb) {
-      final result = await FilePicker.platform.pickFiles();
-      if (result != null) setState(() => _webFile = result.files.first);
-    } else {
-      final picker = ImagePicker();
-      final picked = await picker.pickImage(source: ImageSource.gallery);
-      if (picked != null) {
-        final compressed = await ImageCompression.compressXFile(picked);
-        setState(() => _photo = compressed);
-      }
-    }
+  final result = await FilePicker.platform.pickFiles(type: FileType.image);
+  if (result != null) {
+    setState(() {
+      _webFile = result.files.first;
+      _photo = null; 
+    });
   }
+}
 
   Future<void> _takePhoto() async {
     if (kIsWeb) {
@@ -257,66 +253,62 @@ class _AddTransactionDialogState extends ConsumerState<AddTransactionDialog> {
   }
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
-    _formKey.currentState!.save();
+  setState(() => _loading = true);
+  
+  String? finalAttachmentUrl;
 
-    setState(() => _loading = true);
-    final api = ApiClient();
+  try {
+    // 1. Обработка файла (Web или Mobile)
+    if (_photo != null || _webFile != null) {
+      Uint8List fileBytes;
+      String fileName;
 
-    try {
-      String? uploadedUrl;
-
-      // Если прикреплен файл (для мобилок _photo, для Web _webFile)
-      if (kIsWeb && _webFile != null && _webFile!.bytes != null) {
-        uploadedUrl = await api.uploadPhotoBytes(
-          '/transactions/upload',
-          _webFile!.bytes!,
-          _webFile!.name,
-          queryParameters: {'company_id': widget.companyId},
-        );
-      } else if (!kIsWeb && _photo != null) {
-        uploadedUrl = await api.uploadPhoto(
-          '/transactions/upload',
-          _photo!,
-          queryParameters: {'company_id': widget.companyId},
-        );
+      if (kIsWeb && _webFile != null) {
+        fileBytes = _webFile!.bytes!; // В Web байты уже в памяти
+        fileName = _webFile!.name;
+      } else {
+        fileBytes = await _photo!.readAsBytes(); // На мобилке читаем
+        fileName = _photo!.name;
       }
 
-      final itemsJson = _selectedProducts.map((p) => {
-        'product_id': p['product_id'],
-        'quantity': p['quantity'],
-        'price_per_unit': p['price_per_unit'],
-      }).toList();
-
-      // Отправляем чистый JSON, где attachment_url — это просто строка URL
-      final body = {
-        'type': _type,
-        'amount': _type == 'transfer'
-            ? _amount
-            : (_selectedProducts.isEmpty ? _amount : _calculatedAmount),
-        'date': _date.toIso8601String(),
-        'account_id': _accountId,
-        'category_id': _type == 'transfer' ? null : _categoryId,
-        'transfer_to_account_id': _type == 'transfer' ? _transferToAccountId : null,
-        'description': _description,
-        'counterparty': _counterparty.trim().isEmpty ? null : _counterparty.trim(),
-        'attachment_url': uploadedUrl, // Наша строка
-        'items': itemsJson,
-      };
-
-      await api.post('/transactions?company_id=${widget.companyId}', data: body);
-
-      await widget.onSuccess();
-      if (mounted) Navigator.pop(context);
-    } catch (e) {
-      print("Ошибка при сохранении транзакции: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка при сохранении: $e')),
+      // Сжимаем (ImageCompression.compressImage ожидает Uint8List)
+      final compressedBytes = await ImageCompression.compressImage(fileBytes);
+      
+      final response = await ApiClient().uploadTransactionFile(
+        companyId: widget.companyId,
+        bytes: compressedBytes,
+        filename: fileName,
       );
-    } finally {
-      if (mounted) setState(() => _loading = false);
+      finalAttachmentUrl = response['url'];
     }
+
+    // 2. Формируем тело запроса
+    final data = {
+      "type": _type,
+      "amount": showAmountField ? _amount : _calculatedAmount,
+      "date": _date.toIso8601String(),
+      "account_id": _accountId,
+      "category_id": _categoryId,
+      "description": _description,
+      "counterparty": _counterparty,
+      "attachment_url": finalAttachmentUrl,
+      "items": _selectedProducts,
+      "transfer_to_account_id": _transferToAccountId,
+    };
+
+    // 3. Отправляем
+    await ApiClient().post('/transactions', data: data);
+    await widget.onSuccess();
+    if (mounted) Navigator.pop(context);
+  } catch (e) {
+    print('Submit error: $e');
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+    }
+  } finally {
+    if (mounted) setState(() => _loading = false);
   }
+}
 
   @override
   Widget build(BuildContext context) {

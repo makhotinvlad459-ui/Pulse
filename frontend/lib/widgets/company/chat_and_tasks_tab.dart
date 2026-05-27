@@ -199,62 +199,64 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab> with SingleTi
     final text = _messageController.text.trim();
     if (text.isEmpty && _chatPhoto == null && _chatWebFile == null) return;
 
+    setState(() => _chatLoading = true);
     String? uploadedUrl;
 
-    if (_chatPhoto != null || _chatWebFile != null) {
-      setState(() => _chatLoading = true);
-      try {
-        String filename = _chatPhoto != null ? _chatPhoto!.name : _chatWebFile!.name;
-        List<int> bytes = _chatPhoto != null ? await _chatPhoto!.readAsBytes() : _chatWebFile!.bytes!;
+    try {
+      // 1. Обработка файла, если он есть (полная логика для Web и Mobile)
+      if (_chatPhoto != null || _chatWebFile != null) {
+        Uint8List fileBytes;
+        String fileName;
 
-        // Сжимаем байты
-        final compressedBytes = await ImageCompression.compressImage(Uint8List.fromList(bytes));
+        if (kIsWeb && _chatWebFile != null) {
+          fileBytes = _chatWebFile!.bytes!;
+          fileName = _chatWebFile!.name;
+        } else if (_chatPhoto != null) {
+          fileBytes = await _chatPhoto!.readAsBytes();
+          fileName = _chatPhoto!.name;
+        } else {
+          throw Exception("Файл не найден");
+        }
 
-        // Вызываем загрузчик. Передаем путь/эндпоинт, байты и имя файла
-        final Map<String, dynamic> uploadResult = await _apiClient.uploadChatFile(
+        // Используем универсальный метод сжатия
+        final compressedBytes = await ImageCompression.compressImage(fileBytes);
+
+        // Отправка через API
+        final result = await _apiClient.uploadChatFile(
           '/chat/upload',
           compressedBytes,
-          filename,
+          fileName,
         );
         
-        // Достаем url из ответа бэкенда (поменяй 'url' на свой ключ, если он другой, например 'attachment_url')
-        uploadedUrl = uploadResult['url'] ?? uploadResult['attachment_url'];
-      } catch (e) {
+        uploadedUrl = result['url'] ?? result['attachment_url'];
+      }
+
+      // 2. Отправка сообщения через WebSocket или API
+      final messageData = {
+        "text": text,
+        "attachment_url": uploadedUrl,
+        "chat_id": widget.companyId, // Убедись, что тут правильный ID
+        "created_at": DateTime.now().toIso8601String(),
+      };
+
+      await _apiClient.post('/chat/messages', data: messageData);
+
+      // 3. Очистка состояния
+      _messageController.clear();
+      setState(() {
+        _chatPhoto = null;
+        _chatWebFile = null;
+        _chatLoading = false;
+      });
+    } catch (e) {
+      print("Ошибка при отправке: $e");
+      setState(() => _chatLoading = false);
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Ошибка загрузки файла: $e")),
+          SnackBar(content: Text("Ошибка отправки: ${e.toString()}")),
         );
-        setState(() => _chatLoading = false);
-        return;
       }
     }
-
-    try {
-      if (_editingMessageId != null) {
-        await _apiClient.patch('/chat/message/$_editingMessageId', data: {'message': text});
-        setState(() {
-          _editingMessageId = null;
-          _messageController.clear();
-        });
-      } else {
-        await _apiClient.post('/chat/company/${widget.companyId}', data: {
-          'message': text,
-          'attachment_url': uploadedUrl,
-        });
-        _messageController.clear();
-        setState(() {
-          _chatPhoto = null;
-          _chatWebFile = null;
-        });
-      }
-    } catch (_) {}
-    setState(() => _chatLoading = false);
-  }
-
-  void _startEditing(int id, String text) {
-    setState(() {
-      _editingMessageId = id;
-      _messageController.text = text;
-    });
   }
 
   Future<void> _deleteMessage(int id) async {
