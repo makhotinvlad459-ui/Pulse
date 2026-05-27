@@ -1,7 +1,9 @@
 import os
 from datetime import datetime, timedelta
 from typing import List, Optional
+import io
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 from sqlalchemy.orm import selectinload
@@ -83,14 +85,38 @@ async def upload_chat_file(
         file_content = await file.read()
         blob.upload_from_string(file_content, content_type=file.content_type)
 
-        # 5. Делаем файл публичным, чтобы Flutter мог отобразить его без токенов
-        blob.make_public()
-        file_url = blob.public_url
-
-        return {"url": file_url}
+        # 5. Вместо прямой ссылки Google Storage, которая блокируется по CORS,
+        # отдаем относительный URL на наш собственный прокси-эндпоинт бэкенда.
+        return {"url": f"/api/chat/file/{blob_name}"}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to upload file to Firebase: {str(e)}")
+
+# ========== Проксирование файлов для обхода CORS во Flutter Web ==========
+@router.get("/file/{folder}/{file_name}")
+async def get_chat_file(folder: str, file_name: str):
+    """Проксирует файл из Firebase Storage наружу, полностью обходя CORS во Flutter Web"""
+    try:
+        bucket = storage.bucket()
+        # Восстанавливаем полный путь к файлу внутри бакета (например: chat_1/1779899002_logo.png)
+        blob_path = f"{folder}/{file_name}"
+        blob = bucket.blob(blob_path)
+
+        if not blob.exists():
+            raise HTTPException(status_code=404, detail="Файл не найден в хранилище")
+
+        # Скачиваем файл в буфер оперативной памяти сервера
+        file_stream = io.BytesIO()
+        blob.download_to_file(file_stream)
+        file_stream.seek(0)
+
+        # Вытаскиваем оригинальный content_type (image/png, image/jpeg и т.д.)
+        content_type = blob.content_type or "application/octet-stream"
+
+        return StreamingResponse(file_stream, media_type=content_type)
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка при чтении файла из Firebase: {str(e)}")
 
 # ========== Чат компании ==========
 @router.post("/company/{company_id}", response_model=ChatMessageResponse)
@@ -107,7 +133,7 @@ async def send_chat_message(
         company_id=company_id,
         user_id=current_user.id,
         message=msg.message,
-        attachment_url=msg.attachment_url,   # Сохраняем готовую Firebase ссылку
+        attachment_url=msg.attachment_url,   # Сохраняем готовую ссылку нашего API
         edited=False
     )
     db.add(new_msg)
@@ -138,15 +164,6 @@ async def send_chat_message(
         "company_id": company_id
     }, db)
     
-    # ========== ЗАДЕЛ ПОД ПУШ-УВЕДОМЛЕНИЯ ==========
-    # Сюда мы добавим логику: если человека нет в сокетах чата, мы шлем Firebase Пуш.
-    # Пример вызова:
-    # messaging.send(messaging.Message(
-    #     notification=messaging.Notification(title=current_user.display_name, body=msg.message),
-    #     token=user_fcm_token
-    # ))
-    # ===============================================
-
     return ChatMessageResponse(
         id=new_msg.id,
         user_id=current_user.id,
