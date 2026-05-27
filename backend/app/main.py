@@ -5,6 +5,9 @@ from fastapi.staticfiles import StaticFiles
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 import os
 import asyncio
+from app.config import settings
+import firebase_admin
+from firebase_admin import credentials
 
 from app.auth import router as auth_router
 from app.routers import subscription, counterparties, companies, accounts, categories, transactions, statistics, admin, showcase, chat, tasks, websocket, notifications, products, permissions, orders
@@ -14,6 +17,21 @@ from app.websocket_manager import manager
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Управление жизненным циклом приложения"""
+    
+    # === ИНИЦИАЛИЗАЦИЯ FIREBASE ===
+    print("🔥 [Startup] Инициализация Firebase SDK...")
+    try:
+        # Проверяем, не инициализировано ли приложение ранее (чтобы докер не ругался при перезапусках)
+        if not firebase_admin._apps:
+            cred = credentials.Certificate(settings.FIREBASE_KEY_PATH)
+            firebase_admin.initialize_app(cred, {
+                'storageBucket': settings.FIREBASE_STORAGE_BUCKET
+            })
+        print("✅ [Startup] Firebase успешно подключен!")
+    except Exception as e:
+        print(f"❌ [Startup] Ошибка инициализации Firebase: {e}")
+    # ===============================
+
     print("🚀 [Startup] Инициализация Redis клиента...")
     await manager.init_redis()
     

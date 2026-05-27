@@ -28,13 +28,14 @@ class User(Base):
     soft_delete_retention_days: Mapped[int] = mapped_column(Integer, default=15)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    fcm_token: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
-    # ВАЖНО: старые поля (как на сервере)
+    
     last_login: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     subscription_plan: Mapped[str | None] = mapped_column(String(50), nullable=True)
     extra_companies: Mapped[int] = mapped_column(Integer, default=0)  # не JSON!
 
-    # relationships (все старые остаются + новая связь)
+    # relationships 
     companies_founded: Mapped[list["Company"]] = relationship("Company", back_populates="founder", foreign_keys="Company.founder_id")
     memberships: Mapped[list["CompanyMember"]] = relationship("CompanyMember", foreign_keys="CompanyMember.user_id", back_populates="user")
     invited_members: Mapped[list["CompanyMember"]] = relationship("CompanyMember", foreign_keys="CompanyMember.invited_by", back_populates="inviter")
@@ -44,7 +45,6 @@ class User(Base):
     deleted_transactions: Mapped[list["Transaction"]] = relationship("Transaction", foreign_keys="Transaction.deleted_by", back_populates="deleter")
     chat_messages: Mapped[list["ChatMessage"]] = relationship(back_populates="user")
     transaction_comments: Mapped[list["TransactionComment"]] = relationship(back_populates="user")
-    # новая связь
     payment_orders: Mapped[list["PaymentOrder"]] = relationship(back_populates="user")
 
 

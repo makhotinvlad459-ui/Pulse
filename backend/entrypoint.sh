@@ -27,6 +27,6 @@ init_redis() {
 wait_for_db
 run_migrations
 init_permissions
-#init_redis   # 👈 ДОБАВИТЬ ЭТУ СТРОКУ
+
 
 exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2

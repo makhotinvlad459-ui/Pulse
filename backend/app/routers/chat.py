@@ -1,12 +1,12 @@
 import os
-import shutil
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 from sqlalchemy.orm import selectinload
 from pydantic import BaseModel
+from firebase_admin import storage, messaging  # Подключаем Firebase Storage и пуши
 
 from app.database import get_db
 from app.models import User, Company, ChatMessage, TransactionComment, Transaction, CompanyMember, UserRole, UserChatVisit
@@ -19,6 +19,9 @@ router = APIRouter(prefix="/chat", tags=["chat"], redirect_slashes=False)
 class ChatMessageCreate(BaseModel):
     message: str
     attachment_url: Optional[str] = None
+
+class UpdateFCMTokenRequest(BaseModel):
+    fcm_token: str    
 
 class EditMessageRequest(BaseModel):
     message: str
@@ -55,10 +58,7 @@ async def _check_company_access(company_id: int, current_user: User, db: AsyncSe
         result = await db.execute(select(Company).join(CompanyMember).where(Company.id == company_id, CompanyMember.user_id == current_user.id))
     return result.scalar_one_or_none() is not None
 
-# ========== Загрузка файлов ==========
-UPLOAD_DIR = "uploads/chat"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-
+# ========== Загрузка файлов СРАЗУ В FIREBASE STORAGE ==========
 @router.post("/upload")
 async def upload_chat_file(
     company_id: int = Form(...),
@@ -66,22 +66,31 @@ async def upload_chat_file(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # Проверка доступа к компании
+    # 1. Проверяем доступ пользователя к компании
     if not await _check_company_access(company_id, current_user, db):
         raise HTTPException(status_code=403, detail="Access denied to this company")
 
-    # Генерируем безопасное имя файла
-    timestamp = int(datetime.utcnow().timestamp())
-    safe_filename = f"{current_user.id}_{timestamp}_{file.filename}"
-    file_path = os.path.join(UPLOAD_DIR, safe_filename)
+    try:
+        # 2. Формируем уникальное имя файла для облака
+        timestamp = int(datetime.utcnow().timestamp())
+        blob_name = f"chat_{company_id}/{timestamp}_{file.filename}"
 
-    # Сохраняем файл
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+        # 3. Подключаемся к бакету Firebase
+        bucket = storage.bucket()
+        blob = bucket.blob(blob_name)
 
-    # Возвращаем URL для доступа к файлу
-    file_url = f"/uploads/chat/{safe_filename}"
-    return {"url": file_url}
+        # 4. Читаем файл и заливаем в Firebase Storage
+        file_content = await file.read()
+        blob.upload_from_string(file_content, content_type=file.content_type)
+
+        # 5. Делаем файл публичным, чтобы Flutter мог отобразить его без токенов
+        blob.make_public()
+        file_url = blob.public_url
+
+        return {"url": file_url}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to upload file to Firebase: {str(e)}")
 
 # ========== Чат компании ==========
 @router.post("/company/{company_id}", response_model=ChatMessageResponse)
@@ -98,40 +107,52 @@ async def send_chat_message(
         company_id=company_id,
         user_id=current_user.id,
         message=msg.message,
-        attachment_url=msg.attachment_url,   # СОХРАНЯЕМ ВЛОЖЕНИЕ
+        attachment_url=msg.attachment_url,   # Сохраняем готовую Firebase ссылку
         edited=False
     )
     db.add(new_msg)
     await db.commit()
     await db.refresh(new_msg)
     
-    # Отправляем через WebSocket
+    # Готовим пакет данных для реалтайма
+    ws_message_data = {
+        "id": new_msg.id,
+        "user_id": current_user.id,
+        "user_full_name": current_user.display_name,
+        "message": new_msg.message,
+        "attachment_url": new_msg.attachment_url,  # Ссылка летит в WebSocket
+        "created_at": new_msg.created_at.isoformat(),
+        "edited": False,
+        "updated_at": None,
+    }
+
+    # Отправляем через WebSocket всем, кто ОНЛАЙН в чате этой компании
     await manager.broadcast_chat(company_id, {
         "type": "new_message",
-        "message": {
-            "id": new_msg.id,
-            "user_id": current_user.id,
-            "user_full_name": current_user.display_name,
-            "message": new_msg.message,
-            "attachment_url": new_msg.attachment_url,  # ВЛОЖЕНИЕ В ВЕБСОКЕТ
-            "created_at": new_msg.created_at.isoformat(),
-            "edited": False,
-            "updated_at": None,
-        }
+        "message": ws_message_data
     })
     
-    # Уведомляем о непрочитанных
+    # Обновляем красные точки (счётчики) непрочитанных у всей компании
     await manager.notify_company_members(company_id, {
         "type": "update_counters",
         "company_id": company_id
     }, db)
     
+    # ========== ЗАДЕЛ ПОД ПУШ-УВЕДОМЛЕНИЯ ==========
+    # Сюда мы добавим логику: если человека нет в сокетах чата, мы шлем Firebase Пуш.
+    # Пример вызова:
+    # messaging.send(messaging.Message(
+    #     notification=messaging.Notification(title=current_user.display_name, body=msg.message),
+    #     token=user_fcm_token
+    # ))
+    # ===============================================
+
     return ChatMessageResponse(
         id=new_msg.id,
         user_id=current_user.id,
         user_full_name=current_user.display_name,
         message=new_msg.message,
-        attachment_url=new_msg.attachment_url,  # ВЛОЖЕНИЕ В ОТВЕТЕ
+        attachment_url=new_msg.attachment_url,
         created_at=new_msg.created_at,
         edited=new_msg.edited,
         updated_at=new_msg.updated_at
@@ -164,7 +185,7 @@ async def get_chat_messages(
             user_id=m.user_id,
             user_full_name=m.user.display_name,
             message=m.message,
-            attachment_url=m.attachment_url,   # ВЛОЖЕНИЕ В СПИСКЕ
+            attachment_url=m.attachment_url,
             created_at=m.created_at,
             edited=m.edited,
             updated_at=m.updated_at
@@ -247,7 +268,7 @@ async def clear_chat(
     
     return {"detail": "Chat cleared"}
 
-# ========== Комментарии к операциям (без изменений) ==========
+# ========== Комментарии к операциям ==========
 @router.post("/transaction/{transaction_id}", response_model=CommentResponse)
 async def add_transaction_comment(
     transaction_id: int,
@@ -327,7 +348,7 @@ async def delete_message(
         raise HTTPException(status_code=403, detail="Not authorized")
     await db.delete(msg)
     await db.commit()
-    # Отправить WebSocket событие об удалении
+
     await manager.broadcast_chat(msg.company_id, {
         "type": "delete_message",
         "message_id": message_id,
@@ -337,3 +358,18 @@ async def delete_message(
         "company_id": msg.company_id
     }, db)
     return {"detail": "Message deleted"}
+
+@router.post("/fcm-token")
+async def update_fcm_token(
+    req: UpdateFCMTokenRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    try:
+        # Обновляем токен у текущего авторизованного пользователя
+        current_user.fcm_token = req.fcm_token
+        await db.commit()
+        return {"status": "success", "detail": "FCM token updated successfully"}
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to update FCM token: {str(e)}")

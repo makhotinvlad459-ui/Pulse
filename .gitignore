@@ -43,3 +43,4 @@ __pycache__/
 *.pyo
 backend/alembic.ini
 docker-compose.yaml
+firebase-key.json

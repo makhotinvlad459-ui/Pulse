@@ -15,3 +15,4 @@ apscheduler==3.10.4
 fastapi-mail
 httpx
 redis>=5.0.0
+firebase-admin>=6.5.0

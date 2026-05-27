@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     DB_VOLUME: str = "postgres_data"
     REDIS_URL: str = "redis://redis:6379/0"
 
+    # ========== FIREBASE STORAGE ==========
+    FIREBASE_KEY_PATH: str = "firebase-key.json"
+    FIREBASE_STORAGE_BUCKET: str = ""
+
     class Config:
         env_file = ".env"
         extra = "ignore"  # игнорировать лишние переменные окружения
