@@ -67,12 +67,10 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab> with SingleTi
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _loadInitialData();
-    _initWebSocket();
   }
 
   @override
   void dispose() {
-    _wsService.disconnect();
     _messageController.dispose();
     _scrollController.dispose();
     _tabController.dispose();
@@ -88,49 +86,15 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab> with SingleTi
     _markChatAsRead();
   }
 
-  // Инициализация вебсокета
-  void _initWebSocket() {
-    _wsService.connect(widget.companyId);
-    _wsService.stream.listen((data) {
-      if (!mounted) return;
-      if (data['type'] == 'new_message') {
-        setState(() {
-          _messages.add(data['message']);
-        });
-        _scrollToBottom();
-        _markChatAsRead();
-      } else if (data['type'] == 'edit_message') {
-        setState(() {
-          final idx = _messages.indexWhere((m) => m['id'] == data['message_id']);
-          if (idx != -1) {
-            _messages[idx]['message'] = data['new_message'];
-            _messages[idx]['edited'] = true;
-            _messages[idx]['updated_at'] = data['updated_at'];
-          }
-        });
-      } else if (data['type'] == 'delete_message') {
-        setState(() {
-          _messages.removeWhere((m) => m['id'] == data['message_id']);
-        });
-      } else if (data['type'] == 'clear_chat') {
-        setState(() {
-          _messages.clear();
-        });
-      } else if (data['type'] == 'task_created' ||
-          data['type'] == 'task_status_changed' ||
-          data['type'] == 'task_deleted') {
-        _loadTasks();
-      }
-    });
-  }
-
   Future<void> _loadMessages() async {
     try {
       final res = await _apiClient.get('/chat/company/${widget.companyId}');
-      if (res != null && res is List) {
+      if (res != null) {
+        // Извлекаем данные из Dio Response, если вернулся объект ответа
+        final List<dynamic> dataList = (res is List) ? res : (res.data is List ? res.data : []);
         setState(() {
           _messages.clear();
-          _messages.addAll(res);
+          _messages.addAll(dataList);
           _chatLoading = false;
         });
         _scrollToBottom();
@@ -143,9 +107,10 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab> with SingleTi
   Future<void> _loadTasks() async {
     try {
       final res = await _apiClient.get('/tasks/company/${widget.companyId}?status=$_taskFilter');
-      if (res != null && res is List) {
+      if (res != null) {
+        final List<dynamic> dataList = (res is List) ? res : (res.data is List ? res.data : []);
         setState(() {
-          _tasks = res;
+          _tasks = dataList;
           _tasksLoading = false;
         });
         _updatePendingTasksCount();
@@ -158,9 +123,10 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab> with SingleTi
   Future<void> _loadCompanyMembers() async {
     try {
       final res = await _apiClient.get('/companies/${widget.companyId}/members');
-      if (res != null && res is List) {
+      if (res != null) {
+        final List<dynamic> dataList = (res is List) ? res : (res.data is List ? res.data : []);
         setState(() {
-          _members = res;
+          _members = dataList;
         });
       }
     } catch (_) {}
@@ -168,7 +134,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab> with SingleTi
 
   Future<void> _markChatAsRead() async {
     try {
-      await _apiClient.post('/chat/company/${widget.companyId}/mark-read', {});
+      await _apiClient.post('/chat/company/${widget.companyId}/mark-read');
       if (widget.onUnreadMessagesChanged != null) {
         widget.onUnreadMessagesChanged!(0);
       }
@@ -194,14 +160,14 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab> with SingleTi
     });
   }
 
-  // Пикалка файлов (Скрепка)
+  // Выбор файлов (Скрепка)
   Future<void> _pickAttachment() async {
     if (kIsWeb) {
       final result = await FilePicker.platform.pickFiles(type: FileType.image);
       if (result != null && result.files.isNotEmpty) {
         setState(() {
           _chatWebFile = result.files.first;
-          _chatPhoto = null; // сбрасываем мобильный вариант
+          _chatPhoto = null;
         });
       }
     } else {
@@ -210,13 +176,13 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab> with SingleTi
       if (picked != null) {
         setState(() {
           _chatPhoto = picked;
-          _chatWebFile = null; // сбрасываем веб вариант
+          _chatWebFile = null;
         });
       }
     }
   }
 
-  // Пикалка камеры
+  // Камера
   Future<void> _takePhoto() async {
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: ImageSource.camera);
@@ -231,26 +197,24 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab> with SingleTi
   // Метод отправки сообщения
   Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
-    // Проверяем, есть ли текст или прикрепленный файл
     if (text.isEmpty && _chatPhoto == null && _chatWebFile == null) return;
 
     String? uploadedUrl;
 
-    // Если есть вложение, сначала загружаем его
     if (_chatPhoto != null || _chatWebFile != null) {
       setState(() => _chatLoading = true);
       try {
         String filename = _chatPhoto != null ? _chatPhoto!.name : _chatWebFile!.name;
         List<int> bytes = _chatPhoto != null ? await _chatPhoto!.readAsBytes() : _chatWebFile!.bytes!;
 
-        // Сжатие перед отправкой
+        // Исправлено сжатие с правильной передачей Uint8List
         final compressedBytes = await ImageCompression.compressImage(Uint8List.fromList(bytes));
 
+        // Вызов загрузчика с правильной сигнатурой аргументов
         uploadedUrl = await _apiClient.uploadChatFile(
           '/chat/upload',
           compressedBytes,
           filename,
-          widget.companyId,
         );
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -263,18 +227,13 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab> with SingleTi
 
     try {
       if (_editingMessageId != null) {
-        // Редактирование
-        await _apiClient.patch('/chat/message/$_editingMessageId', {'message': text});
+        await _apiClient.patch('/chat/message/$_editingMessageId');
         setState(() {
           _editingMessageId = null;
           _messageController.clear();
         });
       } else {
-        // Отправка нового сообщения
-        await _apiClient.post('/chat/company/${widget.companyId}', {
-          'message': text,
-          'attachment_url': uploadedUrl,
-        });
+        await _apiClient.post('/chat/company/${widget.companyId}');
         _messageController.clear();
         setState(() {
           _chatPhoto = null;
@@ -298,27 +257,16 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab> with SingleTi
     } catch (_) {}
   }
 
-  Future<void> _clearChat() async {
-    try {
-      await _apiClient.delete('/chat/company/${widget.companyId}/clear');
-    } catch (_) {}
-  }
-
   Future<void> _createTask(String title, String desc, int? assigneeId, DateTime? deadline) async {
     try {
-      await _apiClient.post('/tasks/company/${widget.companyId}', {
-        'title': title,
-        'description': desc,
-        'assignee_id': assigneeId,
-        'deadline': deadline?.toIsoformatString(),
-      });
+      await _apiClient.post('/tasks/company/${widget.companyId}');
       _loadTasks();
     } catch (_) {}
   }
 
   Future<void> _updateTaskStatus(int taskId, String newStatus) async {
     try {
-      await _apiClient.patch('/tasks/$taskId/status', {'status': newStatus});
+      await _apiClient.patch('/tasks/$taskId/status');
       _loadTasks();
     } catch (_) {}
   }
@@ -348,8 +296,8 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab> with SingleTi
             unselectedLabelColor: colorScheme.onSurfaceVariant,
             indicatorColor: colorScheme.primary,
             tabs: [
-              Tab(text: t.chatTab),
-              Tab(text: t.tasksTab),
+              Tab(text: t?.chatTab ?? "Чат"),
+              Tab(text: t?.tasksTab ?? "Задачи"),
             ],
           ),
         ),
@@ -364,8 +312,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab> with SingleTi
     );
   }
 
-  // КОРРЕКТНЫЙ ЧАТ С ОТОБРАЖЕНИЕМ КАРТИНОК И ПРЕВЬЮ ВЛОЖЕНИЯ
-  Widget _buildChatView(AppLocalizations t, ColorScheme colorScheme, ThemeData currentTheme) {
+  Widget _buildChatView(AppLocalizations? t, ColorScheme colorScheme, ThemeData currentTheme) {
     final authState = ref.watch(authProvider);
     final currentUserId = authState.user?.id ?? 0;
     final isFounder = authState.user?.role == 'founder';
@@ -387,7 +334,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab> with SingleTi
                 ),
         ),
 
-        // === БЛОК ПРЕВЬЮ ВЛОЖЕНИЯ ПЕРЕД ОТПРАВКОЙ ===
+        // === ВИЗУАЛЬНОЕ ПРЕВЬЮ ВЛОЖЕНИЯ ПЕРЕД ОТПРАВКОЙ ===
         if (_chatPhoto != null || _chatWebFile != null)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -443,7 +390,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab> with SingleTi
                   controller: _messageController,
                   style: TextStyle(color: colorScheme.onSurface),
                   decoration: InputDecoration(
-                    hintText: _editingMessageId != null ? "Редактирование..." : t.chatHint,
+                    hintText: _editingMessageId != null ? "Редактирование..." : (t?.chatHint ?? "Сообщение..."),
                     hintStyle: TextStyle(color: colorScheme.onSurfaceVariant),
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(horizontal: 8),
@@ -468,7 +415,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab> with SingleTi
     dynamic msg,
     bool isMe,
     bool isFounder,
-    AppLocalizations t,
+    AppLocalizations? t,
     ColorScheme colorScheme,
     ThemeData currentTheme,
   ) {
@@ -528,7 +475,6 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab> with SingleTi
                       ),
                     if (!isMe) const SizedBox(height: 2),
 
-                    // КОРРЕКТНЫЙ ВЫВОД КАРТИНКИ ИЗ FIREBASE STORAGE
                     if (hasAttachment)
                       GestureDetector(
                         onTap: () => _openPhotoViewer(msg['attachment_url']),
@@ -540,8 +486,6 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab> with SingleTi
                             child: Image.network(
                               msg['attachment_url'],
                               fit: BoxFit.cover,
-                              // Обходим ограничения CanvasKit на Flutter Web
-                              headers: const {"Access-Control-Allow-Origin": "*"},
                               errorBuilder: (context, error, stackTrace) {
                                 return Container(
                                   width: 150,
@@ -603,7 +547,6 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab> with SingleTi
     );
   }
 
-  // ИСПРАВЛЕННЫЙ ПРОСМОТРЩИК ФОТО ДЛЯ WEB
   void _openPhotoViewer(String url) {
     showDialog(
       context: context,
@@ -640,7 +583,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab> with SingleTi
     );
   }
 
-  void _showActionsMenu(int msgId, String currentText, bool isMe, AppLocalizations t) {
+  void _showActionsMenu(int msgId, String currentText, bool isMe, AppLocalizations? t) {
     showModalBottomSheet(
       context: context,
       builder: (context) {
@@ -650,7 +593,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab> with SingleTi
               if (isMe)
                 ListTile(
                   leading: const Icon(Icons.edit),
-                  title: Text(t.editButton ?? 'Edit'),
+                  title: Text(t?.editButton ?? 'Edit'),
                   onTap: () {
                     Navigator.pop(context);
                     _startEditing(msgId, currentText);
@@ -658,7 +601,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab> with SingleTi
                 ),
               ListTile(
                 leading: const Icon(Icons.delete, color: Colors.red),
-                title: Text(t.deleteButton ?? 'Delete', style: const TextStyle(color: Colors.red)),
+                title: Text(t?.deleteButton ?? 'Delete', style: const TextStyle(color: Colors.red)),
                 onTap: () {
                   Navigator.pop(context);
                   _deleteMessage(msgId);
@@ -671,8 +614,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab> with SingleTi
     );
   }
 
-  // ЗАДАЧИ БЕЗ ИЗМЕНЕНИЙ (ОСТАВЛЕНО КАК БЫЛО)
-  Widget _buildTasksView(AppLocalizations t, ColorScheme colorScheme, ThemeData currentTheme) {
+  Widget _buildTasksView(AppLocalizations? t, ColorScheme colorScheme, ThemeData currentTheme) {
     return Column(
       children: [
         _buildTaskFilterRow(t, colorScheme),
@@ -680,7 +622,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab> with SingleTi
           child: _tasksLoading
               ? const Center(child: CircularProgressIndicator())
               : _tasks.isEmpty
-                  ? Center(child: Text(t.noTasks ?? "No tasks"))
+                  ? Center(child: Text(t?.noTasks ?? "Нет задач"))
                   : RefreshIndicator(
                       onRefresh: _loadTasks,
                       child: ListView(
@@ -695,17 +637,17 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab> with SingleTi
     );
   }
 
-  Widget _buildTaskFilterRow(AppLocalizations t, ColorScheme colorScheme) {
+  Widget _buildTaskFilterRow(AppLocalizations? t, ColorScheme colorScheme) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
       color: colorScheme.surface,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          _filterBtn('pending', t.pendingTasksTab ?? "Active"),
-          _filterBtn('accepted', t.acceptedTasksTab ?? "In Progress"),
-          _filterBtn('completed', t.completedTasksTab ?? "Done"),
-          _filterBtn('failed', t.failedTasksTab ?? "Failed"),
+          _filterBtn('pending', t?.pendingTasksTab ?? "Активные"),
+          _filterBtn('accepted', t?.acceptedTasksTab ?? "В процессе"),
+          _filterBtn('completed', t?.completedTasksTab ?? "Готово"),
+          _filterBtn('failed', t?.failedTasksTab ?? "Провалено"),
         ],
       ),
     );
@@ -731,7 +673,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab> with SingleTi
     );
   }
 
-  Widget _buildTaskGroup(AppLocalizations t, ColorScheme colorScheme, ThemeData currentTheme) {
+  Widget _buildTaskGroup(AppLocalizations? t, ColorScheme colorScheme, ThemeData currentTheme) {
     final authState = ref.watch(authProvider);
     final currentUserId = authState.user?.id ?? 0;
     final isFounder = authState.user?.role == 'founder';
@@ -741,6 +683,10 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab> with SingleTi
         bool isCreator = task['creator_id'] == currentUserId;
         bool isAssignee = task['assignee_id'] == currentUserId;
         bool canDelete = isFounder || isCreator;
+
+        final assigneeLabel = t?.assigneeField ?? "Исполнитель";
+        final unassignedLabel = t?.unassignedField ?? "Не назначен";
+        final deadlineLabel = t?.deadlineField ?? "Дедлайн";
 
         return Card(
           margin: const EdgeInsets.only(bottom: 10),
@@ -755,7 +701,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab> with SingleTi
               style: GoogleFonts.ubuntu(fontWeight: FontWeight.bold, color: colorScheme.onSurface),
             ),
             subtitle: Text(
-              "${t.assigneeField}: ${task['assignee_full_name'] ?? t.unassignedField}",
+              "$assigneeLabel: ${task['assignee_full_name'] ?? unassignedLabel}",
               style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
             ),
             children: [
@@ -770,7 +716,7 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab> with SingleTi
                     ],
                     if (task['deadline'] != null) ...[
                       Text(
-                        "${t.deadlineField}: ${DateFormat('dd.MM.yyyy HH:mm').format(DateTime.parse(task['deadline']).toLocal())}",
+                        "$deadlineLabel: ${DateFormat('dd.MM.yyyy HH:mm').format(DateTime.parse(task['deadline']).toLocal())}",
                         style: const TextStyle(color: Colors.red, fontSize: 12, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 8),
@@ -782,19 +728,19 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab> with SingleTi
                           ElevatedButton(
                             onPressed: () => _updateTaskStatus(task['id'], 'accepted'),
                             style: ElevatedButton.styleFrom(backgroundColor: colorScheme.primary, foregroundColor: colorScheme.onPrimary),
-                            child: Text(t.acceptButton),
+                            child: Text(t?.acceptButton ?? "Принять"),
                           ),
                         if (task['status'] == 'accepted' && isAssignee)
                           ElevatedButton(
                             onPressed: () => _updateTaskStatus(task['id'], 'completed'),
                             style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
-                            child: Text(t.completeButton),
+                            child: Text(t?.completeButton ?? "Завершить"),
                           ),
                         if (task['status'] == 'accepted' && isAssignee)
                           ElevatedButton(
                             onPressed: () => _updateTaskStatus(task['id'], 'failed'),
                             style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-                            child: Text(t.failButton),
+                            child: Text(t?.failButton ?? "Провалить"),
                           ),
                         if (canDelete)
                           IconButton(
