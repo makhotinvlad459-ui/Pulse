@@ -1,9 +1,7 @@
 import os
 from datetime import datetime, timedelta
 from typing import List, Optional
-import io
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
-from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 from sqlalchemy.orm import selectinload
@@ -60,7 +58,7 @@ async def _check_company_access(company_id: int, current_user: User, db: AsyncSe
         result = await db.execute(select(Company).join(CompanyMember).where(Company.id == company_id, CompanyMember.user_id == current_user.id))
     return result.scalar_one_or_none() is not None
 
-# ========== Загрузка файлов СРАЗУ В FIREBASE STORAGE ==========
+# ========== Загрузка файлов СРАЗУ В FIREBASE STORAGE С SIGNED URL ==========
 @router.post("/upload")
 async def upload_chat_file(
     company_id: int = Form(...),
@@ -85,38 +83,17 @@ async def upload_chat_file(
         file_content = await file.read()
         blob.upload_from_string(file_content, content_type=file.content_type)
 
-        # 5. Вместо прямой ссылки Google Storage, которая блокируется по CORS,
-        # отдаем относительный URL на наш собственный прокси-эндпоинт бэкенда.
-        return {"url": f"/api/chat/file/{blob_name}"}
+        # 5. Генерируем безопасную временную подписанную ссылку (Signed URL) на 7 дней.
+        # Flutter Web сможет отобразить её напрямую без ошибок CORS.
+        file_url = blob.generate_signed_url(
+            expiration=timedelta(days=7),
+            method="GET"
+        )
+
+        return {"url": file_url}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to upload file to Firebase: {str(e)}")
-
-# ========== Проксирование файлов для обхода CORS во Flutter Web ==========
-@router.get("/file/{folder}/{file_name}")
-async def get_chat_file(folder: str, file_name: str):
-    """Проксирует файл из Firebase Storage наружу, полностью обходя CORS во Flutter Web"""
-    try:
-        bucket = storage.bucket()
-        # Восстанавливаем полный путь к файлу внутри бакета (например: chat_1/1779899002_logo.png)
-        blob_path = f"{folder}/{file_name}"
-        blob = bucket.blob(blob_path)
-
-        if not blob.exists():
-            raise HTTPException(status_code=404, detail="Файл не найден в хранилище")
-
-        # Скачиваем файл в буфер оперативной памяти сервера
-        file_stream = io.BytesIO()
-        blob.download_to_file(file_stream)
-        file_stream.seek(0)
-
-        # Вытаскиваем оригинальный content_type (image/png, image/jpeg и т.д.)
-        content_type = blob.content_type or "application/octet-stream"
-
-        return StreamingResponse(file_stream, media_type=content_type)
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ошибка при чтении файла из Firebase: {str(e)}")
 
 # ========== Чат компании ==========
 @router.post("/company/{company_id}", response_model=ChatMessageResponse)
@@ -133,7 +110,7 @@ async def send_chat_message(
         company_id=company_id,
         user_id=current_user.id,
         message=msg.message,
-        attachment_url=msg.attachment_url,   # Сохраняем готовую ссылку нашего API
+        attachment_url=msg.attachment_url,   # Сохраняем готовую Signed URL ссылку
         edited=False
     )
     db.add(new_msg)
@@ -163,7 +140,7 @@ async def send_chat_message(
         "type": "update_counters",
         "company_id": company_id
     }, db)
-    
+
     return ChatMessageResponse(
         id=new_msg.id,
         user_id=current_user.id,
@@ -383,7 +360,6 @@ async def update_fcm_token(
     current_user: User = Depends(get_current_user)
 ):
     try:
-        # Обновляем токен у текущего авторизованного пользователя
         current_user.fcm_token = req.fcm_token
         await db.commit()
         return {"status": "success", "detail": "FCM token updated successfully"}
