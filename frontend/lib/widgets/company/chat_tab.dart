@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:io';
+import 'dart:html' as html;
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,7 +8,6 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:path_provider/path_provider.dart';
 import 'package:photo_view/photo_view.dart';
 import '../../services/api_client.dart';
 import '../../services/image_compression.dart';
@@ -97,23 +96,7 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
     setState(() {
       switch (type) {
         case 'new_message':
-          final wasAtBottom = _scrollController.hasClients && 
-              _scrollController.position.pixels >= 
-              _scrollController.position.maxScrollExtent - 100;
-          
           _messages.add(data['message']);
-          
-          if (wasAtBottom) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (_scrollController.hasClients) {
-                _scrollController.animateTo(
-                  _scrollController.position.maxScrollExtent,
-                  duration: const Duration(milliseconds: 200),
-                  curve: Curves.easeOutCubic,
-                );
-              }
-            });
-          }
           break;
         case 'edit_message':
           final messageId = data['message_id'];
@@ -168,6 +151,13 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
       await _markChatRead();
       _lastVisit = DateTime.now();
       _updateUnreadCount();
+      
+      // Прокручиваем к последнему сообщению только при загрузке
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scrollController.hasClients && _messages.isNotEmpty) {
+          _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+        }
+      });
     } catch (e) {
       setState(() => _loadingMessages = false);
       print('Error loading chat: $e');
@@ -242,7 +232,7 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
     });
   }
 
-  // Просмотр изображения с зумом
+  // Просмотр изображения с зумом (работает в браузере и на телефоне)
   Future<void> _showPhotoViewer(String url) async {
     showDialog(
       context: context,
@@ -281,27 +271,37 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
     );
   }
 
-  // Скачивание файла
-  Future<void> _downloadFile(String url) async {
-    final t = AppLocalizations.of(context)!;
+  // Скачивание файла (работает в браузере)
+  Future<void> _downloadFile(String url, String filename) async {
     final api = ApiClient();
     try {
       final response = await api.getFile(url);
       final bytes = response.data as List<int>;
-      final directory = await getApplicationDocumentsDirectory();
-      final filename = url.split('/').last;
-      final file = File('${directory.path}/$filename');
-      await file.writeAsBytes(bytes);
+      
+      // Для веб-версии
+      if (kIsWeb) {
+        final blob = html.Blob([bytes]);
+        final anchor = html.AnchorElement(href: html.Url.createObjectUrlFromBlob(blob))
+          ..target = 'blank'
+          ..download = filename;
+        anchor.click();
+        html.Url.revokeObjectUrl(anchor.href);
+      } else {
+        // Для мобильных версий
+        final directory = await getApplicationDocumentsDirectory();
+        final file = File('${directory.path}/$filename');
+        await file.writeAsBytes(bytes);
+      }
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${t.savedTo}: ${file.path}'))
+          const SnackBar(content: Text('Файл сохранен')),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${t.error}: $e'))
+          SnackBar(content: Text('Ошибка: $e')),
         );
       }
     }
@@ -761,7 +761,7 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
                                 ),
                               )
                             : GestureDetector(
-                                onTap: () => _downloadFile(msg['attachment_url']),
+                                onTap: () => _downloadFile(msg['attachment_url'], msg['attachment_url'].split('/').last),
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                   decoration: BoxDecoration(
