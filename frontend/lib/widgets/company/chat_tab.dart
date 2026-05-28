@@ -108,12 +108,12 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
       switch (type) {
         case 'new_message':
           _messages.add(data['message']);
-          // Прокручиваем только если пользователь не скроллит вверх
-          if (!_isUserScrolling) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              _scrollToBottom();
-            });
-          }
+  // Прокручиваем к новому сообщению только если пользователь не скроллит вверх
+        if (!_isUserScrolling) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _scrollToBottom();
+         });
+           }
           break;
         case 'edit_message':
           final messageId = data['message_id'];
@@ -157,33 +157,40 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
   }
 
   Future<void> _loadChatMessages() async {
-    final api = ApiClient();
-    try {
-      final res = await api.get('/chat/company/${widget.companyId}');
-      final newMessages = List<Map<String, dynamic>>.from(res.data);
-      setState(() {
-        _messages = newMessages;
-        _loadingMessages = false;
-      });
-      await _markChatRead();
-      _lastVisit = DateTime.now();
-      _updateUnreadCount();
-      // НЕ вызываем _scrollToBottom() здесь
-    } catch (e) {
-      setState(() => _loadingMessages = false);
-      print('Error loading chat: $e');
-    }
+  final api = ApiClient();
+  try {
+    final res = await api.get('/chat/company/${widget.companyId}');
+    final newMessages = List<Map<String, dynamic>>.from(res.data);
+    setState(() {
+      _messages = newMessages;
+      _loadingMessages = false;
+    });
+    await _markChatRead();
+    _lastVisit = DateTime.now();
+    _updateUnreadCount();
+    // НЕ вызываем _scrollToBottom() здесь
+  } catch (e) {
+    setState(() => _loadingMessages = false);
+    print('Error loading chat: $e');
   }
+}
 
   void _scrollToBottom() {
-    if (_scrollController.hasClients && !_isUserScrolling) {
+  if (_scrollController.hasClients && !_isUserScrolling) {
+    final position = _scrollController.position;
+    if (position.maxScrollExtent - position.pixels > 100) {
+      // Если далеко от низа - просто прокручиваем
+      _scrollController.jumpTo(position.maxScrollExtent);
+    } else {
+      // Если близко - плавно
       _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOutCubic,
+        position.maxScrollExtent,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
       );
     }
   }
+}
 
   Future<void> _showAttachmentPicker(BuildContext context) async {
     final t = AppLocalizations.of(context)!;
@@ -684,124 +691,122 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
   }
 
   Widget _buildMessageBubble(
-      bool isMe, String displayName, Map<String, dynamic> msg, bool isFounder, ColorScheme colorScheme, AppLocalizations t) {
-    final hasAttachment = msg['attachment_url'] != null && msg['attachment_url'].toString().isNotEmpty;
-    
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 2, horizontal: 12),
-      child: Row(
-        mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (!isMe)
-            Padding(
-              padding: const EdgeInsets.only(top: 18),
-              child: CircleAvatar(
-                radius: 14,
-                backgroundColor: colorScheme.primaryContainer,
-                child: Text(
-                  displayName.isNotEmpty ? displayName[0].toUpperCase() : 'U',
-                  style: TextStyle(color: colorScheme.onPrimaryContainer, fontSize: 11, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Column(
-              crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-              children: [
-                if (!isMe)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 8, bottom: 2),
-                    child: Text(
-                      displayName,
-                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: colorScheme.primary),
-                    ),
-                  ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: isMe ? colorScheme.primary : colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.only(
-                      topLeft: const Radius.circular(14),
-                      topRight: const Radius.circular(14),
-                      bottomLeft: isMe ? const Radius.circular(14) : const Radius.circular(2),
-                      bottomRight: isMe ? const Radius.circular(2) : const Radius.circular(14),
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (hasAttachment)
-                        GestureDetector(
-                          onTap: () => _showAttachmentDialog(msg['attachment_url']),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Image.network(
-                              msg['attachment_url'],
-                              height: 120,
-                              width: 180,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Container(
-                                width: 180,
-                                height: 120,
-                                color: Colors.grey.shade300,
-                                child: const Icon(Icons.broken_image, size: 30),
-                              ),
-                            ),
-                          ),
-                        ),
-                      if (msg['message'] != null && msg['message'].toString().isNotEmpty)
-                        Text(
-                          msg['message'],
-                          style: TextStyle(
-                            color: isMe ? colorScheme.onPrimary : colorScheme.onSurface,
-                            fontSize: 13,
-                          ),
-                        ),
-                      const SizedBox(height: 2),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (msg['edited'] == true)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 4),
-                              child: Text(
-                                t.editedLabel,
-                                style: TextStyle(
-                                  fontSize: 9,
-                                  color: (isMe ? colorScheme.onPrimary : colorScheme.onSurfaceVariant).withOpacity(0.6),
-                                ),
-                              ),
-                            ),
-                          Text(
-                            DateFormat('HH:mm').format(DateTime.parse(msg['created_at']).toLocal()),
-                            style: TextStyle(
-                              fontSize: 9,
-                              color: (isMe ? colorScheme.onPrimary : colorScheme.onSurfaceVariant).withOpacity(0.6),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+    bool isMe, String displayName, Map<String, dynamic> msg, bool isFounder, ColorScheme colorScheme, AppLocalizations t) {
+  final hasAttachment = msg['attachment_url'] != null && msg['attachment_url'].toString().isNotEmpty;
+  
+  return Container(
+    margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Аватар всегда слева (кроме своих - можно убрать или оставить)
+        CircleAvatar(
+          radius: 16,
+          backgroundColor: isMe ? colorScheme.primary : colorScheme.primaryContainer,
+          child: Text(
+            displayName.isNotEmpty ? displayName[0].toUpperCase() : 'U',
+            style: TextStyle(
+              color: isMe ? colorScheme.onPrimary : colorScheme.onPrimaryContainer, 
+              fontSize: 12, 
+              fontWeight: FontWeight.bold
             ),
           ),
-          if (isMe && (isMe || isFounder))
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: IconButton(
-                icon: Icon(Icons.more_vert, size: 14, color: colorScheme.onSurfaceVariant),
-                onPressed: () => _showMessageActions(msg),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
+        ),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Имя пользователя
+              Row(
+                children: [
+                  Text(
+                    displayName,
+                    style: TextStyle(
+                      fontSize: 12, 
+                      fontWeight: FontWeight.w600, 
+                      color: isMe ? colorScheme.primary : colorScheme.onSurface,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    DateFormat('HH:mm').format(DateTime.parse(msg['created_at']).toLocal()),
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  if (msg['edited'] == true)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4),
+                      child: Text(
+                        t.editedLabel,
+                        style: TextStyle(
+                          fontSize: 9,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                ],
               ),
+              const SizedBox(height: 4),
+              // Само сообщение с фоном
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: isMe ? colorScheme.primaryContainer : colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (hasAttachment)
+                      GestureDetector(
+                        onTap: () => _showAttachmentDialog(msg['attachment_url']),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.network(
+                            msg['attachment_url'],
+                            height: 150,
+                            width: 200,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(
+                              width: 200,
+                              height: 150,
+                              color: Colors.grey.shade300,
+                              child: const Icon(Icons.broken_image, size: 40),
+                            ),
+                          ),
+                        ),
+                      ),
+                    if (msg['message'] != null && msg['message'].toString().isNotEmpty)
+                      Text(
+                        msg['message'],
+                        style: TextStyle(
+                          color: isMe ? colorScheme.onPrimaryContainer : colorScheme.onSurface,
+                          fontSize: 14,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Кнопка меню (только для своих сообщений)
+        if (isMe || isFounder)
+          Padding(
+            padding: const EdgeInsets.only(left: 4),
+            child: IconButton(
+              icon: Icon(Icons.more_vert, size: 18, color: colorScheme.onSurfaceVariant),
+              onPressed: () => _showMessageActions(msg),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
             ),
-        ],
-      ),
-    );
-  }
+          ),
+      ],
+    ),
+  );
 }
