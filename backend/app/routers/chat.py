@@ -7,8 +7,6 @@ from sqlalchemy import select, delete
 from sqlalchemy.orm import selectinload
 from pydantic import BaseModel
 from firebase_admin import storage, messaging
-from fastapi.responses import Response
-import aiohttp
 from app.database import get_db
 from app.models import User, Company, ChatMessage, TransactionComment, Transaction, CompanyMember, UserRole, UserChatVisit
 from app.deps import get_current_user
