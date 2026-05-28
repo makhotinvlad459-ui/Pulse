@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../services/api_client.dart';
-import '../../providers/auth_provider.dart';
-import '../../providers/locale_provider.dart';
-import '../../models/user.dart';
+import '../../../services/api_client.dart';
+import '../../../providers/auth_provider.dart';
+import '../../../providers/locale_provider.dart';
+import '../../../models/user.dart';
 import 'package:frontend/l10n/app_localizations.dart';
 
 class TasksTab extends ConsumerStatefulWidget {

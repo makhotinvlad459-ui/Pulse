@@ -6,10 +6,11 @@ class ChatTabWeb implements ChatTabPlatform {
   @override
   Future<void> downloadFile(Uint8List bytes, String filename) async {
     final blob = html.Blob([bytes]);
-    final anchor = html.AnchorElement(href: html.Url.createObjectUrlFromBlob(blob))
+    final url = html.Url.createObjectUrlFromBlob(blob);
+    final anchor = html.AnchorElement(href: url)
       ..target = 'blank'
       ..download = filename;
     anchor.click();
-    html.Url.revokeObjectUrl(anchor.href);
+    html.Url.revokeObjectUrl(url);
   }
 }

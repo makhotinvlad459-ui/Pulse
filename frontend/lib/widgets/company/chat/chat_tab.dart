@@ -9,11 +9,11 @@ import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:photo_view/photo_view.dart';
-import '../../services/api_client.dart';
-import '../../services/image_compression.dart';
-import '../../providers/auth_provider.dart';
-import '../../providers/locale_provider.dart';
-import '../../models/user.dart';
+import '../../../services/api_client.dart';           // исправлено
+import '../../../services/image_compression.dart';   // исправлено
+import '../../../providers/auth_provider.dart';      // исправлено
+import '../../../providers/locale_provider.dart';    // исправлено
+import '../../../models/user.dart';                  // исправлено
 import 'package:frontend/l10n/app_localizations.dart';
 import 'chat_tab_platform.dart';
 import 'chat_tab_platform_interface.dart';
