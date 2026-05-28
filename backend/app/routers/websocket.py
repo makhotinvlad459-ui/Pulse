@@ -21,7 +21,7 @@ async def get_user_from_token(token: str, db: AsyncSession) -> User | None:
     except JWTError:
         return None
 
-@router.websocket("/ws/chat/{company_id}")
+@router.websocket("/api/ws/chat/{company_id}")
 async def websocket_chat(
     websocket: WebSocket,
     company_id: int,
@@ -47,7 +47,7 @@ async def websocket_chat(
     except WebSocketDisconnect:
         manager.disconnect_chat(company_id, websocket)
 
-@router.websocket("/ws/tasks/{company_id}")
+@router.websocket("/api/ws/tasks/{company_id}")
 async def websocket_tasks(
     websocket: WebSocket,
     company_id: int,

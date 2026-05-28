@@ -234,13 +234,13 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
   final token = await api.getToken();
   if (token == null) return;
 
-  // Для веб-версии используем текущий origin (https://pulse-yourmoney.com)
   final origin = Uri.base.origin;
   final wsScheme = origin.startsWith('https') ? 'wss' : 'ws';
   final wsBase = origin.replaceFirst(RegExp(r'^https?://'), '');
   
-  final chatUrl = '$wsScheme://$wsBase/ws/chat/${widget.companyId}?token=$token';
-  final tasksUrl = '$wsScheme://$wsBase/ws/tasks/${widget.companyId}?token=$token';
+  // ДОБАВЛЯЕМ /api/ В ПУТЬ
+  final chatUrl = '$wsScheme://$wsBase/api/ws/chat/${widget.companyId}?token=$token';
+  final tasksUrl = '$wsScheme://$wsBase/api/ws/tasks/${widget.companyId}?token=$token';
 
   print('🔌 Connecting to Chat WebSocket: $chatUrl');
   print('🔌 Connecting to Tasks WebSocket: $tasksUrl');
