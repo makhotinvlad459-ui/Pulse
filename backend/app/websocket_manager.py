@@ -99,14 +99,24 @@ class ConnectionManager:
                 del self.active_chat_connections[company_id]
 
     async def broadcast_chat(self, company_id: int, message: dict):
-        """Публикует сообщение чата в Redis"""
+
+        print(f"📢 broadcast_chat: company={company_id}")
+        print(f"📢 Message type: {message.get('type')}")
+    
         if not self.redis_client:
+            print("❌ Redis client is None!")
             return
-        await self.redis_client.publish("pulse_events", json.dumps({
+    
+        try:
+            payload = json.dumps({
             "type": "chat",
             "company_id": company_id,
             "message": message
-        }))
+            })
+            await self.redis_client.publish("pulse_events", payload)
+            print(f"✅ Published to Redis channel 'pulse_events'")
+        except Exception as e:
+            print(f"❌ Redis publish error: {e}")
 
     # ========== ЗАДАЧИ ==========
     async def connect_task(self, company_id: int, websocket: WebSocket):

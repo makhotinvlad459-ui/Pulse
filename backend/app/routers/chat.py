@@ -71,23 +71,42 @@ async def upload_chat_file(
 
     try:
         timestamp = int(datetime.utcnow().timestamp())
-        blob_name = f"chat_{company_id}/{timestamp}_{file.filename}"
+        # Очищаем имя файла от спецсимволов
+        safe_filename = "".join(c for c in file.filename if c.isalnum() or c in "._-")
+        blob_name = f"chat_{company_id}/{timestamp}_{safe_filename}"
 
         bucket = storage.bucket()
         blob = bucket.blob(blob_name)
 
         file_content = await file.read()
-        blob.upload_from_string(file_content, content_type=file.content_type)
+        
+        # Определяем content type
+        content_type = file.content_type or "application/octet-stream"
+        
+        blob.upload_from_string(
+            file_content, 
+            content_type=content_type
+        )
 
-        # Делаем файл публичным в Firebase Storage
+        # Делаем файл публичным
         blob.make_public()
+        
+        # Получаем публичный URL
         file_url = blob.public_url
-
-        return {"url": file_url}
+        
+        # Логируем успех
+        print(f"✅ File uploaded successfully: {file_url}")
+        print(f"   Bucket: {bucket.name}")
+        print(f"   Blob: {blob_name}")
+        
+        return {"url": file_url, "filename": safe_filename}
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to upload file to Firebase: {str(e)}")
-
+        print(f"❌ Firebase upload error: {str(e)}")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Failed to upload file to Firebase: {str(e)}"
+        )
 # ========== Чат компании ==========
 @router.post("/company/{company_id}", response_model=ChatMessageResponse)
 async def send_chat_message(
@@ -99,6 +118,7 @@ async def send_chat_message(
     if not await _check_company_access(company_id, current_user, db):
         raise HTTPException(status_code=404, detail="Company not found or access denied")
     
+    # Создаем сообщение
     new_msg = ChatMessage(
         company_id=company_id,
         user_id=current_user.id,
@@ -110,6 +130,7 @@ async def send_chat_message(
     await db.commit()
     await db.refresh(new_msg)
     
+    # Формируем данные для WebSocket
     ws_message_data = {
         "id": new_msg.id,
         "user_id": current_user.id,
@@ -120,17 +141,27 @@ async def send_chat_message(
         "edited": False,
         "updated_at": None,
     }
-
-    await manager.broadcast_chat(company_id, {
-        "type": "new_message",
-        "message": ws_message_data
-    })
     
+    # Отправляем через WebSocket
+    print(f"📤 Broadcasting to company {company_id}: {ws_message_data}")
+    
+    try:
+        await manager.broadcast_chat(company_id, {
+            "type": "new_message",
+            "message": ws_message_data
+        })
+        print("✅ WebSocket broadcast sent")
+    except Exception as ws_error:
+        print(f"❌ WebSocket broadcast error: {ws_error}")
+        # Не прерываем выполнение, даже если WebSocket не работает
+    
+    # Уведомляем о необходимости обновить счетчики
     await manager.notify_company_members(company_id, {
         "type": "update_counters",
         "company_id": company_id
     }, db)
     
+    # Возвращаем ответ
     return ChatMessageResponse(
         id=new_msg.id,
         user_id=current_user.id,
