@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'secure_storage.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -278,6 +279,28 @@ class ApiClient {
   final response = await get('/companies/$companyId');
   return Company.fromJson(response.data);
 }
+
+// Добавь эти методы в класс ApiClient в файле api_client.dart
+
+  Future<Map<String, dynamic>> uploadTransactionFile(
+      {required int companyId, required Uint8List bytes, required String filename}) async {
+    FormData formData = FormData.fromMap({
+      "file": MultipartFile.fromBytes(bytes, filename: filename),
+      "company_id": companyId,
+    });
+    final response = await _dio.post('/transactions/upload', data: formData);
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> uploadCompanyLogo(
+      {required int companyId, required Uint8List bytes, required String filename}) async {
+    FormData formData = FormData.fromMap({
+      "file": MultipartFile.fromBytes(bytes, filename: filename),
+      "company_id": companyId,
+    });
+    final response = await _dio.post('/companies/$companyId/logo', data: formData);
+    return response.data;
+  }
 
   Future<void> changePassword(String oldPassword, String newPassword) async {
   await post('/auth/change-password', data: {

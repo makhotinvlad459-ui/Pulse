@@ -123,7 +123,7 @@ class _EditTransactionDialogState extends ConsumerState<EditTransactionDialog> {
       final picker = ImagePicker();
       final picked = await picker.pickImage(source: ImageSource.gallery);
       if (picked != null) {
-        final compressed = await ImageCompression.compressXFile(picked);
+        final compressed = await ImageCompression.compressImage(await picked.readAsBytes());
         setState(() {
           _photo = compressed;
           _hasExistingAttachment = false;
@@ -326,48 +326,50 @@ class _EditTransactionDialogState extends ConsumerState<EditTransactionDialog> {
   }
 
   Future<void> _save() async {
-  if (!_formKey.currentState!.validate()) return;
-  setState(() => _loading = true);
-
-  try {
-    String? finalLogoUrl = widget.companyData['logo_url']; // Старый URL по умолчанию
-
-    // 1. Если пользователь выбрал новый файл
-    if (_logoFile != null) {
-      // Преобразуем XFile в байты
-      final bytes = await _logoFile!.readAsBytes();
-      // Сжимаем
-      final compressedBytes = await ImageCompression.compressImage(bytes);
-      
-      // Отправляем на сервер
-      final response = await ApiClient().uploadCompanyLogo(
-        companyId: widget.companyData['id'],
-        bytes: compressedBytes,
-        filename: _logoFile!.name,
-      );
-      finalLogoUrl = response['url']; // Получаем новый URL от сервера
-    }
-
-    // 2. Отправляем данные компании
-    final data = {
-      "name": _nameController.text,
-      "logo_url": finalLogoUrl,
-      // ... остальные поля компании
-    };
-
-    await ApiClient().patch('/companies/${widget.companyData['id']}', data: data);
+    final t = AppLocalizations.of(context)!;
+    setState(() => _loading = true);
+    final api = ApiClient();
     
-    await widget.onSuccess();
-    if (mounted) Navigator.pop(context);
-  } catch (e) {
-    print('Save error: $e');
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка сохранения: $e')));
+    try {
+      String? attachmentUrl = widget.transaction['attachment_url'];
+
+      if (_photo != null || _webFile != null) {
+        final bytes = _webFile != null ? _webFile!.bytes! : await _photo!.readAsBytes();
+        final fileName = _webFile != null ? _webFile!.name : _photo!.name;
+        
+        final compressedBytes = await ImageCompression.compressImage(bytes);
+        
+        final result = await api.uploadTransactionFile(
+          companyId: widget.companyId,
+          bytes: compressedBytes,
+          filename: fileName,
+        );
+        attachmentUrl = result['url'] ?? result['attachment_url'];
+      }
+
+      await api.patch('/transactions/${widget.transaction['id']}', queryParameters: {
+        'company_id': widget.companyId
+      }, data: {
+        'type': _type,
+        'amount': _amount,
+        'date': _date.toIso8601String(),
+        'account_id': _accountId,
+        'category_id': _categoryId,
+        'description': _description,
+        'counterparty': _counterparty,
+        'attachment_url': attachmentUrl,
+      });
+
+      await widget.onSuccess();
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
-  } finally {
-    if (mounted) setState(() => _loading = false);
   }
-}
 
   Future<void> _deleteTransaction() async {
     final t = AppLocalizations.of(context)!;

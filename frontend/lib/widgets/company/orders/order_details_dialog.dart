@@ -15,6 +15,7 @@ class OrderDetailsDialog extends ConsumerStatefulWidget {
   final Set<String> permissions;
   final bool isFounder;
   final VoidCallback onOrderUpdated;
+  
 
   const OrderDetailsDialog({
     super.key,
@@ -34,6 +35,9 @@ class _OrderDetailsDialogState extends ConsumerState<OrderDetailsDialog> {
   late TextEditingController _workPriceController;
   List<dynamic> _products = [];
   bool _isEditable = false;
+  
+  // 1. Добавляем клиент сюда
+  final ApiClient _apiClient = ApiClient();
 
   bool get _canEdit => widget.isFounder || widget.permissions.contains('edit_orders');
   bool get _canView => widget.isFounder || widget.permissions.contains('view_orders');
@@ -42,14 +46,32 @@ class _OrderDetailsDialogState extends ConsumerState<OrderDetailsDialog> {
   void initState() {
     super.initState();
     _fullOrder = Map.from(widget.order);
-    _workPriceController = TextEditingController(
-        text: (_fullOrder['work_price'] ?? 0).toString());
-    _isEditable = _fullOrder['status'] == 'pending' ||
-        _fullOrder['status'] == 'accepted';
-    if (_isEditable && _canEdit) {
-      _loadProducts();
+    _workPriceController = TextEditingController(text: (_fullOrder['work_price'] ?? 0).toString());
+    _isEditable = _fullOrder['status'] == 'pending' || _fullOrder['status'] == 'accepted';
+  }
+
+  // 2. Метод загрузки файла для этого диалога
+  Future<void> _uploadOrderFile(XFile picked) async {
+    final t = AppLocalizations.of(context)!;
+    try {
+      final bytes = await picked.readAsBytes();
+      final compressed = await ImageCompression.compressImage(bytes);
+      
+      // Используем метод из ApiClient
+      await _apiClient.uploadTransactionFile(
+        companyId: widget.companyId,
+        bytes: compressed,
+        filename: picked.name,
+      );
+      
+      await _refreshOrder();
+      widget.onOrderUpdated();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
     }
   }
+
+}
 
   Future<void> _loadProducts() async {
     final api = ApiClient();
@@ -129,7 +151,7 @@ class _OrderDetailsDialogState extends ConsumerState<OrderDetailsDialog> {
     final ImagePicker picker = ImagePicker();
     final XFile? pickedFile = await picker.pickImage(source: source);
     if (pickedFile == null) return;
-    final compressed = await ImageCompression.compressXFile(picked);
+    final compressed = await ImageCompression.compressImage(await picked.readAsBytes());
     final api = ApiClient();
     try {
       await _apiClient.uploadOrderFile(
