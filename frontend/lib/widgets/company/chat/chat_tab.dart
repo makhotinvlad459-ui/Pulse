@@ -9,15 +9,14 @@ import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:photo_view/photo_view.dart';
-import '../../../services/api_client.dart';           // исправлено
-import '../../../services/image_compression.dart';   // исправлено
-import '../../../providers/auth_provider.dart';      // исправлено
-import '../../../providers/locale_provider.dart';    // исправлено
-import '../../../models/user.dart';                  // исправлено
+import '../../../services/api_client.dart';
+import '../../../services/image_compression.dart';
+import '../../../providers/auth_provider.dart';
+import '../../../providers/locale_provider.dart';
+import '../../../models/user.dart';
 import 'package:frontend/l10n/app_localizations.dart';
 import 'chat_tab_platform.dart';
 import 'chat_tab_platform_interface.dart';
-
 
 enum _MessageAction { edit, delete, cancel }
 
@@ -41,6 +40,7 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   DateTime? _lastVisit;
+  bool _shouldAutoScroll = true; // Флаг для автоскролла
 
   WebSocketChannel? _chatChannel;
 
@@ -54,6 +54,14 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
   void initState() {
     super.initState();
     registerChatTabPlatform();
+    
+    // Отслеживаем скролл пользователя
+    _scrollController.addListener(() {
+      final isAtBottom = _scrollController.position.pixels >= 
+          _scrollController.position.maxScrollExtent - 100;
+      _shouldAutoScroll = isAtBottom;
+    });
+    
     _loadChatMessages();
     _connectWebSocket();
     _markChatRead();
@@ -101,6 +109,18 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
       switch (type) {
         case 'new_message':
           _messages.add(data['message']);
+          // Прокручиваем только если пользователь был внизу
+          if (_shouldAutoScroll) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (_scrollController.hasClients) {
+                _scrollController.animateTo(
+                  _scrollController.position.maxScrollExtent,
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOutCubic,
+                );
+              }
+            });
+          }
           break;
         case 'edit_message':
           final messageId = data['message_id'];
@@ -156,7 +176,7 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
       _lastVisit = DateTime.now();
       _updateUnreadCount();
       
-      // Прокручиваем к последнему сообщению только при загрузке
+      // Прокручиваем к последнему сообщению только один раз при загрузке
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_scrollController.hasClients && _messages.isNotEmpty) {
           _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
@@ -236,7 +256,7 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
     });
   }
 
-  // Просмотр изображения с зумом (работает в браузере и на телефоне)
+  // Просмотр изображения с зумом
   Future<void> _showPhotoViewer(String url) async {
     showDialog(
       context: context,
@@ -275,28 +295,36 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
     );
   }
 
-  // Скачивание файла (работает в браузере)
+  // Скачивание/открытие файла для веба
   Future<void> _downloadFile(String url, String filename) async {
-  final api = ApiClient();
-  try {
-    final response = await api.getFile(url);
-    final bytes = response.data as List<int>;
-    
-    await ChatTabPlatformSingleton.instance.downloadFile(Uint8List.fromList(bytes), filename);
-    
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Файл сохранен')),
-      );
-    }
-  } catch (e) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка: $e')),
-      );
+    final api = ApiClient();
+    try {
+      final response = await api.getFile(url);
+      final bytes = response.data as List<int>;
+      
+      // Для веба - открываем в новой вкладке
+      if (kIsWeb) {
+        final blob = html.Blob([bytes]);
+        final blobUrl = html.Url.createObjectUrlFromBlob(blob);
+        html.window.open(blobUrl, '_blank');
+        html.Url.revokeObjectUrl(blobUrl);
+      } else {
+        // Для мобильных - сохраняем
+        await ChatTabPlatformSingleton.instance.downloadFile(Uint8List.fromList(bytes), filename);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Файл сохранен')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка: $e')),
+        );
+      }
     }
   }
-}
 
   Future<void> _sendMessage() async {
     final t = AppLocalizations.of(context)!;
