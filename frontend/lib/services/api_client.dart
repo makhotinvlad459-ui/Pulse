@@ -132,14 +132,17 @@ class ApiClient {
   }
   // Получение файла
   Future<Response> getFile(String path,
-      {Map<String, dynamic>? queryParameters}) async {
-    return await _dio.get(path,
-        queryParameters: queryParameters,
-        options: Options(
-          responseType: ResponseType.bytes,
-          headers: {},                 // предотвращает сброс headers
-        ));
-  }
+    {Map<String, dynamic>? queryParameters}) async {
+  final token = await getToken();
+  return await _dio.get(path,
+      queryParameters: queryParameters,
+      options: Options(
+        responseType: ResponseType.bytes,
+        headers: {
+          'Authorization': 'Bearer $token',
+        },
+      ));
+}
 
   // Управление токеном – теперь только через storage!
   Future<void> setToken(String token) async {

@@ -93,35 +93,45 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
   }
 
   void _handleChatEvent(dynamic rawData) {
-    final data = rawData is String ? jsonDecode(rawData) : rawData;
-    final type = data['type'];
-    
-    setState(() {
-      switch (type) {
-        case 'new_message':
-          _messages.add(data['message']);
-          break;
-        case 'edit_message':
-          final messageId = data['message_id'];
-          final newText = data['new_message'];
-          final index = _messages.indexWhere((m) => m['id'] == messageId);
-          if (index != -1) {
-            _messages[index]['message'] = newText;
-            _messages[index]['edited'] = true;
-            _messages[index]['updated_at'] = data['updated_at'];
+  final data = rawData is String ? jsonDecode(rawData) : rawData;
+  final type = data['type'];
+  
+  setState(() {
+    switch (type) {
+      case 'new_message':
+        _messages.add(data['message']);
+        // Добавляем плавную прокрутку к новому сообщению
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_scrollController.hasClients) {
+            _scrollController.animateTo(
+              _scrollController.position.maxScrollExtent,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOutCubic,
+            );
           }
-          break;
-        case 'delete_message':
-          final messageId = data['message_id'];
-          _messages.removeWhere((m) => m['id'] == messageId);
-          break;
-        case 'clear_chat':
-          _messages.clear();
-          break;
-      }
-      _updateUnreadCount();
-    });
-  }
+        });
+        break;
+      case 'edit_message':
+        final messageId = data['message_id'];
+        final newText = data['new_message'];
+        final index = _messages.indexWhere((m) => m['id'] == messageId);
+        if (index != -1) {
+          _messages[index]['message'] = newText;
+          _messages[index]['edited'] = true;
+          _messages[index]['updated_at'] = data['updated_at'];
+        }
+        break;
+      case 'delete_message':
+        final messageId = data['message_id'];
+        _messages.removeWhere((m) => m['id'] == messageId);
+        break;
+      case 'clear_chat':
+        _messages.clear();
+        break;
+    }
+    _updateUnreadCount();
+  });
+}
 
   void _updateUnreadCount() {
     int unread = 0;
