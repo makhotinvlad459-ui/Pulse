@@ -462,9 +462,9 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
     await _markChatRead();
     _lastVisit = DateTime.now();
     
-    // Для файлов - перезагружаем (так как WebSocket может не принести)
-    // Для текста - полагаемся на WebSocket (мгновенно)
-    if (hasFile) {
+    // УБИРАЕМ _loadChatMessages() - полагаемся на WebSocket!
+    // Только если WebSocket не подключен, делаем перезагрузку
+    if (_chatChannel == null) {
       await _loadChatMessages();
     }
     
