@@ -1731,4 +1731,34 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get bankAccountLabel => 'Расчётный счёт';
+
+  @override
+  String get chatHint => 'Сообщение...';
+
+  @override
+  String get editButton => 'Редактировать';
+
+  @override
+  String get deleteButton => 'Удалить';
+
+  @override
+  String get pendingTasksTab => 'Активные';
+
+  @override
+  String get acceptedTasksTab => 'В процессе';
+
+  @override
+  String get completedTasksTab => 'Готово';
+
+  @override
+  String get failedTasksTab => 'Провалено';
+
+  @override
+  String get assigneeField => 'Исполнитель';
+
+  @override
+  String get unassignedField => 'Не назначен';
+
+  @override
+  String get deadlineField => 'Дедлайн';
 }

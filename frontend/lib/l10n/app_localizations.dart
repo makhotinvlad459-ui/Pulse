@@ -3499,6 +3499,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Bank account'**
   String get bankAccountLabel;
+
+  /// No description provided for @chatHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Message...'**
+  String get chatHint;
+
+  /// No description provided for @editButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get editButton;
+
+  /// No description provided for @deleteButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get deleteButton;
+
+  /// No description provided for @pendingTasksTab.
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get pendingTasksTab;
+
+  /// No description provided for @acceptedTasksTab.
+  ///
+  /// In en, this message translates to:
+  /// **'In Progress'**
+  String get acceptedTasksTab;
+
+  /// No description provided for @completedTasksTab.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get completedTasksTab;
+
+  /// No description provided for @failedTasksTab.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed'**
+  String get failedTasksTab;
+
+  /// No description provided for @assigneeField.
+  ///
+  /// In en, this message translates to:
+  /// **'Assignee'**
+  String get assigneeField;
+
+  /// No description provided for @unassignedField.
+  ///
+  /// In en, this message translates to:
+  /// **'Unassigned'**
+  String get unassignedField;
+
+  /// No description provided for @deadlineField.
+  ///
+  /// In en, this message translates to:
+  /// **'Deadline'**
+  String get deadlineField;
 }
 
 class _AppLocalizationsDelegate

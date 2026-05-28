@@ -651,5 +651,15 @@
   "fullName": "Полное имя",
   "enterFullName": "Введите полное имя",
   "innLabel": "ИНН",
-  "bankAccountLabel": "Расчётный счёт"
+  "bankAccountLabel": "Расчётный счёт",
+  "chatHint": "Сообщение...",
+  "editButton": "Редактировать",
+  "deleteButton": "Удалить",
+  "pendingTasksTab": "Активные",
+  "acceptedTasksTab": "В процессе",
+  "completedTasksTab": "Готово",
+  "failedTasksTab": "Провалено",
+  "assigneeField": "Исполнитель",
+  "unassignedField": "Не назначен",
+  "deadlineField": "Дедлайн"
 }

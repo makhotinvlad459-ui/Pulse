@@ -1733,4 +1733,34 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get bankAccountLabel => 'Bank account';
+
+  @override
+  String get chatHint => 'Message...';
+
+  @override
+  String get editButton => 'Edit';
+
+  @override
+  String get deleteButton => 'Delete';
+
+  @override
+  String get pendingTasksTab => 'Active';
+
+  @override
+  String get acceptedTasksTab => 'In Progress';
+
+  @override
+  String get completedTasksTab => 'Completed';
+
+  @override
+  String get failedTasksTab => 'Failed';
+
+  @override
+  String get assigneeField => 'Assignee';
+
+  @override
+  String get unassignedField => 'Unassigned';
+
+  @override
+  String get deadlineField => 'Deadline';
 }

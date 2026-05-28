@@ -651,5 +651,15 @@
   "fullName": "Full name",
   "enterFullName": "Enter full name",
   "innLabel": "INN",
-  "bankAccountLabel": "Bank account"
+  "bankAccountLabel": "Bank account",
+  "chatHint": "Message...",
+  "editButton": "Edit",
+  "deleteButton": "Delete",
+  "pendingTasksTab": "Active",
+  "acceptedTasksTab": "In Progress",
+  "completedTasksTab": "Completed",
+  "failedTasksTab": "Failed",
+  "assigneeField": "Assignee",
+  "unassignedField": "Unassigned",
+  "deadlineField": "Deadline"
 }

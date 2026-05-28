@@ -227,34 +227,44 @@ class ApiClient {
     });
   }
 
-  Future<Map<String, dynamic>> uploadChatFile(
-    XFile? photo,
-    PlatformFile? webFile,
-    int companyId,
-  ) async {
+    Future<Map<String, dynamic>> uploadChatFile({
+  required int companyId,
+  required Uint8List bytes,
+  required String filename,
+}) async {
+  try {
     final uri = Uri.parse('$baseUrl/chat/upload');
     final request = http.MultipartRequest('POST', uri)
       ..headers['Authorization'] = 'Bearer ${await getToken()}';
-    if (photo != null) {
-      request.files.add(await http.MultipartFile.fromPath('file', photo.path));
-    } else if (webFile != null && webFile.bytes != null) {
-      request.files.add(http.MultipartFile.fromBytes(
-        'file',
-        webFile.bytes!,
-        filename: webFile.name,
-      ));
-    } else {
-      throw Exception('No file provided');
-    }
+    
+    // Добавляем файл
+    request.files.add(http.MultipartFile.fromBytes(
+      'file',
+      bytes,
+      filename: filename,
+    ));
+    
+    // Добавляем company_id как поле формы
     request.fields['company_id'] = companyId.toString();
+    
+    print('Uploading file: $filename, size: ${bytes.length} bytes, company_id: $companyId');
+    
     final streamedResponse = await request.send();
     final response = await http.Response.fromStream(streamedResponse);
-    if (response.statusCode != 200) {
-      throw Exception('Failed to upload chat file: ${response.body}');
+    
+    print('Response status: ${response.statusCode}');
+    print('Response body: ${response.body}');
+    
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw Exception('Failed to upload chat file: ${response.statusCode} - ${response.body}');
     }
+    
     return jsonDecode(response.body);
+  } catch (e) {
+    print('Error in uploadChatFile: $e');
+    rethrow;
   }
-
+}
   // Методы для работы с правами
   Future<List<dynamic>> getAllPermissions() async {
     final response = await get('/permissions/list');

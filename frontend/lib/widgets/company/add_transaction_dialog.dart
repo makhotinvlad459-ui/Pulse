@@ -115,14 +115,14 @@ class _AddTransactionDialogState extends ConsumerState<AddTransactionDialog> {
   }
 
   Future<void> _pickFile() async {
-  final result = await FilePicker.platform.pickFiles(type: FileType.image);
-  if (result != null) {
-    setState(() {
-      _webFile = result.files.first;
-      _photo = null; 
-    });
+    final result = await FilePicker.platform.pickFiles(type: FileType.image);
+    if (result != null) {
+      setState(() {
+        _webFile = result.files.first;
+        _photo = null; 
+      });
+    }
   }
-}
 
   Future<void> _takePhoto() async {
     if (kIsWeb) {
@@ -130,9 +130,12 @@ class _AddTransactionDialogState extends ConsumerState<AddTransactionDialog> {
     } else {
       final picker = ImagePicker();
       final picked = await picker.pickImage(source: ImageSource.camera);
+      // Сохраняем XFile, сжатие будет в _submit
       if (picked != null) {
-        final compressed = await ImageCompression.compressImage(picked);
-        setState(() => _photo = compressed);
+        setState(() {
+          _photo = picked;
+          _webFile = null;
+        });
       }
     }
   }
@@ -262,33 +265,37 @@ class _AddTransactionDialogState extends ConsumerState<AddTransactionDialog> {
     try {
       String? attachmentUrl;
 
-      // ОБРАБОТКА ФАЙЛА
+      // Обработка файла: сжатие происходит здесь
       if (_photo != null || _webFile != null) {
         final bytes = _webFile != null ? _webFile!.bytes! : await _photo!.readAsBytes();
         final fileName = _webFile != null ? _webFile!.name : _photo!.name;
         
+        // Сжимаем байты
         final compressedBytes = await ImageCompression.compressImage(bytes);
         
+        // Отправляем сжатые байты
         final result = await api.uploadTransactionFile(
           companyId: widget.companyId,
-          bytes: compressedBytes,
+          bytes: compressedBytes, 
           filename: fileName,
         );
+        
         attachmentUrl = result['url'] ?? result['attachment_url'];
       }
 
-      // ОТПРАВКА ДАННЫХ
+      // Отправка данных
       await api.post('/transactions/', queryParameters: {
         'company_id': widget.companyId
       }, data: {
         'type': _type,
-        'amount': _amount,
+        'amount': _selectedProducts.isNotEmpty ? _calculatedAmount : _amount,
         'date': _date.toIso8601String(),
         'account_id': _accountId,
         'category_id': _categoryId,
         'description': _description,
         'counterparty': _counterparty,
         'attachment_url': attachmentUrl,
+        'products': _selectedProducts.isNotEmpty ? _selectedProducts : null,
       });
 
       widget.onSuccess();
@@ -438,7 +445,7 @@ class _AddTransactionDialogState extends ConsumerState<AddTransactionDialog> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<int>(
-                  initialValue: _accountId,
+                  value: _accountId,
                   items: widget.accounts
                       .map<DropdownMenuItem<int>>(
                           (a) => DropdownMenuItem<int>(
@@ -529,7 +536,7 @@ class _AddTransactionDialogState extends ConsumerState<AddTransactionDialog> {
                 const SizedBox(height: 12),
                 if (_type == 'income' || _type == 'expense')
                   DropdownButtonFormField<int>(
-                    initialValue: _categoryId,
+                    value: _categoryId,
                     items: widget.categories.map<DropdownMenuItem<int>>((c) => DropdownMenuItem<int>(
                           value: c['id'],
                           child: Text('${c['icon'] ?? '📁'} ${_translateCategoryName(c['name'], t)}'),
@@ -539,7 +546,7 @@ class _AddTransactionDialogState extends ConsumerState<AddTransactionDialog> {
                   ),
                 if (_type == 'transfer')
                   DropdownButtonFormField<int>(
-                    initialValue: _transferToAccountId,
+                    value: _transferToAccountId,
                     items: widget.accounts.map<DropdownMenuItem<int>>((a) => DropdownMenuItem<int>(
                           value: a['id'],
                           child: Text(a['name']),

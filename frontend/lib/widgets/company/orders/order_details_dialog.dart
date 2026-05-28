@@ -15,7 +15,6 @@ class OrderDetailsDialog extends ConsumerStatefulWidget {
   final Set<String> permissions;
   final bool isFounder;
   final VoidCallback onOrderUpdated;
-  
 
   const OrderDetailsDialog({
     super.key,
@@ -36,7 +35,6 @@ class _OrderDetailsDialogState extends ConsumerState<OrderDetailsDialog> {
   List<dynamic> _products = [];
   bool _isEditable = false;
   
-  // 1. Добавляем клиент сюда
   final ApiClient _apiClient = ApiClient();
 
   bool get _canEdit => widget.isFounder || widget.permissions.contains('edit_orders');
@@ -48,16 +46,17 @@ class _OrderDetailsDialogState extends ConsumerState<OrderDetailsDialog> {
     _fullOrder = Map.from(widget.order);
     _workPriceController = TextEditingController(text: (_fullOrder['work_price'] ?? 0).toString());
     _isEditable = _fullOrder['status'] == 'pending' || _fullOrder['status'] == 'accepted';
+    _loadProducts();
   }
 
-  // 2. Метод загрузки файла для этого диалога
+  // Исправленный метод: принимаем XFile, сжимаем внутри, отправляем байты
   Future<void> _uploadOrderFile(XFile picked) async {
     final t = AppLocalizations.of(context)!;
     try {
       final bytes = await picked.readAsBytes();
       final compressed = await ImageCompression.compressImage(bytes);
       
-      // Используем метод из ApiClient
+      // Используем uploadTransactionFile для загрузки файла
       await _apiClient.uploadTransactionFile(
         companyId: widget.companyId,
         bytes: compressed,
@@ -67,54 +66,58 @@ class _OrderDetailsDialogState extends ConsumerState<OrderDetailsDialog> {
       await _refreshOrder();
       widget.onOrderUpdated();
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+      }
     }
   }
 
-}
-
   Future<void> _loadProducts() async {
-    final api = ApiClient();
     try {
-      final res = await api.get('/products/',
+      final res = await _apiClient.get('/products/',
           queryParameters: {'company_id': widget.companyId});
-      setState(() {
-        _products = res.data;
-      });
+      if (mounted) {
+        setState(() {
+          _products = res.data;
+        });
+      }
     } catch (e) {
       print('Error loading products: $e');
     }
   }
 
   Future<void> _refreshOrder() async {
-    final api = ApiClient();
     try {
-      final res = await api.get('/orders/${widget.order['id']}',
+      final res = await _apiClient.get('/orders/${widget.order['id']}',
           queryParameters: {'company_id': widget.companyId});
-      setState(() {
-        _fullOrder = res.data;
-        _workPriceController.text =
-            (_fullOrder['work_price'] ?? 0).toString();
-      });
+      if (mounted) {
+        setState(() {
+          _fullOrder = res.data;
+          _workPriceController.text = (_fullOrder['work_price'] ?? 0).toString();
+        });
+      }
     } catch (e) {
       final t = AppLocalizations.of(context)!;
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${t.error}: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('${t.error}: $e')));
+      }
     }
   }
 
   Future<void> _updateItemPaid(int itemId, bool isPaid) async {
-    final api = ApiClient();
     try {
-      await api.patch('/orders/items/$itemId',
+      await _apiClient.patch('/orders/items/$itemId',
           queryParameters: {'company_id': widget.companyId},
           data: {'is_paid': isPaid});
       await _refreshOrder();
       widget.onOrderUpdated();
     } catch (e) {
       final t = AppLocalizations.of(context)!;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+      }
     }
   }
 
@@ -151,71 +154,67 @@ class _OrderDetailsDialogState extends ConsumerState<OrderDetailsDialog> {
     final ImagePicker picker = ImagePicker();
     final XFile? pickedFile = await picker.pickImage(source: source);
     if (pickedFile == null) return;
-    final compressed = await ImageCompression.compressImage(await picked.readAsBytes());
-    final api = ApiClient();
-    try {
-      await _apiClient.uploadOrderFile(
-      compressedXFile, 
-      queryParameters: {'company_id': widget.companyId},
-      );
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(t.fileAttached)));
-      await _refreshOrder();
-      widget.onOrderUpdated();
-    } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('${t.error}: $e')));
-    }
+    
+    // Вызываем исправленный метод с XFile
+    await _uploadOrderFile(pickedFile);
+    
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.fileAttached)));
+    await _refreshOrder();
+    widget.onOrderUpdated();
   }
 
   Future<void> _showAttachment(String url) async {
-    final api = ApiClient();
     final t = AppLocalizations.of(context)!;
     try {
-      final response = await api.getFile(url);
+      final response = await _apiClient.getFile(url);
       final bytes = response.data as List<int>;
       final uint8list = Uint8List.fromList(bytes);
-      showDialog(
-        context: context,
-        builder: (context) => Dialog(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Text(t.filePreview, style: const TextStyle(fontWeight: FontWeight.bold)),
-              ),
-              Expanded(
-                child: InteractiveViewer(
-                  child: Image.memory(uint8list),
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => Dialog(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Text(t.filePreview, style: const TextStyle(fontWeight: FontWeight.bold)),
                 ),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text(t.close),
-              ),
-            ],
+                Expanded(
+                  child: InteractiveViewer(
+                    child: Image.memory(uint8list),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text(t.close),
+                ),
+              ],
+            ),
           ),
-        ),
-      );
+        );
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${t.error}: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('${t.error}: $e')));
+      }
     }
   }
 
   Future<void> _updateOrderStatus(String newStatus) async {
-    final api = ApiClient();
     final t = AppLocalizations.of(context)!;
     try {
-      await api.post('/orders/${widget.order['id']}/status',
+      await _apiClient.post('/orders/${widget.order['id']}/status',
           queryParameters: {'company_id': widget.companyId},
           data: {'status': newStatus});
       widget.onOrderUpdated();
-      Navigator.pop(context);
+      if (mounted) Navigator.pop(context);
     } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+      }
     }
   }
 
@@ -292,13 +291,11 @@ class _OrderDetailsDialogState extends ConsumerState<OrderDetailsDialog> {
                     IconButton(
                       icon: const Icon(Icons.save),
                       onPressed: () async {
-                        final api = ApiClient();
                         try {
-                          await api.patch('/orders/$orderId',
+                          await _apiClient.patch('/orders/$orderId',
                               queryParameters: {'company_id': widget.companyId},
                               data: {
-                                'work_price':
-                                    double.tryParse(_workPriceController.text) ?? 0,
+                                'work_price': double.tryParse(_workPriceController.text) ?? 0,
                               });
                           await _refreshOrder();
                           widget.onOrderUpdated();
@@ -345,9 +342,8 @@ class _OrderDetailsDialogState extends ConsumerState<OrderDetailsDialog> {
                           ),
                         );
                         if (newItem != null) {
-                          final api = ApiClient();
                           try {
-                            await api.post('/orders/$orderId/items',
+                            await _apiClient.post('/orders/$orderId/items',
                                 queryParameters: {'company_id': widget.companyId},
                                 data: {
                                   'product_id': newItem['product_id'],
@@ -432,15 +428,12 @@ class _OrderDetailsDialogState extends ConsumerState<OrderDetailsDialog> {
                                       ElevatedButton(
                                         onPressed: () async {
                                           if (newTotalPrice <= 0) return;
-                                          final newUnitPrice =
-                                              newTotalPrice / quantity;
-                                          final api = ApiClient();
+                                          final newUnitPrice = newTotalPrice / quantity;
                                           try {
-                                            await api.patch(
+                                            await _apiClient.patch(
                                                 '/orders/items/$itemId',
                                                 queryParameters: {
-                                                  'company_id':
-                                                      widget.companyId
+                                                  'company_id': widget.companyId
                                                 },
                                                 data: {
                                                   'unit_price': newUnitPrice,
@@ -466,9 +459,8 @@ class _OrderDetailsDialogState extends ConsumerState<OrderDetailsDialog> {
                             IconButton(
                               icon: const Icon(Icons.delete, color: Colors.red),
                               onPressed: () async {
-                                final api = ApiClient();
                                 try {
-                                  await api.delete('/orders/items/$itemId',
+                                  await _apiClient.delete('/orders/items/$itemId',
                                       queryParameters: {
                                         'company_id': widget.companyId
                                       });
@@ -515,9 +507,8 @@ class _OrderDetailsDialogState extends ConsumerState<OrderDetailsDialog> {
                             IconButton(
                               icon: const Icon(Icons.delete, color: Colors.red),
                               onPressed: () async {
-                                final api = ApiClient();
                                 try {
-                                  await api.delete(
+                                  await _apiClient.delete(
                                       '/orders/$orderId/payments/${payment['id']}',
                                       queryParameters: {
                                         'company_id': widget.companyId
@@ -591,9 +582,8 @@ class _OrderDetailsDialogState extends ConsumerState<OrderDetailsDialog> {
                                     ),
                                   );
                                   if (confirm != true) return;
-                                  final api = ApiClient();
                                   try {
-                                    await api.delete(
+                                    await _apiClient.delete(
                                         '/orders/${widget.order['id']}/attachments/${att['id']}',
                                         queryParameters: {
                                           'company_id': widget.companyId
@@ -645,10 +635,9 @@ class _OrderDetailsDialogState extends ConsumerState<OrderDetailsDialog> {
     int? selectedAccountId;
     String counterparty = '';
 
-    final api = ApiClient();
     List<dynamic> accounts = [];
     try {
-      final res = await api.get('/accounts', queryParameters: {'company_id': widget.companyId});
+      final res = await _apiClient.get('/accounts', queryParameters: {'company_id': widget.companyId});
       accounts = res.data;
       if (accounts.isNotEmpty) selectedAccountId = accounts[0]['id'];
     } catch (e) {
@@ -688,7 +677,7 @@ class _OrderDetailsDialogState extends ConsumerState<OrderDetailsDialog> {
                   ),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<int>(
-                    initialValue: selectedAccountId,
+                    value: selectedAccountId,
                     items: accounts.map((acc) => DropdownMenuItem<int>(
                       value: acc['id'],
                       child: Text('${acc['name']} (${acc['balance']}$currency)'),
@@ -726,9 +715,8 @@ class _OrderDetailsDialogState extends ConsumerState<OrderDetailsDialog> {
                     );
                     return;
                   }
-                  final api = ApiClient();
                   try {
-                    await api.post(
+                    await _apiClient.post(
                       '/orders/${widget.order['id']}/payments',
                       queryParameters: {'company_id': widget.companyId},
                       data: {

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -12,11 +13,11 @@ import 'package:path_provider/path_provider.dart';
 import 'package:photo_view/photo_view.dart';
 import '../../services/api_client.dart';
 import '../../services/image_compression.dart';
-import '../../services/websocket_service.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/locale_provider.dart';
 import '../../models/user.dart';
 import 'package:frontend/l10n/app_localizations.dart';
+import '../../services/image_compression.dart';
 
 enum _MessageAction { edit, delete, cancel }
 
@@ -38,113 +39,334 @@ class ChatAndTasksTab extends ConsumerStatefulWidget {
   ConsumerState<ChatAndTasksTab> createState() => _ChatAndTasksTabState();
 }
 
-class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab> with SingleTickerProviderStateMixin {
+class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
+    with SingleTickerProviderStateMixin, AutomaticKeepAliveClientMixin {
   late TabController _tabController;
-  final ApiClient _apiClient = ApiClient();
-  final WebSocketService _wsService = WebSocketService();
-
-  // Состояния для чата
-  final List<dynamic> _messages = [];
+  List<Map<String, dynamic>> _messages = [];
+  List<Map<String, dynamic>> _tasks = [];
+  List<Map<String, dynamic>> _employees = [];
+  bool _loadingMessages = true;
+  bool _loadingTasks = true;
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  bool _chatLoading = true;
-  int? _editingMessageId;
+  DateTime? _lastVisit;
 
-  // Переменные для хранения вложения ПЕРЕД отправкой (Превью)
-  XFile? _chatPhoto;
-  PlatformFile? _chatWebFile;
+  WebSocketChannel? _chatChannel;
+  WebSocketChannel? _tasksChannel;
 
-  // Состояния для задач
-  List<dynamic> _tasks = [];
-  bool _tasksLoading = true;
-  String _taskFilter = 'pending';
+  XFile? _attachmentFile;
+  PlatformFile? _webFile;
 
-  // Для списков исполнителей (при создании задачи)
-  List<dynamic> _members = [];
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    _loadInitialData();
+    _loadEmployees().then((_) async {
+      await _loadChatMessages();
+      await _loadTasks();
+      _connectWebSockets();
+      if (_tabController.index == 0) {
+        await _markChatRead();
+        _lastVisit = DateTime.now();
+      }
+    });
+    _tabController.addListener(() async {
+      if (_tabController.index == 0) {
+        await _markChatRead();
+        _lastVisit = DateTime.now();
+        await _loadChatMessages();
+      } else if (_tabController.index == 1) {
+        await _loadTasks();
+      }
+    });
   }
 
   @override
   void dispose() {
-    _messageController.dispose();
-    _scrollController.dispose();
+    _chatChannel?.sink.close();
+    _tasksChannel?.sink.close();
     _tabController.dispose();
     super.dispose();
   }
 
-  Future<void> _loadInitialData() async {
-    await Future.wait([
-      _loadMessages(),
-      _loadTasks(),
-      _loadCompanyMembers(),
-    ]);
-    _markChatAsRead();
+  // ==================== ВЛОЖЕНИЯ ====================
+  Future<void> _showAttachmentPicker(BuildContext context) async {
+    final t = AppLocalizations.of(context)!;
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: Text(t.chooseFromGallery),
+              onTap: () async {
+                Navigator.pop(context);
+                await _pickFile(ImageSource.gallery);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: Text(t.takePhoto),
+              onTap: () async {
+                Navigator.pop(context);
+                await _pickFile(ImageSource.camera);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.insert_drive_file),
+              title: Text(t.chooseFile),
+              onTap: () async {
+                Navigator.pop(context);
+                await _pickFile();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
-  Future<void> _loadMessages() async {
-    try {
-      final res = await _apiClient.get('/chat/company/${widget.companyId}');
-      if (res != null) {
-        // Извлекаем данные из Dio Response, если вернулся объект ответа
-        final List<dynamic> dataList = (res is List) ? res : (res.data is List ? res.data : []);
+  Future<void> _pickFile([ImageSource? source]) async {
+    if (source != null && !kIsWeb) {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(source: source);
+      if (picked != null) {
+        setState(() => _attachmentFile = picked);
+        _webFile = null;
+      }
+    } else {
+      final result = await FilePicker.platform.pickFiles();
+      if (result != null) {
         setState(() {
+          _webFile = result.files.first;
+          _attachmentFile = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _showAttachmentDialog(String url) async {
+    final t = AppLocalizations.of(context)!;
+    final api = ApiClient();
+    try {
+      final response = await api.getFile(url);
+      final bytes = response.data as List<int>;
+      final uint8list = Uint8List.fromList(bytes);
+      final ext = url.split('.').last.toLowerCase();
+
+      if (ext == 'jpg' || ext == 'jpeg' || ext == 'png') {
+        showDialog(
+          context: context,
+          builder: (context) => Dialog(
+            insetPadding: const EdgeInsets.all(16),
+            child: Container(
+              width: MediaQuery.of(context).size.width * 0.9,
+              height: MediaQuery.of(context).size.height * 0.7,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Text(t.photo, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                  Expanded(
+                    child: PhotoView(
+                      imageProvider: MemoryImage(uint8list),
+                      minScale: PhotoViewComputedScale.contained * 0.8,
+                      maxScale: PhotoViewComputedScale.covered * 3,
+                      backgroundDecoration: const BoxDecoration(color: Colors.transparent),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text(t.close),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      } else {
+        final confirm = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text(t.file),
+            content: Text(t.downloadAttachment),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(t.cancel),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: Text(t.download),
+              ),
+            ],
+          ),
+        );
+        if (confirm == true) {
+          final directory = await getApplicationDocumentsDirectory();
+          final filename = url.split('/').last;
+          final file = File('${directory.path}/$filename');
+          await file.writeAsBytes(bytes);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('${t.savedTo}: ${file.path}'))
+          );
+        }
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${t.error}: $e'))
+      );
+    }
+  }
+
+  // ==================== ОСНОВНЫЕ МЕТОДЫ ====================
+  Future<void> _connectWebSockets() async {
+    final api = ApiClient();
+    final token = await api.getToken();
+    if (token == null) return;
+
+    final baseUrl = ApiClient.baseUrl;
+    final wsBase = baseUrl.replaceFirst('http', 'ws');
+    final chatUrl = '$wsBase/ws/chat/${widget.companyId}?token=$token';
+    final tasksUrl = '$wsBase/ws/tasks/${widget.companyId}?token=$token';
+
+    _chatChannel = WebSocketChannel.connect(Uri.parse(chatUrl));
+    _chatChannel!.stream.listen((data) {
+      _handleChatEvent(data);
+    }, onError: (error) {
+      print('Chat WebSocket error: $error');
+    });
+
+    _tasksChannel = WebSocketChannel.connect(Uri.parse(tasksUrl));
+    _tasksChannel!.stream.listen((data) {
+      _handleTaskEvent(data);
+    }, onError: (error) {
+      print('Tasks WebSocket error: $error');
+    });
+  }
+
+  void _handleChatEvent(dynamic rawData) {
+    final data = rawData is String ? jsonDecode(rawData) : rawData;
+    final type = data['type'];
+    setState(() {
+      switch (type) {
+        case 'new_message':
+          _messages.add(data['message']);
+          _scrollToBottom();
+          break;
+        case 'edit_message':
+          final messageId = data['message_id'];
+          final newText = data['new_message'];
+          final index = _messages.indexWhere((m) => m['id'] == messageId);
+          if (index != -1) {
+            _messages[index]['message'] = newText;
+            _messages[index]['edited'] = true;
+            _messages[index]['updated_at'] = data['updated_at'];
+          }
+          break;
+        case 'delete_message':
+          final messageId = data['message_id'];
+          _messages.removeWhere((m) => m['id'] == messageId);
+          break;
+        case 'clear_chat':
           _messages.clear();
-          _messages.addAll(dataList);
-          _chatLoading = false;
-        });
-        _scrollToBottom();
+          break;
       }
-    } catch (_) {
-      setState(() => _chatLoading = false);
+      _updateUnreadCount();
+    });
+  }
+
+  void _handleTaskEvent(dynamic rawData) {
+    final data = rawData is String ? jsonDecode(rawData) : rawData;
+    final type = data['type'];
+    setState(() {
+      switch (type) {
+        case 'new_task':
+          final newTask = data['task'];
+          _tasks.insert(0, newTask);
+          break;
+        case 'update_task_status':
+          final taskId = data['task_id'];
+          final newStatus = data['new_status'];
+          final index = _tasks.indexWhere((t) => t['id'] == taskId);
+          if (index != -1) {
+            _tasks[index]['status'] = newStatus;
+            _tasks[index]['updated_at'] = data['updated_at'];
+          }
+          break;
+        case 'delete_task':
+          final taskId = data['task_id'];
+          _tasks.removeWhere((t) => t['id'] == taskId);
+          break;
+      }
+      _updatePendingCount();
+    });
+  }
+
+  void _updateUnreadCount() {
+    int unread = 0;
+    if (_lastVisit != null) {
+      unread = _messages
+          .where((msg) => DateTime.parse(msg['created_at']).isAfter(_lastVisit!))
+          .length;
+    }
+    widget.onUnreadMessagesChanged?.call(unread);
+  }
+
+  void _updatePendingCount() {
+    final pendingCount = _tasks.where((t) => t['status'] == 'pending').length;
+    widget.onPendingTasksChanged?.call(pendingCount);
+  }
+
+  Future<void> _markChatRead() async {
+    final api = ApiClient();
+    try {
+      await api.post('/chat/company/${widget.companyId}/mark-read');
+    } catch (e) {
+      print('Error marking chat read: $e');
     }
   }
 
-  Future<void> _loadTasks() async {
+  Future<void> _loadEmployees() async {
+    final api = ApiClient();
     try {
-      final res = await _apiClient.get('/tasks/company/${widget.companyId}?status=$_taskFilter');
-      if (res != null) {
-        final List<dynamic> dataList = (res is List) ? res : (res.data is List ? res.data : []);
-        setState(() {
-          _tasks = dataList;
-          _tasksLoading = false;
-        });
-        _updatePendingTasksCount();
-      }
-    } catch (_) {
-      setState(() => _tasksLoading = false);
+      final res = await api.get('/companies/${widget.companyId}/members');
+      final members = List<Map<String, dynamic>>.from(res.data);
+      setState(() {
+        _employees = members;
+      });
+    } catch (e) {
+      print('Error loading employees: $e');
     }
   }
 
-  Future<void> _loadCompanyMembers() async {
+  Future<void> _loadChatMessages() async {
+    final api = ApiClient();
     try {
-      final res = await _apiClient.get('/companies/${widget.companyId}/members');
-      if (res != null) {
-        final List<dynamic> dataList = (res is List) ? res : (res.data is List ? res.data : []);
-        setState(() {
-          _members = dataList;
-        });
+      final res = await api.get('/chat/company/${widget.companyId}');
+      final newMessages = List<Map<String, dynamic>>.from(res.data);
+      setState(() {
+        _messages = newMessages;
+        _loadingMessages = false;
+      });
+      if (_tabController.index == 0) {
+        await _markChatRead();
+        _lastVisit = DateTime.now();
       }
-    } catch (_) {}
-  }
-
-  Future<void> _markChatAsRead() async {
-    try {
-      await _apiClient.post('/chat/company/${widget.companyId}/mark-read');
-      if (widget.onUnreadMessagesChanged != null) {
-        widget.onUnreadMessagesChanged!(0);
-      }
-    } catch (_) {}
-  }
-
-  void _updatePendingTasksCount() {
-    if (widget.onPendingTasksChanged != null) {
-      int pCount = _tasks.where((t) => t['status'] == 'pending' || t['status'] == 'accepted').length;
-      widget.onPendingTasksChanged!(pCount);
+      _updateUnreadCount();
+      _scrollToBottom();
+    } catch (e) {
+      setState(() => _loadingMessages = false);
+      print('Error loading chat: $e');
     }
   }
 
@@ -160,257 +382,534 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab> with SingleTi
     });
   }
 
-  // Выбор файлов (Скрепка)
-  Future<void> _pickAttachment() async {
-    if (kIsWeb) {
-      final result = await FilePicker.platform.pickFiles(type: FileType.image);
-      if (result != null && result.files.isNotEmpty) {
-        setState(() {
-          _chatWebFile = result.files.first;
-          _chatPhoto = null;
-        });
-      }
-    } else {
-      final picker = ImagePicker();
-      final picked = await picker.pickImage(source: ImageSource.gallery);
-      if (picked != null) {
-        setState(() {
-          _chatPhoto = picked;
-          _chatWebFile = null;
-        });
-      }
-    }
-  }
-
-  // Камера
-  Future<void> _takePhoto() async {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.camera);
-    if (picked != null) {
-      setState(() {
-        _chatPhoto = picked;
-        _chatWebFile = null;
-      });
-    }
-  }
-
-  // Метод отправки сообщения
-  Future<void> _sendMessage() async {
-    final text = _messageController.text.trim();
-    if (text.isEmpty && _chatPhoto == null && _chatWebFile == null) return;
-
-    setState(() => _chatLoading = true);
-    String? uploadedUrl;
-
+  Future<void> _loadTasks() async {
+    final api = ApiClient();
     try {
-      // 1. Обработка файла, если он есть (полная логика для Web и Mobile)
-      if (_chatPhoto != null || _chatWebFile != null) {
-        Uint8List fileBytes;
-        String fileName;
-
-        if (kIsWeb && _chatWebFile != null) {
-          fileBytes = _chatWebFile!.bytes!;
-          fileName = _chatWebFile!.name;
-        } else if (_chatPhoto != null) {
-          fileBytes = await _chatPhoto!.readAsBytes();
-          fileName = _chatPhoto!.name;
-        } else {
-          throw Exception("Файл не найден");
-        }
-
-        // Используем универсальный метод сжатия
-        final compressedBytes = await ImageCompression.compressImage(fileBytes);
-
-        // Отправка через API
-        final result = await _apiClient.uploadChatFile(
-          '/chat/upload',
-          compressedBytes,
-          fileName,
-        );
-        
-        uploadedUrl = result['url'] ?? result['attachment_url'];
-      }
-
-      // 2. Отправка сообщения через WebSocket или API
-      final messageData = {
-        "text": text,
-        "attachment_url": uploadedUrl,
-        "chat_id": widget.companyId, // Убедись, что тут правильный ID
-        "created_at": DateTime.now().toIso8601String(),
-      };
-
-      await _apiClient.post('/chat/messages', data: messageData);
-
-      // 3. Очистка состояния
-      _messageController.clear();
+      final res = await api.get('/tasks', queryParameters: {'company_id': widget.companyId});
       setState(() {
-        _chatPhoto = null;
-        _chatWebFile = null;
-        _chatLoading = false;
+        _tasks = List<Map<String, dynamic>>.from(res.data);
+        _loadingTasks = false;
       });
+      _updatePendingCount();
     } catch (e) {
-      print("Ошибка при отправке: $e");
-      setState(() => _chatLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Ошибка отправки: ${e.toString()}")),
-        );
-      }
+      setState(() => _loadingTasks = false);
+      print('Error loading tasks: $e');
     }
   }
 
-  Future<void> _deleteMessage(int id) async {
-    try {
-      await _apiClient.delete('/chat/message/$id');
-    } catch (_) {}
+  Future<void> _sendMessage() async {
+  final t = AppLocalizations.of(context)!;
+  final text = _messageController.text.trim();
+  final hasFile = _attachmentFile != null || _webFile != null;
+  
+  if (text.isEmpty && !hasFile) return;
+
+  setState(() => _loadingMessages = true);
+  final api = ApiClient();
+  try {
+    String? attachmentUrl;
+    
+    if (hasFile) {
+      Uint8List fileBytes;
+      String fileName;
+
+      if (_attachmentFile != null) {
+        fileBytes = await _attachmentFile!.readAsBytes();
+        fileName = _attachmentFile!.name;
+      } else {
+        fileBytes = _webFile!.bytes!;
+        fileName = _webFile!.name;
+      }
+
+      final compressedBytes = await ImageCompression.compressImage(fileBytes);
+
+      final uploadRes = await api.uploadChatFile(
+        companyId: widget.companyId,
+        bytes: compressedBytes,
+        filename: fileName,
+      );
+      attachmentUrl = uploadRes['url'];
+    }
+
+    await api.post('/chat/company/${widget.companyId}', data: {
+      'message': text,
+      'attachment_url': attachmentUrl,
+    });
+
+    _messageController.clear();
+    setState(() {
+      _attachmentFile = null;
+      _webFile = null;
+      _loadingMessages = false;
+    });
+    
+    widget.onUnreadMessagesChanged?.call(0);
+    await _markChatRead();
+    _lastVisit = DateTime.now();
+    
+    // Для файлов - перезагружаем (так как WebSocket может не принести)
+    // Для текста - полагаемся на WebSocket (мгновенно)
+    if (hasFile) {
+      await _loadChatMessages();
+    }
+    
+  } catch (e) {
+    print('Error sending message: $e');
+    setState(() => _loadingMessages = false);
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('${t.sendError}: $e')));
   }
+}
 
-  Future<void> _createTask(String title, String desc, int? assigneeId, DateTime? deadline) async {
-    try {
-      await _apiClient.post('/tasks/company/${widget.companyId}');
-      _loadTasks();
-    } catch (_) {}
-  }
-
-  Future<void> _updateTaskStatus(int taskId, String newStatus) async {
-    try {
-      await _apiClient.patch('/tasks/$taskId/status');
-      _loadTasks();
-    } catch (_) {}
-  }
-
-  Future<void> _deleteTask(int taskId) async {
-    try {
-      await _apiClient.delete('/tasks/$taskId');
-      _loadTasks();
-    } catch (_) {}
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final t = AppLocalizations.of(context);
-    final currentTheme = Theme.of(context);
-    final colorScheme = currentTheme.colorScheme;
-
-    return Scaffold(
-      backgroundColor: colorScheme.background,
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(50),
-        child: Container(
-          color: colorScheme.surface,
-          child: TabBar(
-            controller: _tabController,
-            labelColor: colorScheme.primary,
-            unselectedLabelColor: colorScheme.onSurfaceVariant,
-            indicatorColor: colorScheme.primary,
-            tabs: [
-              Tab(text: t?.chatTab ?? "Чат"),
-              Tab(text: t?.tasksTab ?? "Задачи"),
-            ],
-          ),
-        ),
+  Future<void> _clearChat() async {
+    final t = AppLocalizations.of(context)!;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(t.clearChatTitle),
+        content: Text(t.clearChatContent),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(t.cancel)),
+          TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(t.clear, style: const TextStyle(color: Colors.red))),
+        ],
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildChatView(t, colorScheme, currentTheme),
-          _buildTasksView(t, colorScheme, currentTheme),
+    );
+    if (confirm != true) return;
+    final api = ApiClient();
+    try {
+      await api.delete('/chat/company/${widget.companyId}/clear');
+      await _loadChatMessages();
+    } catch (e) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+    }
+  }
+
+  // ==================== ДЕЙСТВИЯ С СООБЩЕНИЯМИ ====================
+  Future<void> _showMessageActions(Map<String, dynamic> msg) async {
+    final t = AppLocalizations.of(context)!;
+    final colorScheme = Theme.of(context).colorScheme;
+    final action = await showDialog<_MessageAction>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(t.messageActions, style: TextStyle(color: colorScheme.onSurface)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Icon(Icons.edit, color: colorScheme.primary),
+              title: Text(t.edit, style: TextStyle(color: colorScheme.onSurface)),
+              onTap: () => Navigator.pop(context, _MessageAction.edit),
+            ),
+            ListTile(
+              leading: Icon(Icons.delete, color: Colors.red),
+              title: Text(t.delete, style: TextStyle(color: Colors.red)),
+              onTap: () => Navigator.pop(context, _MessageAction.delete),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, _MessageAction.cancel),
+            child: Text(t.cancel, style: TextStyle(color: colorScheme.onSurfaceVariant)),
+          ),
+        ],
+      ),
+    );
+    if (action == _MessageAction.edit) {
+      await _editMessageContent(msg);
+    } else if (action == _MessageAction.delete) {
+      await _deleteMessage(msg);
+    }
+  }
+
+  Future<void> _editMessageContent(Map<String, dynamic> msg) async {
+    final t = AppLocalizations.of(context)!;
+    final controller = TextEditingController(text: msg['message']);
+    final colorScheme = Theme.of(context).colorScheme;
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(t.editMessage, style: TextStyle(color: colorScheme.onSurface)),
+        content: TextField(
+          controller: controller,
+          decoration: InputDecoration(hintText: t.newText, hintStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+          style: TextStyle(color: colorScheme.onSurface),
+          maxLines: 3,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(t.cancel, style: TextStyle(color: colorScheme.onSurfaceVariant)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final newText = controller.text.trim();
+              if (newText.isEmpty) return;
+              final api = ApiClient();
+              try {
+                await api.patch('/chat/message/${msg['id']}', data: {'message': newText});
+                if (mounted) Navigator.pop(context);
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: colorScheme.primary,
+              foregroundColor: colorScheme.onPrimary,
+            ),
+            child: Text(t.save),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildChatView(AppLocalizations? t, ColorScheme colorScheme, ThemeData currentTheme) {
+  Future<void> _deleteMessage(Map<String, dynamic> msg) async {
+    final t = AppLocalizations.of(context)!;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(t.deleteMessageTitle),
+        content: Text(t.deleteMessageContent),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(t.cancel)),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: Text(t.delete, style: const TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    final api = ApiClient();
+    try {
+      await api.delete('/chat/message/${msg['id']}');
+      setState(() {
+        _messages.removeWhere((m) => m['id'] == msg['id']);
+      });
+      _updateUnreadCount();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+    }
+  }
+
+  // ==================== ЗАДАЧИ ====================
+  Future<void> _createTask() async {
+    final t = AppLocalizations.of(context)!;
+    if (_employees.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.loadEmployeesFirst)));
+      return;
+    }
+    final titleController = TextEditingController();
+    final descController = TextEditingController();
+    int? assigneeId;
+    DateTime? deadline;
+    final formKey = GlobalKey<FormState>();
+    final colorScheme = Theme.of(context).colorScheme;
+
+    await showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setStateDialog) {
+          return AlertDialog(
+            title: Text(t.newTaskTitle, style: TextStyle(color: colorScheme.onSurface)),
+            content: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                      controller: titleController,
+                      decoration: InputDecoration(labelText: t.taskName, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+                      style: TextStyle(color: colorScheme.onSurface),
+                      validator: (v) => v!.isEmpty ? t.enterTaskName : null),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                      controller: descController,
+                      decoration: InputDecoration(labelText: t.taskDescription, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+                      style: TextStyle(color: colorScheme.onSurface)),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<int>(
+                    decoration: InputDecoration(labelText: t.assignTo, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+                    dropdownColor: colorScheme.surface,
+                    style: TextStyle(color: colorScheme.onSurface),
+                    items: [
+                      const DropdownMenuItem(value: null, child: Text('Не назначен')),
+                      ..._employees.map((e) => DropdownMenuItem(
+                          value: e['user_id'], child: Text(e['full_name']))),
+                    ],
+                    onChanged: (v) => assigneeId = v,
+                  ),
+                  const SizedBox(height: 8),
+                  ListTile(
+                    title: Text(t.deadline, style: TextStyle(color: colorScheme.onSurface)),
+                    trailing: Text(deadline == null ? t.notSelected : DateFormat('dd.MM.yyyy').format(deadline!),
+                        style: TextStyle(color: colorScheme.onSurfaceVariant)),
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: DateTime.now(),
+                        firstDate: DateTime.now(),
+                        lastDate: DateTime.now().add(const Duration(days: 365)),
+                      );
+                      if (picked != null)
+                        setStateDialog(() => deadline = picked);
+                    },
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text(t.cancel, style: TextStyle(color: colorScheme.onSurfaceVariant))),
+              ElevatedButton(
+                onPressed: () async {
+                  if (!formKey.currentState!.validate()) return;
+                  final api = ApiClient();
+                  try {
+                    await api.post('/tasks', queryParameters: {
+                      'company_id': widget.companyId
+                    }, data: {
+                      'title': titleController.text,
+                      'description': descController.text,
+                      'assignee_id': assigneeId,
+                      'deadline': deadline?.toIso8601String(),
+                    });
+                    Navigator.pop(context);
+                  } catch (e) {
+                    ScaffoldMessenger.of(context)
+                        .showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: colorScheme.primary,
+                  foregroundColor: colorScheme.onPrimary,
+                ),
+                child: Text(t.create),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _updateTaskStatus(int taskId, String newStatus) async {
+    final api = ApiClient();
+    try {
+      await api.patch('/tasks/$taskId/status',
+          queryParameters: {'company_id': widget.companyId},
+          data: {'status': newStatus});
+    } catch (e) {
+      print('Error updating task status: $e');
+    }
+  }
+
+  Future<void> _deleteTask(int taskId) async {
+    final t = AppLocalizations.of(context)!;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(t.deleteTaskTitle),
+        content: Text(t.deleteTaskContent),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(t.cancel)),
+          TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(t.delete, style: const TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    final api = ApiClient();
+    try {
+      await api.delete('/tasks/$taskId',
+          queryParameters: {'company_id': widget.companyId});
+    } catch (e) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+    }
+  }
+
+  String _statusName(String status, AppLocalizations t) {
+    switch (status) {
+      case 'pending': return t.pendingStatus;
+      case 'accepted': return t.acceptedStatus;
+      case 'completed': return t.completedStatus;
+      case 'failed': return t.failedStatus;
+      default: return status;
+    }
+  }
+
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'pending': return Colors.orange;
+      case 'accepted': return Colors.blue;
+      case 'completed': return Colors.green;
+      case 'failed': return Colors.red;
+      default: return Colors.grey;
+    }
+  }
+
+  List<Map<String, dynamic>> get _pendingTasks =>
+      _tasks.where((t) => t['status'] == 'pending').toList();
+  List<Map<String, dynamic>> get _acceptedTasks =>
+      _tasks.where((t) => t['status'] == 'accepted').toList();
+  List<Map<String, dynamic>> get _completedTasks =>
+      _tasks.where((t) => t['status'] == 'completed').toList();
+  List<Map<String, dynamic>> get _failedTasks =>
+      _tasks.where((t) => t['status'] == 'failed').toList();
+
+  // ==================== UI ====================
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    ref.watch(localeProvider);
+    final t = AppLocalizations.of(context)!;
     final authState = ref.watch(authProvider);
-    final currentUserId = authState.user?.id ?? 0;
-    final isFounder = authState.user?.role == 'founder';
+    final currentUser = authState.user;
+    final isFounder = currentUser?.role == UserRole.founder;
+    final canCreateTask = true;
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Column(
       children: [
-        Expanded(
-          child: _chatLoading && _messages.isEmpty
-              ? const Center(child: CircularProgressIndicator())
-              : ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.all(12),
-                  itemCount: _messages.length,
-                  itemBuilder: (context, idx) {
-                    final msg = _messages[idx];
-                    final isMe = msg['user_id'] == currentUserId;
-                    return _buildMessageBubble(msg, isMe, isFounder, t, colorScheme, currentTheme);
-                  },
-                ),
+        TabBar(
+          controller: _tabController,
+          tabs: [Tab(text: t.chatTab), Tab(text: t.tasksTab)],
+          labelColor: colorScheme.primary,
+          unselectedLabelColor: colorScheme.onSurfaceVariant,
+          indicatorColor: colorScheme.primary,
         ),
-
-        // === ВИЗУАЛЬНОЕ ПРЕВЬЮ ВЛОЖЕНИЯ ПЕРЕД ОТПРАВКОЙ ===
-        if (_chatPhoto != null || _chatWebFile != null)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: colorScheme.surfaceVariant.withOpacity(0.5),
-              border: Border(top: BorderSide(color: colorScheme.outlineVariant)),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.attach_file, color: Colors.green),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    _chatPhoto != null ? _chatPhoto!.name : _chatWebFile!.name,
-                    style: TextStyle(fontSize: 14, color: colorScheme.onSurfaceVariant),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close, size: 20, color: Colors.red),
-                  onPressed: () {
-                    setState(() {
-                      _chatPhoto = null;
-                      _chatWebFile = null;
-                    });
-                  },
-                ),
-              ],
-            ),
-          ),
-
-        // ПОЛЕ ВВОДА СООБЩЕНИЯ
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          decoration: BoxDecoration(
-            color: colorScheme.surface,
-            border: Border(top: BorderSide(color: colorScheme.outlineVariant)),
-          ),
-          child: Row(
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
             children: [
-              IconButton(
-                icon: Icon(Icons.attach_file, color: colorScheme.primary),
-                onPressed: _pickAttachment,
-              ),
-              if (!kIsWeb)
-                IconButton(
-                  icon: Icon(Icons.camera_alt, color: colorScheme.primary),
-                  onPressed: _takePhoto,
-                ),
-              Expanded(
-                child: TextField(
-                  controller: _messageController,
-                  style: TextStyle(color: colorScheme.onSurface),
-                  decoration: InputDecoration(
-                    hintText: _editingMessageId != null ? "Редактирование..." : (t?.chatHint ?? "Сообщение..."),
-                    hintStyle: TextStyle(color: colorScheme.onSurfaceVariant),
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+              // ==================== ЧАТ ====================
+              Column(
+                children: [
+                  if (isFounder)
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: IconButton(
+                        icon: const Icon(Icons.delete_sweep, color: Colors.red),
+                        onPressed: _clearChat,
+                        tooltip: t.clearChatTooltip,
+                      ),
+                    ),
+                  Expanded(
+                    child: _loadingMessages
+                        ? const Center(child: CircularProgressIndicator())
+                        : ListView.builder(
+                            controller: _scrollController,
+                            itemCount: _messages.length,
+                            itemBuilder: (context, index) {
+                              final msg = _messages[index];
+                              final isMe = msg['user_id'] == currentUser?.id;
+                              final originalName = msg['user_full_name'];
+                              final displayName = (originalName == 'Основатель')
+                                  ? t.founderRole
+                                  : originalName;
+                              return _buildMessageBubble(isMe, displayName, msg, isFounder, colorScheme, t);
+                            },
+                          ),
                   ),
-                  maxLines: null,
-                  textInputAction: TextInputAction.send,
-                  onSubmitted: (_) => _sendMessage(),
-                ),
+                  Padding(
+                    padding: EdgeInsets.only(
+                      left: 12.0,
+                      right: 12.0,
+                      top: 12.0,
+                      bottom: MediaQuery.of(context).viewInsets.bottom,
+                    ),
+                    child: Row(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.attach_file),
+                          onPressed: () => _showAttachmentPicker(context),
+                          tooltip: t.attachFileTooltip,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: _messageController,
+                            style: TextStyle(color: colorScheme.onSurface),
+                            decoration: InputDecoration(
+                              hintText: t.enterMessageHint,
+                              hintStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+                              filled: true,
+                              fillColor: colorScheme.surfaceContainerHighest,
+                              border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(30),
+                                  borderSide: BorderSide.none),
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 20, vertical: 12),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        CircleAvatar(
+                          backgroundColor: colorScheme.primaryContainer,
+                          child: IconButton(
+                            icon: Icon(Icons.send, color: colorScheme.onPrimaryContainer),
+                            onPressed: _sendMessage,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-              IconButton(
-                icon: Icon(_editingMessageId != null ? Icons.check : Icons.send, color: colorScheme.primary),
-                onPressed: _sendMessage,
+              // ==================== ЗАДАЧИ ====================
+              Column(
+                children: [
+                  if (canCreateTask)
+                    Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: ElevatedButton.icon(
+                        onPressed: _createTask,
+                        icon: const Icon(Icons.add),
+                        label: Text(t.newTaskButton),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: colorScheme.primary,
+                          foregroundColor: colorScheme.onPrimary,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20)),
+                        ),
+                      ),
+                    ),
+                  Expanded(
+                    child: _loadingTasks
+                        ? const Center(child: CircularProgressIndicator())
+                        : SingleChildScrollView(
+                            child: Column(
+                              children: [
+                                if (_pendingTasks.isNotEmpty)
+                                  _buildTaskSection(t.pendingStatus, _pendingTasks,
+                                      Colors.orange, currentUser, isFounder, colorScheme, t),
+                                if (_acceptedTasks.isNotEmpty)
+                                  _buildTaskSection(t.acceptedStatus, _acceptedTasks,
+                                      Colors.blue, currentUser, isFounder, colorScheme, t),
+                                if (_completedTasks.isNotEmpty)
+                                  _buildTaskSection(t.completedStatus, _completedTasks,
+                                      Colors.green, currentUser, isFounder, colorScheme, t),
+                                if (_failedTasks.isNotEmpty)
+                                  _buildTaskSection(t.failedStatus, _failedTasks,
+                                      Colors.red, currentUser, isFounder, colorScheme, t),
+                                if (_tasks.isEmpty)
+                                  Padding(
+                                      padding: const EdgeInsets.all(16.0),
+                                      child: Text(t.noTasks, style: TextStyle(color: colorScheme.onSurfaceVariant))),
+                              ],
+                            ),
+                          ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -420,354 +919,229 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab> with SingleTi
   }
 
   Widget _buildMessageBubble(
-    dynamic msg,
-    bool isMe,
-    bool isFounder,
-    AppLocalizations? t,
-    ColorScheme colorScheme,
-    ThemeData currentTheme,
-  ) {
-    final timeStr = msg['created_at'] != null
-        ? DateFormat('HH:mm').format(DateTime.parse(msg['created_at']).toLocal())
-        : '';
+      bool isMe, String displayName, Map<String, dynamic> msg, bool isFounder, ColorScheme colorScheme, AppLocalizations t) {
     final hasAttachment = msg['attachment_url'] != null && msg['attachment_url'].toString().isNotEmpty;
-
-    return GestureDetector(
-      onLongPress: () {
-        if (isMe || isFounder) {
-          _showActionsMenu(msg['id'], msg['message'], isMe, t);
-        }
-      },
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
-          mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (!isMe)
-              CircleAvatar(
-                radius: 16,
-                backgroundColor: colorScheme.primaryContainer,
-                child: Text(
-                  msg['user_full_name'] != null && msg['user_full_name'].toString().isNotEmpty
-                      ? msg['user_full_name'].toString().substring(0, 1).toUpperCase()
-                      : 'U',
-                  style: TextStyle(color: colorScheme.onPrimaryContainer, fontSize: 12, fontWeight: FontWeight.bold),
-                ),
-              ),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: isMe ? colorScheme.primary : colorScheme.surfaceVariant,
-                  borderRadius: BorderRadius.only(
-                    topLeft: const Radius.circular(12),
-                    topRight: const Radius.circular(12),
-                    bottomLeft: isMe ? const Radius.circular(12) : const Radius.circular(0),
-                    bottomRight: isMe ? const Radius.circular(0) : const Radius.circular(12),
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (!isMe)
-                      Text(
-                        msg['user_full_name'] ?? 'User',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: colorScheme.primary,
-                        ),
-                      ),
-                    if (!isMe) const SizedBox(height: 2),
-
-                    if (hasAttachment)
-                      GestureDetector(
-                        onTap: () => _openPhotoViewer(msg['attachment_url']),
-                        child: Container(
-                          margin: const EdgeInsets.only(bottom: 6, top: 4),
-                          constraints: const BoxConstraints(maxHeight: 200, maxWidth: 250),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Image.network(
-                              msg['attachment_url'],
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) {
-                                return Container(
-                                  width: 150,
-                                  height: 100,
-                                  color: Colors.grey.shade300,
-                                  child: const Icon(Icons.broken_image, color: Colors.grey),
-                                );
-                              },
-                              loadingBuilder: (context, child, loadingProgress) {
-                                if (loadingProgress == null) return child;
-                                return const SizedBox(
-                                  width: 100,
-                                  height: 100,
-                                  child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                      ),
-
-                    if (msg['message'] != null && msg['message'].toString().isNotEmpty)
-                      Text(
-                        msg['message'],
-                        style: TextStyle(
-                          color: isMe ? colorScheme.onPrimary : colorScheme.onSurfaceVariant,
-                          fontSize: 15,
-                        ),
-                      ),
-                    const SizedBox(height: 2),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        if (msg['edited'] == true)
-                          Text(
-                            "ред. ",
-                            style: TextStyle(
-                              fontSize: 9,
-                              color: (isMe ? colorScheme.onPrimary : colorScheme.onSurfaceVariant).withOpacity(0.6),
-                            ),
-                          ),
-                        Text(
-                          timeStr,
-                          style: TextStyle(
-                            fontSize: 9,
-                            color: (isMe ? colorScheme.onPrimary : colorScheme.onSurfaceVariant).withOpacity(0.6),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _openPhotoViewer(String url) {
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        backgroundColor: Colors.black,
-        insetPadding: EdgeInsets.zero,
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: PhotoView(
-                imageProvider: NetworkImage(url),
-                loadingBuilder: (context, event) => const Center(child: CircularProgressIndicator()),
-                errorBuilder: (context, error, stackTrace) {
-                  return const Center(
-                    child: Text(
-                      "Не удалось открыть изображение",
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  );
-                },
-              ),
-            ),
-            Positioned(
-              top: 20,
-              right: 20,
-              child: IconButton(
-                icon: const Icon(Icons.close, color: Colors.white, size: 30),
-                onPressed: () => Navigator.pop(context),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showActionsMenu(int msgId, String currentText, bool isMe, AppLocalizations? t) {
-    showModalBottomSheet(
-      context: context,
-      builder: (context) {
-        return SafeArea(
-          child: Wrap(
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              if (isMe)
-                ListTile(
-                  leading: const Icon(Icons.edit),
-                  title: Text(t?.editButton ?? 'Edit'),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _startEditing(msgId, currentText);
-                  },
-                ),
-              ListTile(
-                leading: const Icon(Icons.delete, color: Colors.red),
-                title: Text(t?.deleteButton ?? 'Delete', style: const TextStyle(color: Colors.red)),
-                onTap: () {
-                  Navigator.pop(context);
-                  _deleteMessage(msgId);
-                },
+              Text(
+                displayName,
+                style: GoogleFonts.roboto(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                    color: isMe ? colorScheme.primary : colorScheme.onSurface),
               ),
+              if (msg['edited'] == true) ...[
+                const SizedBox(width: 4),
+                Text(t.editedLabel,
+                    style: TextStyle(fontSize: 10, color: colorScheme.onSurfaceVariant)),
+              ],
+              const Spacer(),
+              if (isMe || isFounder)
+                IconButton(
+                  icon: Icon(Icons.more_vert, size: 16, color: colorScheme.onSurfaceVariant),
+                  onPressed: () => _showMessageActions(msg),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
             ],
           ),
-        );
-      },
-    );
-  }
-
-  Widget _buildTasksView(AppLocalizations? t, ColorScheme colorScheme, ThemeData currentTheme) {
-    return Column(
-      children: [
-        _buildTaskFilterRow(t, colorScheme),
-        Expanded(
-          child: _tasksLoading
-              ? const Center(child: CircularProgressIndicator())
-              : _tasks.isEmpty
-                  ? Center(child: Text(t?.noTasks ?? "Нет задач"))
-                  : RefreshIndicator(
-                      onRefresh: _loadTasks,
-                      child: ListView(
-                        padding: const EdgeInsets.all(12),
-                        children: [
-                          _buildTaskGroup(t, colorScheme, currentTheme),
-                        ],
+          const SizedBox(height: 4),
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+            decoration: BoxDecoration(
+              color: isMe ? colorScheme.primaryContainer : colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 2,
+                    offset: const Offset(0, 1))
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(msg['message'],
+                    style: GoogleFonts.roboto(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 0.2,
+                        color: isMe ? colorScheme.onPrimaryContainer : colorScheme.onSurface)),
+                if (hasAttachment)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8.0),
+                    child: GestureDetector(
+                      onTap: () => _showAttachmentDialog(msg['attachment_url']),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _getFileIcon(msg['attachment_url']),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                _getFileName(msg['attachment_url']),
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  decoration: TextDecoration.underline,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTaskFilterRow(AppLocalizations? t, ColorScheme colorScheme) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
-      color: colorScheme.surface,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          _filterBtn('pending', t?.pendingTasksTab ?? "Активные"),
-          _filterBtn('accepted', t?.acceptedTasksTab ?? "В процессе"),
-          _filterBtn('completed', t?.completedTasksTab ?? "Готово"),
-          _filterBtn('failed', t?.failedTasksTab ?? "Провалено"),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(DateFormat('HH:mm').format(DateTime.parse(msg['created_at'])),
+              style: TextStyle(fontSize: 10, color: colorScheme.onSurfaceVariant)),
         ],
       ),
     );
   }
 
-  Widget _filterBtn(String slug, String label) {
-    bool active = _taskFilter == slug;
-    final colorScheme = Theme.of(context).colorScheme;
-    return ChoiceChip(
-      label: Text(label, style: TextStyle(fontSize: 12, color: active ? colorScheme.onPrimary : colorScheme.onSurface)),
-      selected: active,
-      selectedColor: colorScheme.primary,
-      backgroundColor: colorScheme.surfaceVariant,
-      onSelected: (val) {
-        if (val) {
-          setState(() {
-            _taskFilter = slug;
-            _tasksLoading = true;
-          });
-          _loadTasks();
-        }
-      },
-    );
+  String _getFileName(String url) {
+    return url.split('/').last;
   }
 
-  Widget _buildTaskGroup(AppLocalizations? t, ColorScheme colorScheme, ThemeData currentTheme) {
-    final authState = ref.watch(authProvider);
-    final currentUserId = authState.user?.id ?? 0;
-    final isFounder = authState.user?.role == 'founder';
+  Widget _getFileIcon(String url) {
+    final ext = url.split('.').last.toLowerCase();
+    if (ext == 'jpg' || ext == 'jpeg' || ext == 'png') {
+      return const Icon(Icons.image, size: 14, color: Colors.blue);
+    } else if (ext == 'pdf') {
+      return const Icon(Icons.picture_as_pdf, size: 14, color: Colors.blue);
+    } else if (ext == 'doc' || ext == 'docx') {
+      return const Icon(Icons.description, size: 14, color: Colors.blue);
+    }
+    return const Icon(Icons.attach_file, size: 14, color: Colors.blue);
+  }
 
-    return Column(
-      children: _tasks.map((task) {
-        bool isCreator = task['creator_id'] == currentUserId;
-        bool isAssignee = task['assignee_id'] == currentUserId;
-        bool canDelete = isFounder || isCreator;
-
-        final assigneeLabel = t?.assigneeField ?? "Исполнитель";
-        final unassignedLabel = t?.unassignedField ?? "Не назначен";
-        final deadlineLabel = t?.deadlineField ?? "Дедлайн";
-
-        return Card(
-          margin: const EdgeInsets.only(bottom: 10),
-          color: colorScheme.surface,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: BorderSide(color: colorScheme.outlineVariant.withOpacity(0.5)),
-          ),
-          child: ExpansionTile(
-            title: Text(
-              task['title'] ?? '',
-              style: GoogleFonts.ubuntu(fontWeight: FontWeight.bold, color: colorScheme.onSurface),
-            ),
-            subtitle: Text(
-              "$assigneeLabel: ${task['assignee_full_name'] ?? unassignedLabel}",
-              style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
-            ),
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (task['description'] != null && task['description'].toString().isNotEmpty) ...[
-                      Text(task['description'], style: TextStyle(color: colorScheme.onSurface)),
-                      const SizedBox(height: 8),
-                    ],
-                    if (task['deadline'] != null) ...[
-                      Text(
-                        "$deadlineLabel: ${DateFormat('dd.MM.yyyy HH:mm').format(DateTime.parse(task['deadline']).toLocal())}",
-                        style: const TextStyle(color: Colors.red, fontSize: 12, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 8),
-                    ],
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        if (task['status'] == 'pending' && isAssignee)
-                          ElevatedButton(
-                            onPressed: () => _updateTaskStatus(task['id'], 'accepted'),
-                            style: ElevatedButton.styleFrom(backgroundColor: colorScheme.primary, foregroundColor: colorScheme.onPrimary),
-                            child: Text(t?.acceptButton ?? "Принять"),
-                          ),
-                        if (task['status'] == 'accepted' && isAssignee)
-                          ElevatedButton(
-                            onPressed: () => _updateTaskStatus(task['id'], 'completed'),
-                            style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
-                            child: Text(t?.completeButton ?? "Завершить"),
-                          ),
-                        if (task['status'] == 'accepted' && isAssignee)
-                          ElevatedButton(
-                            onPressed: () => _updateTaskStatus(task['id'], 'failed'),
-                            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-                            child: Text(t?.failButton ?? "Провалить"),
-                          ),
-                        if (canDelete)
-                          IconButton(
-                            icon: const Icon(Icons.delete, color: Colors.red),
-                            onPressed: () => _deleteTask(task['id']),
-                          ),
-                      ],
-                    ),
-                  ],
-                ),
+  Widget _buildTaskSection(String title, List<Map<String, dynamic>> tasks,
+      Color color, User? currentUser, bool isFounder, ColorScheme colorScheme, AppLocalizations t) {
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      color: colorScheme.surface,
+      child: ExpansionTile(
+        title: Row(
+          children: [
+            Container(
+                width: 14,
+                height: 14,
+                decoration:
+                    BoxDecoration(color: color, shape: BoxShape.circle)),
+            const SizedBox(width: 10),
+            Text('$title (${tasks.length})',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: colorScheme.onSurface)),
+          ],
+        ),
+        children: tasks.map((task) {
+          final isAssignee = task['assignee_id'] == currentUser?.id;
+          final isAuthor = task['author_id'] == currentUser?.id;
+          final canDelete = isFounder || isAuthor;
+          final originalAuthor = task['author_name'];
+          final originalAssignee = task['assignee_name'];
+          final authorName = (originalAuthor == 'Основатель') ? t.founderRole : originalAuthor;
+          final assigneeName = (originalAssignee == 'Основатель') ? t.founderRole : originalAssignee;
+          return Card(
+            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            elevation: 1,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            color: colorScheme.surfaceContainerHighest,
+            child: ExpansionTile(
+              title: Row(
+                children: [
+                  Container(
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
+                          color: _statusColor(task['status']),
+                          shape: BoxShape.circle)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                      child: Text(task['title'],
+                          style: TextStyle(fontWeight: FontWeight.w500, color: colorScheme.onSurface))),
+                ],
               ),
-            ],
-          ),
-        );
-      }).toList(),
+              subtitle: Text('${t.taskAuthorLabel}: $authorName',
+                  style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant)),
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(12.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (task['description'] != null && task['description'].toString().isNotEmpty)
+                        Text('📄 ${task['description']}',
+                            style: TextStyle(fontSize: 13, color: colorScheme.onSurfaceVariant)),
+                      const SizedBox(height: 4),
+                      if (assigneeName != null)
+                        Text('👤 ${t.taskAssigneeLabel}: $assigneeName',
+                            style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant)),
+                      if (task['deadline'] != null)
+                        Text('⏰ ${t.deadlineLabel}: ${DateFormat('dd.MM.yyyy').format(DateTime.parse(task['deadline']))}',
+                            style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant)),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        children: [
+                          if (task['status'] == 'pending' && isAssignee)
+                            ElevatedButton(
+                              onPressed: () => _updateTaskStatus(task['id'], 'accepted'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.blue,
+                                foregroundColor: Colors.white,
+                              ),
+                              child: Text(t.acceptButton),
+                            ),
+                          if (task['status'] == 'accepted' && isAssignee)
+                            ElevatedButton(
+                              onPressed: () => _updateTaskStatus(task['id'], 'completed'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green,
+                                foregroundColor: Colors.white,
+                              ),
+                              child: Text(t.completeButton),
+                            ),
+                          if (task['status'] == 'accepted' && isAssignee)
+                            ElevatedButton(
+                              onPressed: () => _updateTaskStatus(task['id'], 'failed'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.red,
+                                foregroundColor: Colors.white,
+                              ),
+                              child: Text(t.failButton),
+                            ),
+                          if (canDelete)
+                            IconButton(
+                              icon: const Icon(Icons.delete, color: Colors.red),
+                              onPressed: () => _deleteTask(task['id']),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        }).toList(),
+      ),
     );
   }
-}
-
-extension on DateTime {
-  String toIsoformatString() => toIso8601String();
 }
