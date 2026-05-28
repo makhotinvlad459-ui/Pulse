@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:frontend/l10n/app_localizations.dart';
-import 'chat_tab.dart';
-import 'tasks_tab.dart';
+import 'chat/chat_tab.dart';
+import 'chat/tasks_tab.dart';
 
 class ChatAndTasksTab extends ConsumerStatefulWidget {
   final int companyId;

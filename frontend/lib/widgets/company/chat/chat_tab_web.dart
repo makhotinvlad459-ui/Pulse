@@ -1,0 +1,15 @@
+import 'dart:html' as html;
+import 'dart:typed_data';
+import 'chat_tab_platform_interface.dart';
+
+class ChatTabWeb implements ChatTabPlatform {
+  @override
+  Future<void> downloadFile(Uint8List bytes, String filename) async {
+    final blob = html.Blob([bytes]);
+    final anchor = html.AnchorElement(href: html.Url.createObjectUrlFromBlob(blob))
+      ..target = 'blank'
+      ..download = filename;
+    anchor.click();
+    html.Url.revokeObjectUrl(anchor.href);
+  }
+}

@@ -15,6 +15,9 @@ import '../../providers/auth_provider.dart';
 import '../../providers/locale_provider.dart';
 import '../../models/user.dart';
 import 'package:frontend/l10n/app_localizations.dart';
+import 'chat_tab_platform.dart';
+import 'chat_tab_platform_interface.dart';
+
 
 enum _MessageAction { edit, delete, cancel }
 
@@ -50,6 +53,7 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
   @override
   void initState() {
     super.initState();
+    registerChatTabPlatform();
     _loadChatMessages();
     _connectWebSocket();
     _markChatRead();
@@ -273,39 +277,26 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
 
   // Скачивание файла (работает в браузере)
   Future<void> _downloadFile(String url, String filename) async {
-    final api = ApiClient();
-    try {
-      final response = await api.getFile(url);
-      final bytes = response.data as List<int>;
-      
-      // Для веб-версии
-      if (kIsWeb) {
-        final blob = html.Blob([bytes]);
-        final anchor = html.AnchorElement(href: html.Url.createObjectUrlFromBlob(blob))
-          ..target = 'blank'
-          ..download = filename;
-        anchor.click();
-        html.Url.revokeObjectUrl(anchor.href);
-      } else {
-        // Для мобильных версий
-        final directory = await getApplicationDocumentsDirectory();
-        final file = File('${directory.path}/$filename');
-        await file.writeAsBytes(bytes);
-      }
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Файл сохранен')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
-        );
-      }
+  final api = ApiClient();
+  try {
+    final response = await api.getFile(url);
+    final bytes = response.data as List<int>;
+    
+    await ChatTabPlatformSingleton.instance.downloadFile(Uint8List.fromList(bytes), filename);
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Файл сохранен')),
+      );
+    }
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка: $e')),
+      );
     }
   }
+}
 
   Future<void> _sendMessage() async {
     final t = AppLocalizations.of(context)!;
