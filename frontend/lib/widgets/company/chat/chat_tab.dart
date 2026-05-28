@@ -77,12 +77,9 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
     final wsBase = origin.replaceFirst(RegExp(r'^https?://'), '');
     final chatUrl = '$wsScheme://$wsBase/api/ws/chat/${widget.companyId}?token=$token';
 
-    print('🔌 Connecting to Chat WebSocket: $chatUrl');
-
     try {
       _chatChannel = WebSocketChannel.connect(Uri.parse(chatUrl));
       _chatChannel!.stream.listen((data) {
-        print('📨 WebSocket received: $data');
         _handleChatEvent(data);
       }, onError: (error) {
         print('❌ Chat WS error: $error');
@@ -93,36 +90,45 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
   }
 
   void _handleChatEvent(dynamic rawData) {
-  final data = rawData is String ? jsonDecode(rawData) : rawData;
-  final type = data['type'];
-  
-  setState(() {
-    switch (type) {
-      case 'new_message':
-        _messages.add(data['message']);
-        _scrollDownIfNeeded();
-        break;
-      case 'edit_message':
-        final messageId = data['message_id'];
-        final newText = data['new_message'];
-        final index = _messages.indexWhere((m) => m['id'] == messageId);
-        if (index != -1) {
-          _messages[index]['message'] = newText;
-          _messages[index]['edited'] = true;
-          _messages[index]['updated_at'] = data['updated_at'];
-        }
-        break;
-      case 'delete_message':
-        final messageId = data['message_id'];
-        _messages.removeWhere((m) => m['id'] == messageId);
-        break;
-      case 'clear_chat':
-        _messages.clear();
-        break;
-    }
-    _updateUnreadCount();
-  });
-}
+    final data = rawData is String ? jsonDecode(rawData) : rawData;
+    final type = data['type'];
+    
+    setState(() {
+      switch (type) {
+        case 'new_message':
+          _messages.add(data['message']);
+          // Плавная прокрутка к новому сообщению
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (_scrollController.hasClients) {
+              _scrollController.animateTo(
+                _scrollController.position.maxScrollExtent,
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOutCubic,
+              );
+            }
+          });
+          break;
+        case 'edit_message':
+          final messageId = data['message_id'];
+          final newText = data['new_message'];
+          final index = _messages.indexWhere((m) => m['id'] == messageId);
+          if (index != -1) {
+            _messages[index]['message'] = newText;
+            _messages[index]['edited'] = true;
+            _messages[index]['updated_at'] = data['updated_at'];
+          }
+          break;
+        case 'delete_message':
+          final messageId = data['message_id'];
+          _messages.removeWhere((m) => m['id'] == messageId);
+          break;
+        case 'clear_chat':
+          _messages.clear();
+          break;
+      }
+      _updateUnreadCount();
+    });
+  }
 
   void _updateUnreadCount() {
     int unread = 0;
@@ -133,22 +139,6 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
     }
     widget.onUnreadMessagesChanged?.call(unread);
   }
-
-  void _scrollDownIfNeeded() {
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    if (_scrollController.hasClients) {
-      final position = _scrollController.position;
-      // Если пользователь находится внизу (не более 150px от края)
-      if (position.maxScrollExtent - position.pixels < 150) {
-        _scrollController.animateTo(
-          position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOutCubic,
-        );
-      }
-    }
-  });
-}
 
   Future<void> _markChatRead() async {
     final api = ApiClient();
@@ -172,6 +162,7 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
       _lastVisit = DateTime.now();
       _updateUnreadCount();
       
+      // Прокручиваем к последнему сообщению только при первой загрузке
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_scrollController.hasClients && _messages.isNotEmpty) {
           _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
@@ -251,7 +242,6 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
     });
   }
 
-  // Просмотр изображения с зумом
   Future<void> _showPhotoViewer(String url) async {
     showDialog(
       context: context,
@@ -290,7 +280,6 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
     );
   }
 
-  // Диалог выбора действия с файлом
   Future<void> _showFileOptions(String url, String filename) async {
     final action = await showDialog<String>(
       context: context,
@@ -323,20 +312,11 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
     }
   }
 
-  // Открытие файла через API
   Future<void> _openFile(String url, String filename) async {
     final api = ApiClient();
     try {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => const Center(child: CircularProgressIndicator()),
-      );
-      
       final response = await api.getFile(url);
       final bytes = response.data as List<int>;
-      
-      if (mounted) Navigator.pop(context);
       
       if (kIsWeb) {
         final blob = html.Blob([bytes]);
@@ -348,28 +328,18 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
       }
     } catch (e) {
       if (mounted) {
-        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка открытия: $e')),
+          SnackBar(content: Text('Ошибка: $e')),
         );
       }
     }
   }
 
-  // Скачивание файла через API
   Future<void> _downloadFile(String url, String filename) async {
     final api = ApiClient();
     try {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => const Center(child: CircularProgressIndicator()),
-      );
-      
       final response = await api.getFile(url);
       final bytes = response.data as List<int>;
-      
-      if (mounted) Navigator.pop(context);
       
       if (kIsWeb) {
         final blob = html.Blob([bytes]);
@@ -378,8 +348,6 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
           ..download = filename;
         anchor.click();
         html.Url.revokeObjectUrl(blobUrl);
-      } else {
-        await ChatTabPlatformSingleton.instance.downloadFile(Uint8List.fromList(bytes), filename);
       }
       
       if (mounted) {
@@ -389,74 +357,67 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
       }
     } catch (e) {
       if (mounted) {
-        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка скачивания: $e')),
+          SnackBar(content: Text('Ошибка: $e')),
         );
       }
     }
   }
 
   Future<void> _sendMessage() async {
-  final t = AppLocalizations.of(context)!;
-  final text = _messageController.text.trim();
-  final hasFile = _attachmentFile != null || _webFile != null;
-  
-  if (text.isEmpty && !hasFile) return;
-
-  setState(() => _loadingMessages = true);
-  final api = ApiClient();
-  try {
-    String? attachmentUrl;
+    final t = AppLocalizations.of(context)!;
+    final text = _messageController.text.trim();
+    final hasFile = _attachmentFile != null || _webFile != null;
     
-    if (hasFile) {
-      Uint8List fileBytes;
-      String fileName;
+    if (text.isEmpty && !hasFile) return;
 
-      if (_attachmentFile != null) {
-        fileBytes = await _attachmentFile!.readAsBytes();
-        fileName = _attachmentFile!.name;
-      } else {
-        fileBytes = _webFile!.bytes!;
-        fileName = _webFile!.name;
+    final api = ApiClient();
+    try {
+      String? attachmentUrl;
+      
+      if (hasFile) {
+        Uint8List fileBytes;
+        String fileName;
+
+        if (_attachmentFile != null) {
+          fileBytes = await _attachmentFile!.readAsBytes();
+          fileName = _attachmentFile!.name;
+        } else {
+          fileBytes = _webFile!.bytes!;
+          fileName = _webFile!.name;
+        }
+
+        final compressedBytes = await ImageCompression.compressImage(fileBytes);
+
+        final uploadRes = await api.uploadChatFile(
+          companyId: widget.companyId,
+          bytes: compressedBytes,
+          filename: fileName,
+        );
+        attachmentUrl = uploadRes['url'];
       }
 
-      final compressedBytes = await ImageCompression.compressImage(fileBytes);
+      await api.post('/chat/company/${widget.companyId}', data: {
+        'message': text,
+        'attachment_url': attachmentUrl,
+      });
 
-      final uploadRes = await api.uploadChatFile(
-        companyId: widget.companyId,
-        bytes: compressedBytes,
-        filename: fileName,
-      );
-      attachmentUrl = uploadRes['url'];
+      _messageController.clear();
+      setState(() {
+        _attachmentFile = null;
+        _webFile = null;
+      });
+      
+      widget.onUnreadMessagesChanged?.call(0);
+      await _markChatRead();
+      _lastVisit = DateTime.now();
+      
+    } catch (e) {
+      print('Error sending message: $e');
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('${t.sendError}: $e')));
     }
-
-    await api.post('/chat/company/${widget.companyId}', data: {
-      'message': text,
-      'attachment_url': attachmentUrl,
-    });
-
-    _messageController.clear();
-    setState(() {
-      _attachmentFile = null;
-      _webFile = null;
-      _loadingMessages = false;
-    });
-    
-    widget.onUnreadMessagesChanged?.call(0);
-    await _markChatRead();
-    _lastVisit = DateTime.now();
-    
-    // ДОБАВИТЬ ЭТУ СТРОКУ - плавная прокрутка к новому сообщению
-    _scrollDownIfNeeded();
-    
-  } catch (e) {
-    print('Error sending message: $e');
-    setState(() => _loadingMessages = false);
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text('${t.sendError}: $e')));
   }
-}
 
   Future<void> _clearChat() async {
     final t = AppLocalizations.of(context)!;
@@ -630,7 +591,6 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
                   },
                 ),
         ),
-        // Превью вложения
         AnimatedContainer(
           duration: const Duration(milliseconds: 300),
           height: hasAttachment ? 70 : 0,
@@ -662,11 +622,7 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
                           children: [
                             Text(
                               _attachmentFile != null ? _attachmentFile!.name : _webFile!.name,
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                                color: colorScheme.onSurface,
-                              ),
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: colorScheme.onSurface),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -674,10 +630,7 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
                             if (_webFile != null)
                               Text(
                                 '${(_webFile!.size ~/ 1024).toString()} KB',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: colorScheme.onSurfaceVariant,
-                                ),
+                                style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant),
                               ),
                             if (_attachmentFile != null)
                               FutureBuilder<int>(
@@ -686,10 +639,7 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
                                   if (snapshot.hasData) {
                                     return Text(
                                       '${(snapshot.data! ~/ 1024).toString()} KB',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: colorScheme.onSurfaceVariant,
-                                      ),
+                                      style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant),
                                     );
                                   }
                                   return const SizedBox.shrink();
@@ -708,7 +658,6 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
                 )
               : const SizedBox.shrink(),
         ),
-        // Поле ввода
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           decoration: BoxDecoration(
@@ -788,30 +737,17 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
                   children: [
                     Text(
                       displayName,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: isMe ? colorScheme.primary : colorScheme.onSurface,
-                      ),
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: isMe ? colorScheme.primary : colorScheme.onSurface),
                     ),
                     const SizedBox(width: 8),
                     Text(
                       DateFormat('HH:mm').format(DateTime.parse(msg['created_at']).toLocal()),
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: colorScheme.onSurfaceVariant,
-                      ),
+                      style: TextStyle(fontSize: 10, color: colorScheme.onSurfaceVariant),
                     ),
                     if (msg['edited'] == true)
                       Padding(
                         padding: const EdgeInsets.only(left: 4),
-                        child: Text(
-                          t.editedLabel,
-                          style: TextStyle(
-                            fontSize: 9,
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                        ),
+                        child: Text(t.editedLabel, style: TextStyle(fontSize: 9, color: colorScheme.onSurfaceVariant)),
                       ),
                   ],
                 ),
