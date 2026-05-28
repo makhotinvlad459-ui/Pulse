@@ -52,6 +52,7 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
   void initState() {
     super.initState();
     registerChatTabPlatform();
+    print('🔵 ChatTab initState');
     _loadChatMessages();
     _connectWebSocket();
     _markChatRead();
@@ -67,26 +68,34 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
   }
 
   Future<void> _connectWebSocket() async {
-    final api = ApiClient();
-    final token = await api.getToken();
-    if (token == null) return;
+  print('🔵 _connectWebSocket START');
+  final api = ApiClient();
+  final token = await api.getToken();
+  print('🔵 Token: ${token != null ? "OK" : "NULL"}');
+  if (token == null) return;
 
-    final origin = Uri.base.origin;
-    final wsScheme = origin.startsWith('https') ? 'wss' : 'ws';
-    final wsBase = origin.replaceFirst(RegExp(r'^https?://'), '');
-    final chatUrl = '$wsScheme://$wsBase/api/ws/chat/${widget.companyId}?token=$token';
+  final origin = Uri.base.origin;
+  final wsScheme = origin.startsWith('https') ? 'wss' : 'ws';
+  final wsBase = origin.replaceFirst(RegExp(r'^https?://'), '');
+  final chatUrl = '$wsScheme://$wsBase/api/ws/chat/${widget.companyId}?token=$token';
 
-    try {
-      _chatChannel = WebSocketChannel.connect(Uri.parse(chatUrl));
-      _chatChannel!.stream.listen((data) {
-        _handleChatEvent(data);
-      }, onError: (error) {
-        print('❌ Chat WS error: $error');
-      });
-    } catch (e) {
-      print('❌ Failed to connect chat WS: $e');
-    }
+  print('🔌 Connecting to Chat WebSocket: $chatUrl');
+
+  try {
+    _chatChannel = WebSocketChannel.connect(Uri.parse(chatUrl));
+    _chatChannel!.stream.listen((data) {
+      print('📨 WebSocket received: ${data.toString().substring(0, 100)}');
+      _handleChatEvent(data);
+    }, onError: (error) {
+      print('❌ Chat WS error: $error');
+    }, onDone: () {
+      print('🔌 Chat WS disconnected');
+    });
+    print('✅ WebSocket connected');
+  } catch (e) {
+    print('❌ Failed to connect chat WS: $e');
   }
+}
 
   void _handleChatEvent(dynamic rawData) {
     final data = rawData is String ? jsonDecode(rawData) : rawData;
