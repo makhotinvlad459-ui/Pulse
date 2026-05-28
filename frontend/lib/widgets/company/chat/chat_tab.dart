@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:html' as html;
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -52,7 +53,6 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
   void initState() {
     super.initState();
     registerChatTabPlatform();
-    print('🔵 ChatTab initState');
     _loadChatMessages();
     _connectWebSocket();
     _markChatRead();
@@ -68,34 +68,29 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
   }
 
   Future<void> _connectWebSocket() async {
-  print('🔵 _connectWebSocket START');
-  final api = ApiClient();
-  final token = await api.getToken();
-  print('🔵 Token: ${token != null ? "OK" : "NULL"}');
-  if (token == null) return;
+    final api = ApiClient();
+    final token = await api.getToken();
+    if (token == null) return;
 
-  final origin = Uri.base.origin;
-  final wsScheme = origin.startsWith('https') ? 'wss' : 'ws';
-  final wsBase = origin.replaceFirst(RegExp(r'^https?://'), '');
-  final chatUrl = '$wsScheme://$wsBase/api/ws/chat/${widget.companyId}?token=$token';
+    final origin = Uri.base.origin;
+    final wsScheme = origin.startsWith('https') ? 'wss' : 'ws';
+    final wsBase = origin.replaceFirst(RegExp(r'^https?://'), '');
+    final chatUrl = '$wsScheme://$wsBase/api/ws/chat/${widget.companyId}?token=$token';
 
-  print('🔌 Connecting to Chat WebSocket: $chatUrl');
+    print('🔌 Connecting to Chat WebSocket: $chatUrl');
 
-  try {
-    _chatChannel = WebSocketChannel.connect(Uri.parse(chatUrl));
-    _chatChannel!.stream.listen((data) {
-      print('📨 WebSocket received: ${data.toString().substring(0, 100)}');
-      _handleChatEvent(data);
-    }, onError: (error) {
-      print('❌ Chat WS error: $error');
-    }, onDone: () {
-      print('🔌 Chat WS disconnected');
-    });
-    print('✅ WebSocket connected');
-  } catch (e) {
-    print('❌ Failed to connect chat WS: $e');
+    try {
+      _chatChannel = WebSocketChannel.connect(Uri.parse(chatUrl));
+      _chatChannel!.stream.listen((data) {
+        print('📨 WebSocket received: $data');
+        _handleChatEvent(data);
+      }, onError: (error) {
+        print('❌ Chat WS error: $error');
+      });
+    } catch (e) {
+      print('❌ Failed to connect chat WS: $e');
+    }
   }
-}
 
   void _handleChatEvent(dynamic rawData) {
     final data = rawData is String ? jsonDecode(rawData) : rawData;
@@ -286,39 +281,8 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
     );
   }
 
-  Future<void> _showFileOptions(int messageId, String filename) async {
-    final action = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Файл'),
-        content: const Text('Выберите действие:'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, 'open'),
-            child: const Text('Открыть'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, 'download'),
-            child: const Text('Скачать'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, 'cancel'),
-            child: const Text('Отмена'),
-          ),
-        ],
-      ),
-    );
-    
-    if (action == null || action == 'cancel') return;
-    
-    if (action == 'open') {
-      await _openFile(messageId, filename);
-    } else {
-      await _downloadFile(messageId, filename);
-    }
-  }
-
-  Future<void> _openFile(int messageId, String filename) async {
+  // Скачивание файла через прямую ссылку (с авторизацией)
+  Future<void> _downloadFile(String url, String filename) async {
     final api = ApiClient();
     try {
       showDialog(
@@ -327,33 +291,7 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
         builder: (context) => const Center(child: CircularProgressIndicator()),
       );
       
-      final response = await api.getChatFile(messageId);
-      final bytes = response.data as List<int>;
-      
-      if (mounted) Navigator.pop(context);
-      
-      await ChatTabPlatformSingleton.instance.openFile(Uint8List.fromList(bytes), filename);
-      
-    } catch (e) {
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка открытия: $e')),
-        );
-      }
-    }
-  }
-
-  Future<void> _downloadFile(int messageId, String filename) async {
-    final api = ApiClient();
-    try {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => const Center(child: CircularProgressIndicator()),
-      );
-      
-      final response = await api.getChatFile(messageId);
+      final response = await api.getFile(url);
       final bytes = response.data as List<int>;
       
       if (mounted) Navigator.pop(context);
@@ -369,7 +307,7 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка скачивания: $e')),
+          SnackBar(content: Text('Ошибка: $e')),
         );
       }
     }
@@ -382,7 +320,6 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
     
     if (text.isEmpty && !hasFile) return;
 
-    // Показываем индикатор загрузки
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -430,7 +367,6 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
       await _markChatRead();
       _lastVisit = DateTime.now();
       
-      // Закрываем индикатор
       if (mounted) Navigator.pop(context);
       
     } catch (e) {
@@ -812,7 +748,7 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
                                 ),
                               )
                             : GestureDetector(
-                                onTap: () => _showFileOptions(msg['id'], msg['attachment_url'].split('/').last),
+                                onTap: () => _downloadFile(msg['attachment_url'], msg['attachment_url'].split('/').last),
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                   decoration: BoxDecoration(

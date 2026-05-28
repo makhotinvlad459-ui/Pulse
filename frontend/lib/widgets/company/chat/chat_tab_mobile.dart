@@ -11,12 +11,3 @@ class ChatTabMobile implements ChatTabPlatform {
     await file.writeAsBytes(bytes);
   }
   
-  @override
-  Future<void> openFile(Uint8List bytes, String filename) async {
-    // На мобильных проще сохранить и открыть
-    final directory = await getApplicationDocumentsDirectory();
-    final file = File('${directory.path}/$filename');
-    await file.writeAsBytes(bytes);
-    // Можно открыть через open_file пакет, но пока просто сохраняем
-  }
-}
