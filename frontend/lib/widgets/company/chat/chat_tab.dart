@@ -365,59 +365,70 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
   }
 
   Future<void> _sendMessage() async {
-    final t = AppLocalizations.of(context)!;
-    final text = _messageController.text.trim();
-    final hasFile = _attachmentFile != null || _webFile != null;
+  final t = AppLocalizations.of(context)!;
+  final text = _messageController.text.trim();
+  final hasFile = _attachmentFile != null || _webFile != null;
+  
+  if (text.isEmpty && !hasFile) return;
+
+  // Показываем индикатор загрузки
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => const Center(child: CircularProgressIndicator()),
+  );
+
+  final api = ApiClient();
+  try {
+    String? attachmentUrl;
     
-    if (text.isEmpty && !hasFile) return;
+    if (hasFile) {
+      Uint8List fileBytes;
+      String fileName;
 
-    final api = ApiClient();
-    try {
-      String? attachmentUrl;
-      
-      if (hasFile) {
-        Uint8List fileBytes;
-        String fileName;
-
-        if (_attachmentFile != null) {
-          fileBytes = await _attachmentFile!.readAsBytes();
-          fileName = _attachmentFile!.name;
-        } else {
-          fileBytes = _webFile!.bytes!;
-          fileName = _webFile!.name;
-        }
-
-        final compressedBytes = await ImageCompression.compressImage(fileBytes);
-
-        final uploadRes = await api.uploadChatFile(
-          companyId: widget.companyId,
-          bytes: compressedBytes,
-          filename: fileName,
-        );
-        attachmentUrl = uploadRes['url'];
+      if (_attachmentFile != null) {
+        fileBytes = await _attachmentFile!.readAsBytes();
+        fileName = _attachmentFile!.name;
+      } else {
+        fileBytes = _webFile!.bytes!;
+        fileName = _webFile!.name;
       }
 
-      await api.post('/chat/company/${widget.companyId}', data: {
-        'message': text,
-        'attachment_url': attachmentUrl,
-      });
+      final compressedBytes = await ImageCompression.compressImage(fileBytes);
 
-      _messageController.clear();
-      setState(() {
-        _attachmentFile = null;
-        _webFile = null;
-      });
-      
-      widget.onUnreadMessagesChanged?.call(0);
-      await _markChatRead();
-      _lastVisit = DateTime.now();
-      
-    } catch (e) {
-      print('Error sending message: $e');
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('${t.sendError}: $e')));
+      final uploadRes = await api.uploadChatFile(
+        companyId: widget.companyId,
+        bytes: compressedBytes,
+        filename: fileName,
+      );
+      attachmentUrl = uploadRes['url'];
     }
+
+    await api.post('/chat/company/${widget.companyId}', data: {
+      'message': text,
+      'attachment_url': attachmentUrl,
+    });
+
+    _messageController.clear();
+    setState(() {
+      _attachmentFile = null;
+      _webFile = null;
+    });
+    
+    widget.onUnreadMessagesChanged?.call(0);
+    await _markChatRead();
+    _lastVisit = DateTime.now();
+    
+    // Закрываем индикатор
+    if (mounted) Navigator.pop(context);
+    
+  } catch (e) {
+    if (mounted) Navigator.pop(context);
+    print('Error sending message: $e');
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('${t.sendError}: $e')));
   }
+}
 
   Future<void> _clearChat() async {
     final t = AppLocalizations.of(context)!;
