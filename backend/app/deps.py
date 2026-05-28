@@ -3,6 +3,7 @@ from fastapi.security import OAuth2PasswordBearer
 from jose import jwt, JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from fastapi import WebSocket, WebSocketException, status  # <-- добавить импорт
 
 from app.database import get_db
 from app.models import User
@@ -31,3 +32,16 @@ async def get_current_user(
     if user is None:
         raise credentials_exception
     return user
+
+# ДОБАВИТЬ ЭТУ ФУНКЦИЮ
+async def get_current_user_ws(token: str, db: AsyncSession) -> User | None:
+    """Авторизация для WebSocket соединений"""
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        user_id = payload.get("sub")
+        if user_id is None:
+            return None
+        result = await db.execute(select(User).where(User.id == int(user_id)))
+        return result.scalar_one_or_none()
+    except JWTError:
+        return None
