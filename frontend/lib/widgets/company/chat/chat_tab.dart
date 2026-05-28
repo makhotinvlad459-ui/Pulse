@@ -100,16 +100,7 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
     switch (type) {
       case 'new_message':
         _messages.add(data['message']);
-        // Добавляем плавную прокрутку к новому сообщению
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (_scrollController.hasClients) {
-            _scrollController.animateTo(
-              _scrollController.position.maxScrollExtent,
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeOutCubic,
-            );
-          }
-        });
+        _scrollDownIfNeeded();
         break;
       case 'edit_message':
         final messageId = data['message_id'];
@@ -142,6 +133,22 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
     }
     widget.onUnreadMessagesChanged?.call(unread);
   }
+
+  void _scrollDownIfNeeded() {
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (_scrollController.hasClients) {
+      final position = _scrollController.position;
+      // Если пользователь находится внизу (не более 150px от края)
+      if (position.maxScrollExtent - position.pixels < 150) {
+        _scrollController.animateTo(
+          position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+        );
+      }
+    }
+  });
+}
 
   Future<void> _markChatRead() async {
     final api = ApiClient();
@@ -391,62 +398,65 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
   }
 
   Future<void> _sendMessage() async {
-    final t = AppLocalizations.of(context)!;
-    final text = _messageController.text.trim();
-    final hasFile = _attachmentFile != null || _webFile != null;
+  final t = AppLocalizations.of(context)!;
+  final text = _messageController.text.trim();
+  final hasFile = _attachmentFile != null || _webFile != null;
+  
+  if (text.isEmpty && !hasFile) return;
+
+  setState(() => _loadingMessages = true);
+  final api = ApiClient();
+  try {
+    String? attachmentUrl;
     
-    if (text.isEmpty && !hasFile) return;
+    if (hasFile) {
+      Uint8List fileBytes;
+      String fileName;
 
-    setState(() => _loadingMessages = true);
-    final api = ApiClient();
-    try {
-      String? attachmentUrl;
-      
-      if (hasFile) {
-        Uint8List fileBytes;
-        String fileName;
-
-        if (_attachmentFile != null) {
-          fileBytes = await _attachmentFile!.readAsBytes();
-          fileName = _attachmentFile!.name;
-        } else {
-          fileBytes = _webFile!.bytes!;
-          fileName = _webFile!.name;
-        }
-
-        final compressedBytes = await ImageCompression.compressImage(fileBytes);
-
-        final uploadRes = await api.uploadChatFile(
-          companyId: widget.companyId,
-          bytes: compressedBytes,
-          filename: fileName,
-        );
-        attachmentUrl = uploadRes['url'];
+      if (_attachmentFile != null) {
+        fileBytes = await _attachmentFile!.readAsBytes();
+        fileName = _attachmentFile!.name;
+      } else {
+        fileBytes = _webFile!.bytes!;
+        fileName = _webFile!.name;
       }
 
-      await api.post('/chat/company/${widget.companyId}', data: {
-        'message': text,
-        'attachment_url': attachmentUrl,
-      });
+      final compressedBytes = await ImageCompression.compressImage(fileBytes);
 
-      _messageController.clear();
-      setState(() {
-        _attachmentFile = null;
-        _webFile = null;
-        _loadingMessages = false;
-      });
-      
-      widget.onUnreadMessagesChanged?.call(0);
-      await _markChatRead();
-      _lastVisit = DateTime.now();
-      
-    } catch (e) {
-      print('Error sending message: $e');
-      setState(() => _loadingMessages = false);
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('${t.sendError}: $e')));
+      final uploadRes = await api.uploadChatFile(
+        companyId: widget.companyId,
+        bytes: compressedBytes,
+        filename: fileName,
+      );
+      attachmentUrl = uploadRes['url'];
     }
+
+    await api.post('/chat/company/${widget.companyId}', data: {
+      'message': text,
+      'attachment_url': attachmentUrl,
+    });
+
+    _messageController.clear();
+    setState(() {
+      _attachmentFile = null;
+      _webFile = null;
+      _loadingMessages = false;
+    });
+    
+    widget.onUnreadMessagesChanged?.call(0);
+    await _markChatRead();
+    _lastVisit = DateTime.now();
+    
+    // ДОБАВИТЬ ЭТУ СТРОКУ - плавная прокрутка к новому сообщению
+    _scrollDownIfNeeded();
+    
+  } catch (e) {
+    print('Error sending message: $e');
+    setState(() => _loadingMessages = false);
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('${t.sendError}: $e')));
   }
+}
 
   Future<void> _clearChat() async {
     final t = AppLocalizations.of(context)!;

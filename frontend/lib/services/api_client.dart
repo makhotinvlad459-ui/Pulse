@@ -131,17 +131,35 @@ class ApiClient {
     return response.data['url'] ?? response.data['attachment_url'] ?? '';
   }
   // Получение файла
-  Future<Response> getFile(String path,
+  // Получение файла (с авторизацией)
+Future<Response> getFile(String path,
     {Map<String, dynamic>? queryParameters}) async {
   final token = await getToken();
-  return await _dio.get(path,
+  
+  // Если это полный URL (http:// или https://)
+  if (path.startsWith('http')) {
+    return await _dio.get(
+      path,
+      options: Options(
+        responseType: ResponseType.bytes,
+        headers: {
+          'Authorization': 'Bearer $token',
+        },
+      ),
+    );
+  } else {
+    // Если это относительный путь
+    return await _dio.get(
+      path,
       queryParameters: queryParameters,
       options: Options(
         responseType: ResponseType.bytes,
         headers: {
           'Authorization': 'Bearer $token',
         },
-      ));
+      ),
+    );
+  }
 }
 
   // Управление токеном – теперь только через storage!
