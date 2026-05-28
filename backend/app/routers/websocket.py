@@ -27,8 +27,10 @@ async def websocket_chat(
     company_id: int,
     db: AsyncSession = Depends(get_db)
 ):
-    await websocket.accept()  # <-- ВАЖНО: сначала принимаем соединение
+    # СНАЧАЛА принимаем соединение
+    await websocket.accept()
     
+    # ПОТОМ проверяем токен
     token = websocket.query_params.get("token")
     if not token:
         await websocket.close(code=1008, reason="Missing token")
@@ -52,8 +54,10 @@ async def websocket_tasks(
     company_id: int,
     db: AsyncSession = Depends(get_db)
 ):
-    await websocket.accept()  # <-- ВАЖНО: сначала принимаем соединение
+    # СНАЧАЛА принимаем соединение
+    await websocket.accept()
     
+    # ПОТОМ проверяем токен
     token = websocket.query_params.get("token")
     if not token:
         await websocket.close(code=1008, reason="Missing token")
@@ -77,16 +81,20 @@ async def websocket_user(
     user_id: int,
     db: AsyncSession = Depends(get_db)
 ):
-    await websocket.accept()  # <-- ВАЖНО: сначала принимаем соединение
+    # СНАЧАЛА принимаем соединение
+    await websocket.accept()
     
+    # ПОТОМ проверяем токен
     token = websocket.query_params.get("token")
     if not token:
         await websocket.close(code=1008, reason="Missing token")
         return
+    
     user = await get_user_from_token(token, db)
     if not user or user.id != user_id:
         await websocket.close(code=1008, reason="Unauthorized")
         return
+    
     await manager.connect_user(user_id, websocket)
     try:
         while True:
