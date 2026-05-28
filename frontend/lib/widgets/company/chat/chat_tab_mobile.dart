@@ -10,4 +10,4 @@ class ChatTabMobile implements ChatTabPlatform {
     final file = File('${directory.path}/$filename');
     await file.writeAsBytes(bytes);
   }
-  
+}
