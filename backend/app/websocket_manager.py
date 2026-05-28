@@ -87,7 +87,7 @@ class ConnectionManager:
 
     # ========== ЧАТ ==========
     async def connect_chat(self, company_id: int, websocket: WebSocket):
-        await websocket.accept()
+        # НЕ вызываем websocket.accept() - уже принято в роутере
         if company_id not in self.active_chat_connections:
             self.active_chat_connections[company_id] = set()
         self.active_chat_connections[company_id].add(websocket)
@@ -99,7 +99,6 @@ class ConnectionManager:
                 del self.active_chat_connections[company_id]
 
     async def broadcast_chat(self, company_id: int, message: dict):
-
         print(f"📢 broadcast_chat: company={company_id}")
         print(f"📢 Message type: {message.get('type')}")
     
@@ -109,9 +108,9 @@ class ConnectionManager:
     
         try:
             payload = json.dumps({
-            "type": "chat",
-            "company_id": company_id,
-            "message": message
+                "type": "chat",
+                "company_id": company_id,
+                "message": message
             })
             await self.redis_client.publish("pulse_events", payload)
             print(f"✅ Published to Redis channel 'pulse_events'")
@@ -120,7 +119,7 @@ class ConnectionManager:
 
     # ========== ЗАДАЧИ ==========
     async def connect_task(self, company_id: int, websocket: WebSocket):
-        await websocket.accept()
+        # НЕ вызываем websocket.accept() - уже принято в роутере
         if company_id not in self.active_task_connections:
             self.active_task_connections[company_id] = set()
         self.active_task_connections[company_id].add(websocket)
@@ -143,7 +142,7 @@ class ConnectionManager:
 
     # ========== ПОЛЬЗОВАТЕЛЬСКИЕ УВЕДОМЛЕНИЯ ==========
     async def connect_user(self, user_id: int, websocket: WebSocket):
-        await websocket.accept()
+        # НЕ вызываем websocket.accept() - уже принято в роутере
         if user_id not in self.active_user_connections:
             self.active_user_connections[user_id] = set()
         self.active_user_connections[user_id].add(websocket)
