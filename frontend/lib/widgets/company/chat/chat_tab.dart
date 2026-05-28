@@ -40,7 +40,6 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   DateTime? _lastVisit;
-  bool _shouldAutoScroll = true;
 
   WebSocketChannel? _chatChannel;
 
@@ -54,15 +53,6 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
   void initState() {
     super.initState();
     registerChatTabPlatform();
-    
-    _scrollController.addListener(() {
-      if (_scrollController.hasClients) {
-        final isAtBottom = _scrollController.position.pixels >= 
-            _scrollController.position.maxScrollExtent - 100;
-        _shouldAutoScroll = isAtBottom;
-      }
-    });
-    
     _loadChatMessages();
     _connectWebSocket();
     _markChatRead();
@@ -110,17 +100,6 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
       switch (type) {
         case 'new_message':
           _messages.add(data['message']);
-          if (_shouldAutoScroll) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (_scrollController.hasClients) {
-                _scrollController.animateTo(
-                  _scrollController.position.maxScrollExtent,
-                  duration: const Duration(milliseconds: 200),
-                  curve: Curves.easeOutCubic,
-                );
-              }
-            });
-          }
           break;
         case 'edit_message':
           final messageId = data['message_id'];
@@ -255,6 +234,7 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
     });
   }
 
+  // Просмотр изображения с зумом
   Future<void> _showPhotoViewer(String url) async {
     showDialog(
       context: context,
@@ -293,12 +273,53 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
     );
   }
 
-  // Открытие файла через API с авторизацией
+  // Диалог выбора действия с файлом
+  Future<void> _showFileOptions(String url, String filename) async {
+    final action = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Файл'),
+        content: const Text('Выберите действие:'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, 'open'),
+            child: const Text('Открыть'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, 'download'),
+            child: const Text('Скачать'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, 'cancel'),
+            child: const Text('Отмена'),
+          ),
+        ],
+      ),
+    );
+    
+    if (action == null || action == 'cancel') return;
+    
+    if (action == 'open') {
+      await _openFile(url, filename);
+    } else {
+      await _downloadFile(url, filename);
+    }
+  }
+
+  // Открытие файла через API
   Future<void> _openFile(String url, String filename) async {
     final api = ApiClient();
     try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
+      );
+      
       final response = await api.getFile(url);
       final bytes = response.data as List<int>;
+      
+      if (mounted) Navigator.pop(context);
       
       if (kIsWeb) {
         final blob = html.Blob([bytes]);
@@ -307,18 +328,53 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
         Future.delayed(const Duration(seconds: 5), () {
           html.Url.revokeObjectUrl(blobUrl);
         });
-      } else {
-        await ChatTabPlatformSingleton.instance.downloadFile(Uint8List.fromList(bytes), filename);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Файл сохранен')),
-          );
-        }
       }
     } catch (e) {
       if (mounted) {
+        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка открытия файла: $e')),
+          SnackBar(content: Text('Ошибка открытия: $e')),
+        );
+      }
+    }
+  }
+
+  // Скачивание файла через API
+  Future<void> _downloadFile(String url, String filename) async {
+    final api = ApiClient();
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
+      );
+      
+      final response = await api.getFile(url);
+      final bytes = response.data as List<int>;
+      
+      if (mounted) Navigator.pop(context);
+      
+      if (kIsWeb) {
+        final blob = html.Blob([bytes]);
+        final blobUrl = html.Url.createObjectUrlFromBlob(blob);
+        final anchor = html.AnchorElement(href: blobUrl)
+          ..download = filename;
+        anchor.click();
+        html.Url.revokeObjectUrl(blobUrl);
+      } else {
+        await ChatTabPlatformSingleton.instance.downloadFile(Uint8List.fromList(bytes), filename);
+      }
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Файл сохранен')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка скачивания: $e')),
         );
       }
     }
@@ -554,6 +610,7 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
                   },
                 ),
         ),
+        // Превью вложения
         AnimatedContainer(
           duration: const Duration(milliseconds: 300),
           height: hasAttachment ? 70 : 0,
@@ -585,7 +642,11 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
                           children: [
                             Text(
                               _attachmentFile != null ? _attachmentFile!.name : _webFile!.name,
-                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: colorScheme.onSurface),
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                                color: colorScheme.onSurface,
+                              ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -593,7 +654,10 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
                             if (_webFile != null)
                               Text(
                                 '${(_webFile!.size ~/ 1024).toString()} KB',
-                                style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant),
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
                               ),
                             if (_attachmentFile != null)
                               FutureBuilder<int>(
@@ -602,7 +666,10 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
                                   if (snapshot.hasData) {
                                     return Text(
                                       '${(snapshot.data! ~/ 1024).toString()} KB',
-                                      style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant),
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: colorScheme.onSurfaceVariant,
+                                      ),
                                     );
                                   }
                                   return const SizedBox.shrink();
@@ -621,6 +688,7 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
                 )
               : const SizedBox.shrink(),
         ),
+        // Поле ввода
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           decoration: BoxDecoration(
@@ -700,17 +768,30 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
                   children: [
                     Text(
                       displayName,
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: isMe ? colorScheme.primary : colorScheme.onSurface),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: isMe ? colorScheme.primary : colorScheme.onSurface,
+                      ),
                     ),
                     const SizedBox(width: 8),
                     Text(
                       DateFormat('HH:mm').format(DateTime.parse(msg['created_at']).toLocal()),
-                      style: TextStyle(fontSize: 10, color: colorScheme.onSurfaceVariant),
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
                     ),
                     if (msg['edited'] == true)
                       Padding(
                         padding: const EdgeInsets.only(left: 4),
-                        child: Text(t.editedLabel, style: TextStyle(fontSize: 9, color: colorScheme.onSurfaceVariant)),
+                        child: Text(
+                          t.editedLabel,
+                          style: TextStyle(
+                            fontSize: 9,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
                       ),
                   ],
                 ),
@@ -753,7 +834,7 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
                                 ),
                               )
                             : GestureDetector(
-                                onTap: () => _openFile(msg['attachment_url'], msg['attachment_url'].split('/').last),
+                                onTap: () => _showFileOptions(msg['attachment_url'], msg['attachment_url'].split('/').last),
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                   decoration: BoxDecoration(
