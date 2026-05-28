@@ -230,29 +230,44 @@ class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
 
   // ==================== ОСНОВНЫЕ МЕТОДЫ ====================
   Future<void> _connectWebSockets() async {
-    final api = ApiClient();
-    final token = await api.getToken();
-    if (token == null) return;
+  final api = ApiClient();
+  final token = await api.getToken();
+  if (token == null) return;
 
-    final baseUrl = ApiClient.baseUrl;
-    final wsBase = baseUrl.replaceFirst('http', 'ws');
-    final chatUrl = '$wsBase/ws/chat/${widget.companyId}?token=$token';
-    final tasksUrl = '$wsBase/ws/tasks/${widget.companyId}?token=$token';
+  // Для веб-версии используем текущий origin (https://pulse-yourmoney.com)
+  final origin = Uri.base.origin;
+  final wsScheme = origin.startsWith('https') ? 'wss' : 'ws';
+  final wsBase = origin.replaceFirst(RegExp(r'^https?://'), '');
+  
+  final chatUrl = '$wsScheme://$wsBase/ws/chat/${widget.companyId}?token=$token';
+  final tasksUrl = '$wsScheme://$wsBase/ws/tasks/${widget.companyId}?token=$token';
 
+  print('🔌 Connecting to Chat WebSocket: $chatUrl');
+  print('🔌 Connecting to Tasks WebSocket: $tasksUrl');
+
+  try {
     _chatChannel = WebSocketChannel.connect(Uri.parse(chatUrl));
     _chatChannel!.stream.listen((data) {
+      print('📨 Chat WS received: $data');
       _handleChatEvent(data);
     }, onError: (error) {
-      print('Chat WebSocket error: $error');
+      print('❌ Chat WS error: $error');
     });
+  } catch (e) {
+    print('❌ Failed to connect chat WS: $e');
+  }
 
+  try {
     _tasksChannel = WebSocketChannel.connect(Uri.parse(tasksUrl));
     _tasksChannel!.stream.listen((data) {
       _handleTaskEvent(data);
     }, onError: (error) {
-      print('Tasks WebSocket error: $error');
+      print('❌ Tasks WS error: $error');
     });
+  } catch (e) {
+    print('❌ Failed to connect tasks WS: $e');
   }
+}
 
   void _handleChatEvent(dynamic rawData) {
     final data = rawData is String ? jsonDecode(rawData) : rawData;
