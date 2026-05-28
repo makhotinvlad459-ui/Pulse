@@ -39,7 +39,6 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   DateTime? _lastVisit;
-  bool _isUserScrolling = false;
 
   WebSocketChannel? _chatChannel;
 
@@ -52,13 +51,6 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
   @override
   void initState() {
     super.initState();
-    
-    _scrollController.addListener(() {
-      final isAtBottom = _scrollController.position.pixels >= 
-          _scrollController.position.maxScrollExtent - 50;
-      _isUserScrolling = !isAtBottom;
-    });
-    
     _loadChatMessages();
     _connectWebSocket();
     _markChatRead();
@@ -105,10 +97,21 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
     setState(() {
       switch (type) {
         case 'new_message':
+          final wasAtBottom = _scrollController.hasClients && 
+              _scrollController.position.pixels >= 
+              _scrollController.position.maxScrollExtent - 100;
+          
           _messages.add(data['message']);
-          if (!_isUserScrolling) {
+          
+          if (wasAtBottom) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              _scrollToBottom();
+              if (_scrollController.hasClients) {
+                _scrollController.animateTo(
+                  _scrollController.position.maxScrollExtent,
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOutCubic,
+                );
+              }
             });
           }
           break;
@@ -168,16 +171,6 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
     } catch (e) {
       setState(() => _loadingMessages = false);
       print('Error loading chat: $e');
-    }
-  }
-
-  void _scrollToBottom() {
-    if (_scrollController.hasClients && !_isUserScrolling) {
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOutCubic,
-      );
     }
   }
 
@@ -249,79 +242,68 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
     });
   }
 
-  Future<void> _showAttachmentDialog(String url) async {
+  // Просмотр изображения с зумом
+  Future<void> _showPhotoViewer(String url) async {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => Dialog(
+        insetPadding: EdgeInsets.zero,
+        backgroundColor: Colors.transparent,
+        child: Stack(
+          children: [
+            PhotoView(
+              imageProvider: NetworkImage(url),
+              loadingBuilder: (context, event) => const Center(
+                child: CircularProgressIndicator(),
+              ),
+              errorBuilder: (context, error, stackTrace) => const Center(
+                child: Text(
+                  'Не удалось загрузить изображение',
+                  style: TextStyle(color: Colors.white),
+                ),
+              ),
+              backgroundDecoration: const BoxDecoration(color: Colors.black87),
+              minScale: PhotoViewComputedScale.contained * 0.8,
+              maxScale: PhotoViewComputedScale.covered * 3,
+            ),
+            Positioned(
+              top: 40,
+              right: 20,
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Скачивание файла
+  Future<void> _downloadFile(String url) async {
     final t = AppLocalizations.of(context)!;
     final api = ApiClient();
     try {
       final response = await api.getFile(url);
       final bytes = response.data as List<int>;
-      final uint8list = Uint8List.fromList(bytes);
-      final ext = url.split('.').last.toLowerCase();
-
-      if (ext == 'jpg' || ext == 'jpeg' || ext == 'png') {
-        showDialog(
-          context: context,
-          builder: (context) => Dialog(
-            insetPadding: const EdgeInsets.all(16),
-            child: Container(
-              width: MediaQuery.of(context).size.width * 0.9,
-              height: MediaQuery.of(context).size.height * 0.7,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Text(t.photo, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  ),
-                  Expanded(
-                    child: PhotoView(
-                      imageProvider: MemoryImage(uint8list),
-                      minScale: PhotoViewComputedScale.contained * 0.8,
-                      maxScale: PhotoViewComputedScale.covered * 3,
-                      backgroundDecoration: const BoxDecoration(color: Colors.transparent),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: Text(t.close),
-                  ),
-                ],
-              ),
-            ),
-          ),
+      final directory = await getApplicationDocumentsDirectory();
+      final filename = url.split('/').last;
+      final file = File('${directory.path}/$filename');
+      await file.writeAsBytes(bytes);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${t.savedTo}: ${file.path}'))
         );
-      } else {
-        final confirm = await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: Text(t.file),
-            content: Text(t.downloadAttachment),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: Text(t.cancel),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: Text(t.download),
-              ),
-            ],
-          ),
-        );
-        if (confirm == true) {
-          final directory = await getApplicationDocumentsDirectory();
-          final filename = url.split('/').last;
-          final file = File('${directory.path}/$filename');
-          await file.writeAsBytes(bytes);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('${t.savedTo}: ${file.path}'))
-          );
-        }
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${t.error}: $e'))
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${t.error}: $e'))
+        );
+      }
     }
   }
 
@@ -684,6 +666,7 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
   Widget _buildMessageBubble(
       bool isMe, String displayName, Map<String, dynamic> msg, bool isFounder, ColorScheme colorScheme, AppLocalizations t) {
     final hasAttachment = msg['attachment_url'] != null && msg['attachment_url'].toString().isNotEmpty;
+    final isImage = hasAttachment && msg['attachment_url'].toString().contains(RegExp(r'\.(jpg|jpeg|png|gif|webp)', caseSensitive: false));
     
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
@@ -751,24 +734,53 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       if (hasAttachment)
-                        GestureDetector(
-                          onTap: () => _showAttachmentDialog(msg['attachment_url']),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: Image.network(
-                              msg['attachment_url'],
-                              height: 150,
-                              width: 200,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Container(
-                                width: 200,
-                                height: 150,
-                                color: Colors.grey.shade300,
-                                child: const Icon(Icons.broken_image, size: 40),
+                        isImage
+                            ? GestureDetector(
+                                onTap: () => _showPhotoViewer(msg['attachment_url']),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Image.network(
+                                    msg['attachment_url'],
+                                    height: 200,
+                                    width: double.infinity,
+                                    fit: BoxFit.cover,
+                                    loadingBuilder: (context, child, loadingProgress) {
+                                      if (loadingProgress == null) return child;
+                                      return Container(
+                                        height: 200,
+                                        color: Colors.grey.shade300,
+                                        child: const Center(child: CircularProgressIndicator()),
+                                      );
+                                    },
+                                    errorBuilder: (_, __, ___) => Container(
+                                      height: 200,
+                                      color: Colors.grey.shade300,
+                                      child: const Icon(Icons.broken_image, size: 50),
+                                    ),
+                                  ),
+                                ),
+                              )
+                            : GestureDetector(
+                                onTap: () => _downloadFile(msg['attachment_url']),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade200,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.insert_drive_file, color: Colors.blue),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        msg['attachment_url'].split('/').last,
+                                        style: const TextStyle(fontSize: 12),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
-                            ),
-                          ),
-                        ),
                       if (msg['message'] != null && msg['message'].toString().isNotEmpty)
                         Text(
                           msg['message'],
