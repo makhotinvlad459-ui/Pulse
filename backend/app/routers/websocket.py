@@ -1,7 +1,7 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from jose import jwt, JError
+from jose import jwt, JWTError
 from app.database import get_db
 from app.models import User, Company, CompanyMember
 from app.config import settings
@@ -42,25 +42,32 @@ async def websocket_chat(
     company_id: int,
     db: AsyncSession = Depends(get_db)
 ):
-    # СНАЧАЛА принимаем соединение
+    print(f"🔌 Chat WebSocket connection attempt for company {company_id}")
     await websocket.accept()
+    print("✅ WebSocket accepted")
     
-    # ПОТОМ проверяем токен
     token = websocket.query_params.get("token")
+    print(f"🔑 Token received: {token[:50] if token else 'None'}...")
+    
     if not token:
+        print("❌ No token")
         await websocket.close(code=1008, reason="Missing token")
         return
     
     user = await get_user_from_token(token, db)
+    print(f"👤 User found: {user.id if user else None}")
+    
     if not user:
+        print("❌ Invalid token")
         await websocket.close(code=1008, reason="Invalid token")
         return
     
-    # ПРОВЕРКА ДОСТУПА К КОМПАНИИ
     if not await check_company_access(company_id, user, db):
+        print(f"❌ Access denied to company {company_id}")
         await websocket.close(code=1008, reason="Access denied to this company")
         return
     
+    print(f"✅ Access granted, connecting to chat {company_id}")
     await manager.connect_chat(company_id, websocket)
     try:
         while True:
@@ -74,6 +81,7 @@ async def websocket_tasks(
     company_id: int,
     db: AsyncSession = Depends(get_db)
 ):
+    print(f"🔌 Tasks WebSocket connection attempt for company {company_id}")
     await websocket.accept()
     
     token = websocket.query_params.get("token")
