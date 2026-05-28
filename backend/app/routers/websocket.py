@@ -27,6 +27,8 @@ async def websocket_chat(
     company_id: int,
     db: AsyncSession = Depends(get_db)
 ):
+    await websocket.accept()  # <-- ВАЖНО: сначала принимаем соединение
+    
     token = websocket.query_params.get("token")
     if not token:
         await websocket.close(code=1008, reason="Missing token")
@@ -37,13 +39,10 @@ async def websocket_chat(
         await websocket.close(code=1008, reason="Invalid token")
         return
     
-    # Проверка доступа к компании (опционально)
-    
     await manager.connect_chat(company_id, websocket)
     try:
         while True:
             await websocket.receive_text()
-            await websocket.send_json({"status": "pong"})
     except WebSocketDisconnect:
         manager.disconnect_chat(company_id, websocket)
 
@@ -53,6 +52,8 @@ async def websocket_tasks(
     company_id: int,
     db: AsyncSession = Depends(get_db)
 ):
+    await websocket.accept()  # <-- ВАЖНО: сначала принимаем соединение
+    
     token = websocket.query_params.get("token")
     if not token:
         await websocket.close(code=1008, reason="Missing token")
@@ -67,7 +68,6 @@ async def websocket_tasks(
     try:
         while True:
             await websocket.receive_text()
-            await websocket.send_json({"status": "pong"})
     except WebSocketDisconnect:
         manager.disconnect_task(company_id, websocket)
 
@@ -77,6 +77,8 @@ async def websocket_user(
     user_id: int,
     db: AsyncSession = Depends(get_db)
 ):
+    await websocket.accept()  # <-- ВАЖНО: сначала принимаем соединение
+    
     token = websocket.query_params.get("token")
     if not token:
         await websocket.close(code=1008, reason="Missing token")
