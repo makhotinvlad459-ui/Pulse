@@ -7,7 +7,8 @@ from sqlalchemy import select, delete
 from sqlalchemy.orm import selectinload
 from pydantic import BaseModel
 from firebase_admin import storage, messaging
-
+from fastapi.responses import Response
+import aiohttp
 from app.database import get_db
 from app.models import User, Company, ChatMessage, TransactionComment, Transaction, CompanyMember, UserRole, UserChatVisit
 from app.deps import get_current_user
@@ -372,6 +373,43 @@ async def delete_message(
         "company_id": msg.company_id
     }, db)
     return {"detail": "Message deleted"}
+
+@router.get("/file/{message_id}")
+async def get_chat_file(
+    message_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Находим сообщение
+    result = await db.execute(select(ChatMessage).where(ChatMessage.id == message_id))
+    msg = result.scalar_one_or_none()
+    if not msg:
+        raise HTTPException(status_code=404, detail="Message not found")
+    
+    # Проверяем доступ к компании
+    if not await _check_company_access(msg.company_id, current_user, db):
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    if not msg.attachment_url:
+        raise HTTPException(status_code=404, detail="No attachment")
+    
+    # Скачиваем файл из Firebase
+    async with aiohttp.ClientSession() as session:
+        async with session.get(msg.attachment_url) as resp:
+            if resp.status != 200:
+                raise HTTPException(status_code=500, detail="Failed to download file")
+            content = await resp.read()
+    
+    # Определяем content-type
+    import mimetypes
+    content_type = mimetypes.guess_type(msg.attachment_url)[0] or "application/octet-stream"
+    filename = msg.attachment_url.split('/')[-1]
+    
+    return Response(
+        content=content,
+        media_type=content_type,
+        headers={"Content-Disposition": f"inline; filename={filename}"}
+    )
 
 @router.post("/fcm-token")
 async def update_fcm_token(

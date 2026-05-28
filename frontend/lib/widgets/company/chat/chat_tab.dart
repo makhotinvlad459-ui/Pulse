@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:html' as html;
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -97,7 +96,6 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
       switch (type) {
         case 'new_message':
           _messages.add(data['message']);
-          // Плавная прокрутка к новому сообщению
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (_scrollController.hasClients) {
               _scrollController.animateTo(
@@ -162,7 +160,6 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
       _lastVisit = DateTime.now();
       _updateUnreadCount();
       
-      // Прокручиваем к последнему сообщению только при первой загрузке
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_scrollController.hasClients && _messages.isNotEmpty) {
           _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
@@ -280,7 +277,7 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
     );
   }
 
-  Future<void> _showFileOptions(String url, String filename) async {
+  Future<void> _showFileOptions(int messageId, String filename) async {
     final action = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
@@ -306,49 +303,53 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
     if (action == null || action == 'cancel') return;
     
     if (action == 'open') {
-      await _openFile(url, filename);
+      await _openFile(messageId, filename);
     } else {
-      await _downloadFile(url, filename);
+      await _downloadFile(messageId, filename);
     }
   }
 
-  Future<void> _openFile(String url, String filename) async {
+  Future<void> _openFile(int messageId, String filename) async {
     final api = ApiClient();
     try {
-      final response = await api.getFile(url);
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
+      );
+      
+      final response = await api.getChatFile(messageId);
       final bytes = response.data as List<int>;
       
-      if (kIsWeb) {
-        final blob = html.Blob([bytes]);
-        final blobUrl = html.Url.createObjectUrlFromBlob(blob);
-        html.window.open(blobUrl, '_blank');
-        Future.delayed(const Duration(seconds: 5), () {
-          html.Url.revokeObjectUrl(blobUrl);
-        });
-      }
+      if (mounted) Navigator.pop(context);
+      
+      await ChatTabPlatformSingleton.instance.openFile(Uint8List.fromList(bytes), filename);
+      
     } catch (e) {
       if (mounted) {
+        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
+          SnackBar(content: Text('Ошибка открытия: $e')),
         );
       }
     }
   }
 
-  Future<void> _downloadFile(String url, String filename) async {
+  Future<void> _downloadFile(int messageId, String filename) async {
     final api = ApiClient();
     try {
-      final response = await api.getFile(url);
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
+      );
+      
+      final response = await api.getChatFile(messageId);
       final bytes = response.data as List<int>;
       
-      if (kIsWeb) {
-        final blob = html.Blob([bytes]);
-        final blobUrl = html.Url.createObjectUrlFromBlob(blob);
-        final anchor = html.AnchorElement(href: blobUrl)
-          ..download = filename;
-        anchor.click();
-        html.Url.revokeObjectUrl(blobUrl);
-      }
+      if (mounted) Navigator.pop(context);
+      
+      await ChatTabPlatformSingleton.instance.downloadFile(Uint8List.fromList(bytes), filename);
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -357,78 +358,79 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
       }
     } catch (e) {
       if (mounted) {
+        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
+          SnackBar(content: Text('Ошибка скачивания: $e')),
         );
       }
     }
   }
 
   Future<void> _sendMessage() async {
-  final t = AppLocalizations.of(context)!;
-  final text = _messageController.text.trim();
-  final hasFile = _attachmentFile != null || _webFile != null;
-  
-  if (text.isEmpty && !hasFile) return;
-
-  // Показываем индикатор загрузки
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (context) => const Center(child: CircularProgressIndicator()),
-  );
-
-  final api = ApiClient();
-  try {
-    String? attachmentUrl;
+    final t = AppLocalizations.of(context)!;
+    final text = _messageController.text.trim();
+    final hasFile = _attachmentFile != null || _webFile != null;
     
-    if (hasFile) {
-      Uint8List fileBytes;
-      String fileName;
+    if (text.isEmpty && !hasFile) return;
 
-      if (_attachmentFile != null) {
-        fileBytes = await _attachmentFile!.readAsBytes();
-        fileName = _attachmentFile!.name;
-      } else {
-        fileBytes = _webFile!.bytes!;
-        fileName = _webFile!.name;
+    // Показываем индикатор загрузки
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    final api = ApiClient();
+    try {
+      String? attachmentUrl;
+      
+      if (hasFile) {
+        Uint8List fileBytes;
+        String fileName;
+
+        if (_attachmentFile != null) {
+          fileBytes = await _attachmentFile!.readAsBytes();
+          fileName = _attachmentFile!.name;
+        } else {
+          fileBytes = _webFile!.bytes!;
+          fileName = _webFile!.name;
+        }
+
+        final compressedBytes = await ImageCompression.compressImage(fileBytes);
+
+        final uploadRes = await api.uploadChatFile(
+          companyId: widget.companyId,
+          bytes: compressedBytes,
+          filename: fileName,
+        );
+        attachmentUrl = uploadRes['url'];
       }
 
-      final compressedBytes = await ImageCompression.compressImage(fileBytes);
+      await api.post('/chat/company/${widget.companyId}', data: {
+        'message': text,
+        'attachment_url': attachmentUrl,
+      });
 
-      final uploadRes = await api.uploadChatFile(
-        companyId: widget.companyId,
-        bytes: compressedBytes,
-        filename: fileName,
-      );
-      attachmentUrl = uploadRes['url'];
+      _messageController.clear();
+      setState(() {
+        _attachmentFile = null;
+        _webFile = null;
+      });
+      
+      widget.onUnreadMessagesChanged?.call(0);
+      await _markChatRead();
+      _lastVisit = DateTime.now();
+      
+      // Закрываем индикатор
+      if (mounted) Navigator.pop(context);
+      
+    } catch (e) {
+      if (mounted) Navigator.pop(context);
+      print('Error sending message: $e');
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('${t.sendError}: $e')));
     }
-
-    await api.post('/chat/company/${widget.companyId}', data: {
-      'message': text,
-      'attachment_url': attachmentUrl,
-    });
-
-    _messageController.clear();
-    setState(() {
-      _attachmentFile = null;
-      _webFile = null;
-    });
-    
-    widget.onUnreadMessagesChanged?.call(0);
-    await _markChatRead();
-    _lastVisit = DateTime.now();
-    
-    // Закрываем индикатор
-    if (mounted) Navigator.pop(context);
-    
-  } catch (e) {
-    if (mounted) Navigator.pop(context);
-    print('Error sending message: $e');
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text('${t.sendError}: $e')));
   }
-}
 
   Future<void> _clearChat() async {
     final t = AppLocalizations.of(context)!;
@@ -801,7 +803,7 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
                                 ),
                               )
                             : GestureDetector(
-                                onTap: () => _showFileOptions(msg['attachment_url'], msg['attachment_url'].split('/').last),
+                                onTap: () => _showFileOptions(msg['id'], msg['attachment_url'].split('/').last),
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                   decoration: BoxDecoration(

@@ -322,6 +322,15 @@ Future<Response> getFile(String path,
     final response = await _dio.post('/transactions/upload', data: formData);
     return response.data;
   }
+  
+  Future<Response> getChatFile(int messageId) async {
+  return await _dio.get(
+    '/chat/file/$messageId',
+    options: Options(
+      responseType: ResponseType.bytes,
+    ),
+  );
+}
 
   Future<Map<String, dynamic>> uploadCompanyLogo(
       {required int companyId, required Uint8List bytes, required String filename}) async {

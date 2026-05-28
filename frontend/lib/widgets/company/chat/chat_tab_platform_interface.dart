@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 abstract class ChatTabPlatform {
   Future<void> downloadFile(Uint8List bytes, String filename);
+  Future<void> openFile(Uint8List bytes, String filename);  // добавили
 }
 
 class ChatTabPlatformSingleton {
