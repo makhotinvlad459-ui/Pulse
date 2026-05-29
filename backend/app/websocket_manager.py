@@ -87,10 +87,11 @@ class ConnectionManager:
 
     # ========== ЧАТ ==========
     async def connect_chat(self, company_id: int, websocket: WebSocket):
-        # НЕ вызываем websocket.accept() - уже принято в роутере
+        print(f'🔵 CONNECT_CHAT CALLED for company {company_id}')
         if company_id not in self.active_chat_connections:
             self.active_chat_connections[company_id] = set()
         self.active_chat_connections[company_id].add(websocket)
+        print(f'✅ CONNECT_CHAT FINISHED, connections: {list(self.active_chat_connections.keys())}')
 
     def disconnect_chat(self, company_id: int, websocket: WebSocket):
         if company_id in self.active_chat_connections:
