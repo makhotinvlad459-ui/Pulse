@@ -275,13 +275,12 @@ class _AddTransactionDialogState extends ConsumerState<AddTransactionDialog> {
         
         // Отправляем сжатые байты
         final result = await api.uploadTransactionFile(
-          companyId: widget.companyId,
-          bytes: compressedBytes, 
+       companyId: widget.companyId,
+       bytes: compressedBytes,
           filename: fileName,
-        );
-        
+              );
+        print('Upload result: $result');  // добавь
         attachmentUrl = result['url'] ?? result['attachment_url'];
-      }
 
       // Отправка данных
       await api.post('/transactions/', queryParameters: {

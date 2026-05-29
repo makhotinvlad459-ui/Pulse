@@ -313,15 +313,20 @@ Future<Response> getFile(String path,
 
 // Добавь эти методы в класс ApiClient в файле api_client.dart
 
-  Future<Map<String, dynamic>> uploadTransactionFile(
-      {required int companyId, required Uint8List bytes, required String filename}) async {
-    FormData formData = FormData.fromMap({
-      "file": MultipartFile.fromBytes(bytes, filename: filename),
-      "company_id": companyId,
-    });
-    final response = await _dio.post('/transactions/upload', data: formData);
-    return response.data;
-  }
+  Future<Map<String, dynamic>> uploadTransactionFile({
+  required int companyId,
+  required Uint8List bytes,
+  required String filename,
+}) async {
+  print('Uploading transaction file: $filename, size: ${bytes.length}');
+  FormData formData = FormData.fromMap({
+    "file": MultipartFile.fromBytes(bytes, filename: filename),
+    "company_id": companyId,
+  });
+  final response = await _dio.post('/transactions/upload', data: formData);
+  print('Upload response: ${response.data}');
+  return response.data;
+}
   
 
   Future<Map<String, dynamic>> uploadCompanyLogo(

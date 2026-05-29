@@ -265,116 +265,128 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
     );
   }
 
-  Future<void> _downloadFile(String url, String filename) async {
-    final t = AppLocalizations.of(context)!;
-    final api = ApiClient();
-    try {
-      final response = await api
-          .getFile(url, queryParameters: {'company_id': widget.companyId});
-      final bytes = response.data as List<int>;
-      if (kIsWeb) {
-        final blob = html.Blob([bytes]);
-        final objectUrl = html.Url.createObjectUrlFromBlob(blob);
-        final downloadLink = html.AnchorElement(href: objectUrl)
-          ..setAttribute('download', filename)
-          ..click();
-        html.Url.revokeObjectUrl(objectUrl);
-      } else {
-        final directory = await getApplicationDocumentsDirectory();
-        final file = File('${directory.path}/$filename');
-        await file.writeAsBytes(bytes);
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('${t.savedTo}: ${file.path}')));
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('${t.error}: $e')));
-    }
-  }
-
   Future<void> _showAttachment(String? url, int transactionId) async {
-    final t = AppLocalizations.of(context)!;
-    if (url == null) return;
-    final api = ApiClient();
-    try {
-      final response = await api.getFile('/transactions/$transactionId/photo',
-          queryParameters: {'company_id': widget.companyId});
-      final bytes = response.data as List<int>;
-      final uint8list = Uint8List.fromList(bytes);
-      final ext = url.split('.').last.toLowerCase();
-      if (ext == 'jpg' || ext == 'jpeg' || ext == 'png') {
-        showDialog(
-          context: context,
-          builder: (context) => Dialog(
-            insetPadding: const EdgeInsets.all(16),
-            child: Container(
-              width: MediaQuery.of(context).size.width * 0.9,
-              height: MediaQuery.of(context).size.height * 0.7,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Text(t.photo, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  ),
-                  Expanded(
-                    child: PhotoView(
-                      imageProvider: MemoryImage(uint8list),
-                      minScale: PhotoViewComputedScale.contained * 0.8,
-                      maxScale: PhotoViewComputedScale.covered * 3,
-                      backgroundDecoration: const BoxDecoration(color: Colors.transparent),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: Text(t.close),
-                  ),
-                ],
+  final t = AppLocalizations.of(context)!;
+  if (url == null) return;
+  
+  final isImage = url.toLowerCase().contains(RegExp(r'\.(jpg|jpeg|png|gif|webp)'));
+  
+  if (isImage) {
+    // Для изображений - открываем через PhotoView с прямой ссылкой
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        insetPadding: EdgeInsets.zero,
+        backgroundColor: Colors.transparent,
+        child: Stack(
+          children: [
+            PhotoView(
+              imageProvider: NetworkImage(url),
+              loadingBuilder: (context, event) => const Center(
+                child: CircularProgressIndicator(),
+              ),
+              errorBuilder: (context, error, stackTrace) => const Center(
+                child: Text(
+                  'Не удалось загрузить изображение',
+                  style: TextStyle(color: Colors.white),
+                ),
+              ),
+              backgroundDecoration: const BoxDecoration(color: Colors.black87),
+              minScale: PhotoViewComputedScale.contained * 0.8,
+              maxScale: PhotoViewComputedScale.covered * 3,
+            ),
+            Positioned(
+              top: 40,
+              right: 20,
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                onPressed: () => Navigator.pop(context),
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  } else {
+    // Для документов - скачиваем через бэкенд с авторизацией
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Скачать файл'),
+        content: Text(t.downloadPdf),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(t.cancel),
           ),
-        );
-      } else if (ext == 'pdf') {
-        final confirm = await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: Text(t.pdfFile),
-            content: Text(t.downloadPdf),
-            actions: [
-              TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: Text(t.cancel)),
-              TextButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  child: Text(t.download)),
-            ],
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(t.download),
           ),
-        );
-        if (confirm == true) {
-          final filename = url.split('/').last;
-          await _downloadFile('/transactions/$transactionId/photo', filename);
-        }
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(t.cannotDisplayFile)));
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+        ],
+      ),
+    );
+    
+    if (confirm == true) {
+      await _downloadTransactionFile(transactionId, url.split('/').last);
     }
   }
+}
 
-  String _getAccountType(int? accountId) {
-    if (accountId == null) return '';
-    try {
-      final acc = widget.accounts
-          .cast<Map<String, dynamic>>()
-          .firstWhere((a) => a['id'] == accountId);
-      return acc['type'] ?? '';
-    } catch (e) {
-      return '';
+Future<void> _downloadTransactionFile(int transactionId, String filename) async {
+  final api = ApiClient();
+  final t = AppLocalizations.of(context)!;
+  try {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+    
+    final response = await api.getTransactionFile(transactionId);
+    final bytes = response.data as List<int>;
+    
+    if (mounted) Navigator.pop(context);
+    
+    if (kIsWeb) {
+      final blob = html.Blob([bytes]);
+      final blobUrl = html.Url.createObjectUrlFromBlob(blob);
+      final anchor = html.AnchorElement(href: blobUrl)..download = filename;
+      anchor.click();
+      html.Url.revokeObjectUrl(blobUrl);
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${t.savedTo}: Загрузка начата')),
+      );
+    } else {
+      final directory = await getApplicationDocumentsDirectory();
+      final file = File('${directory.path}/$filename');
+      await file.writeAsBytes(bytes);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${t.savedTo}: ${file.path}')),
+      );
+    }
+  } catch (e) {
+    if (mounted) {
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${t.error}: $e')),
+      );
     }
   }
+}
+
+String _getAccountType(int? accountId) {
+  if (accountId == null) return '';
+  try {
+    final acc = widget.accounts
+        .cast<Map<String, dynamic>>()
+        .firstWhere((a) => a['id'] == accountId);
+    return acc['type'] ?? '';
+  } catch (e) {
+    return '';
+  }
+}
 
   @override
   Widget build(BuildContext context) {
