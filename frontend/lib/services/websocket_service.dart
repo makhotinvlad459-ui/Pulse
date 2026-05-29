@@ -37,15 +37,15 @@ class WebSocketService {
       if (bool.fromEnvironment('dart.vm.product')) {
         return 'wss://pulse-yourmoney.com/api';
       }
-      return 'ws://localhost:8000/api';
+      return 'ws://localhost:8000';
     }
     if (bool.fromEnvironment('dart.vm.product')) {
-      return 'wss://pulse-yourmoney.com/api';
+      return 'wss://pulse-yourmoney.com';
     }
     if (Platform.isAndroid) {
-      return 'ws://10.0.2.2:8000/api';
+      return 'ws://10.0.2.2:8000';
     }
-    return 'ws://localhost:8000/api';
+    return 'ws://localhost:8000';
   }
 
   // ✅ ИСПРАВЛЕНО: добавлен /ws/ в путь
