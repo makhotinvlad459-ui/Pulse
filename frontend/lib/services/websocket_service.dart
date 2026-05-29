@@ -35,7 +35,7 @@ class WebSocketService {
   static String get _baseUrl {
     if (kIsWeb) {
       if (bool.fromEnvironment('dart.vm.product')) {
-        return 'wss://pulse-yourmoney.com/api';
+        return 'wss://pulse-yourmoney.com';
       }
       return 'ws://localhost:8000';
     }
