@@ -372,6 +372,26 @@ async def delete_message(
     }, db)
     return {"detail": "Message deleted"}
 
+@router.get("/file/{message_id}")
+async def get_chat_file(
+    message_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from fastapi.responses import Response
+    import httpx
+    
+    result = await db.execute(select(ChatMessage).where(ChatMessage.id == message_id))
+    msg = result.scalar_one_or_none()
+    if not msg or not msg.attachment_url:
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(msg.attachment_url)
+        content = resp.content
+    
+    return Response(content=content, media_type="application/octet-stream")
+
 @router.post("/fcm-token")
 async def update_fcm_token(
     req: UpdateFCMTokenRequest,

@@ -333,6 +333,9 @@ Future<Response> getFile(String path,
     final response = await _dio.post('/companies/$companyId/logo', data: formData);
     return response.data;
   }
+  Future<Response> getChatFile(int messageId) async {
+  return await get('/chat/file/$messageId');
+}
 
   Future<void> changePassword(String oldPassword, String newPassword) async {
   await post('/auth/change-password', data: {
