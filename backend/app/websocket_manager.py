@@ -13,34 +13,42 @@ class ConnectionManager:
         self.active_user_connections: Dict[int, Set[WebSocket]] = {}
         self.redis_client = None
         self.pubsub = None
+        self._running = True
 
-    # ========== REDIS ИНИЦИАЛИЗАЦИЯ ==========
     async def init_redis(self):
-        """Инициализация Redis клиента"""
         print("🟢 Initializing Redis connection...")
         self.redis_client = await aioredis.from_url(settings.REDIS_URL, decode_responses=True)
         await self.redis_client.ping()
         print("✅ Redis connected")
 
     async def listen_redis_channels(self):
-        """Фоновая задача – слушает Redis и рассылает локальным клиентам"""
-        self.pubsub = self.redis_client.pubsub()
-        await self.pubsub.subscribe("pulse_events")
-        print("📡 Subscribed to 'pulse_events' channel")
-        
-        try:
-            async for message in self.pubsub.listen():
-                if message["type"] == "message":
-                    await self._handle_redis_message(message["data"])
-        except asyncio.CancelledError:
-            print("🔴 Redis listener cancelled")
-            if self.pubsub:
-                await self.pubsub.unsubscribe("pulse_events")
-        except Exception as e:
-            print(f"❌ Redis listener error: {e}")
+        while self._running:
+            try:
+                if self.redis_client is None:
+                    await self.init_redis()
+                
+                self.pubsub = self.redis_client.pubsub()
+                await self.pubsub.subscribe("pulse_events")
+                print("📡 Subscribed to 'pulse_events' channel")
+                
+                while self._running:
+                    try:
+                        # Ждем сообщение с таймаутом 30 секунд
+                        message = await asyncio.wait_for(self.pubsub.get_message(), timeout=30.0)
+                        if message and message["type"] == "message":
+                            await self._handle_redis_message(message["data"])
+                    except asyncio.TimeoutError:
+                        # Таймаут - просто продолжаем, чтобы проверить _running
+                        continue
+                    except Exception as e:
+                        print(f"❌ Redis listener error: {e}")
+                        break
+            except Exception as e:
+                print(f"❌ Redis connection error: {e}")
+                await asyncio.sleep(5)  # Ждем перед переподключением
+                continue
 
     async def _handle_redis_message(self, data: str):
-        """Обрабатывает сообщение из Redis и отправляет локальным клиентам"""
         try:
             payload = json.loads(data)
             event_type = payload.get("type")
@@ -78,14 +86,14 @@ class ConnectionManager:
             print(f"❌ Error handling Redis message: {e}")
 
     async def close_redis(self):
-        """Закрывает Redis соединения"""
+        self._running = False
         if self.pubsub:
             await self.pubsub.close()
         if self.redis_client:
             await self.redis_client.close()
         print("✅ Redis connections closed")
 
-    # ========== ЧАТ ==========
+    # ... остальные методы остаются без изменений ...
     async def connect_chat(self, company_id: int, websocket: WebSocket):
         print(f'🔵 CONNECT_CHAT CALLED for company {company_id}')
         if company_id not in self.active_chat_connections:
@@ -118,9 +126,7 @@ class ConnectionManager:
         except Exception as e:
             print(f"❌ Redis publish error: {e}")
 
-    # ========== ЗАДАЧИ ==========
     async def connect_task(self, company_id: int, websocket: WebSocket):
-        # НЕ вызываем websocket.accept() - уже принято в роутере
         if company_id not in self.active_task_connections:
             self.active_task_connections[company_id] = set()
         self.active_task_connections[company_id].add(websocket)
@@ -132,7 +138,6 @@ class ConnectionManager:
                 del self.active_task_connections[company_id]
 
     async def broadcast_task(self, company_id: int, message: dict):
-        """Публикует сообщение о задачах в Redis"""
         if not self.redis_client:
             return
         await self.redis_client.publish("pulse_events", json.dumps({
@@ -141,9 +146,7 @@ class ConnectionManager:
             "message": message
         }))
 
-    # ========== ПОЛЬЗОВАТЕЛЬСКИЕ УВЕДОМЛЕНИЯ ==========
     async def connect_user(self, user_id: int, websocket: WebSocket):
-        # НЕ вызываем websocket.accept() - уже принято в роутере
         if user_id not in self.active_user_connections:
             self.active_user_connections[user_id] = set()
         self.active_user_connections[user_id].add(websocket)
@@ -155,7 +158,6 @@ class ConnectionManager:
                 del self.active_user_connections[user_id]
 
     async def send_to_user(self, user_id: int, message: dict):
-        """Публикует уведомление пользователю в Redis"""
         if not self.redis_client:
             return
         await self.redis_client.publish("pulse_events", json.dumps({
@@ -165,7 +167,6 @@ class ConnectionManager:
         }))
 
     async def notify_company_members(self, company_id: int, message: dict, db):
-        """Получает всех членов компании и отправляет каждому через Redis"""
         from sqlalchemy import select
         from app.models import Company, CompanyMember
         
