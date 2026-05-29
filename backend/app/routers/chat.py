@@ -11,6 +11,8 @@ from app.database import get_db
 from app.models import User, Company, ChatMessage, TransactionComment, Transaction, CompanyMember, UserRole, UserChatVisit
 from app.deps import get_current_user
 from app.websocket_manager import manager
+import aiohttp
+from fastapi.responses import Response
 
 router = APIRouter(prefix="/chat", tags=["chat"], redirect_slashes=False)
 
@@ -372,25 +374,6 @@ async def delete_message(
     }, db)
     return {"detail": "Message deleted"}
 
-@router.get("/file/{message_id}")
-async def get_chat_file(
-    message_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    from fastapi.responses import Response
-    import httpx
-    
-    result = await db.execute(select(ChatMessage).where(ChatMessage.id == message_id))
-    msg = result.scalar_one_or_none()
-    if not msg or not msg.attachment_url:
-        raise HTTPException(status_code=404, detail="File not found")
-    
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(msg.attachment_url)
-        content = resp.content
-    
-    return Response(content=content, media_type="application/octet-stream")
 
 @router.post("/fcm-token")
 async def update_fcm_token(
@@ -405,3 +388,20 @@ async def update_fcm_token(
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to update FCM token: {str(e)}")
+    
+@router.get("/file/{message_id}")
+async def get_chat_file(
+    message_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    result = await db.execute(select(ChatMessage).where(ChatMessage.id == message_id))
+    msg = result.scalar_one_or_none()
+    if not msg or not msg.attachment_url:
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    async with aiohttp.ClientSession() as session:
+        async with session.get(msg.attachment_url) as resp:
+            content = await resp.read()
+    
+    return Response(content=content, media_type="application/octet-stream")

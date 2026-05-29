@@ -284,41 +284,18 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
 
   // Скачивание файла через прямую ссылку (с авторизацией)
   Future<void> _downloadFile(int messageId, String filename) async {
-  print('📥 Downloading file: messageId=$messageId, filename=$filename');
   final api = ApiClient();
   try {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(child: CircularProgressIndicator()),
-    );
-    
-    print('📥 Calling getChatFile...');
     final response = await api.getChatFile(messageId);
-    print('📥 Response status: ${response.statusCode}');
-    print('📥 Response data length: ${response.data.length}');
-    
     final bytes = response.data as List<int>;
-    
-    if (mounted) Navigator.pop(context);
     
     final blob = html.Blob([bytes]);
     final blobUrl = html.Url.createObjectUrlFromBlob(blob);
     final anchor = html.AnchorElement(href: blobUrl)..download = filename;
     anchor.click();
     html.Url.revokeObjectUrl(blobUrl);
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Файл сохранен')),
-    );
   } catch (e) {
-    print('❌ Error: $e');
-    if (mounted) {
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка: $e')),
-      );
-    }
+    print('Error: $e');
   }
 }
 
