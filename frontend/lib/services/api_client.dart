@@ -335,7 +335,7 @@ Future<Response> getFile(String path,
   }
   Future<Response> getChatFile(int messageId) async {
   final response = await dio.get(
-    '/api/chat/file/$messageId',
+    '/chat/file/$messageId',
     options: Options(
       responseType: ResponseType.bytes,  // важно!
     ),

@@ -287,15 +287,25 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
   final api = ApiClient();
   try {
     final response = await api.getChatFile(messageId);
-    final bytes = response.data as List<int>;
+    // Важно: response.data может быть String, нужно конвертировать
+    final bytes = response.data is List<int> 
+        ? response.data as List<int>
+        : Uint8List.fromList((response.data as String).codeUnits);
     
     final blob = html.Blob([bytes]);
     final blobUrl = html.Url.createObjectUrlFromBlob(blob);
     final anchor = html.AnchorElement(href: blobUrl)..download = filename;
     anchor.click();
     html.Url.revokeObjectUrl(blobUrl);
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Файл сохранен')),
+    );
   } catch (e) {
     print('Error: $e');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Ошибка: $e')),
+    );
   }
 }
 
