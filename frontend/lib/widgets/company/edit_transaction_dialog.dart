@@ -328,56 +328,67 @@ class _EditTransactionDialogState extends ConsumerState<EditTransactionDialog> {
   }
 
   Future<void> _save() async {
-    final t = AppLocalizations.of(context)!;
-    if (!_formKey.currentState!.validate()) return;
+  final t = AppLocalizations.of(context)!;
+  if (!_formKey.currentState!.validate()) return;
+  
+  setState(() => _loading = true);
+  final api = ApiClient();
+  
+  try {
+    String? attachmentUrl = widget.transaction['attachment_url'];
     
-    setState(() => _loading = true);
-    final api = ApiClient();
-    
-    try {
-      // Изначально берем текущий URL из транзакции
-      String? attachmentUrl = widget.transaction['attachment_url'];
-
-      // Если пользователь выбрал НОВЫЙ файл, сжимаем и загружаем его
-      if (_photo != null || _webFile != null) {
-        final bytes = _webFile != null ? _webFile!.bytes! : await _photo!.readAsBytes();
-        final fileName = _webFile != null ? _webFile!.name : _photo!.name;
-        
-        final compressedBytes = await ImageCompression.compressImage(bytes);
-        
-        final result = await api.uploadTransactionFile(
-          companyId: widget.companyId,
-          bytes: compressedBytes,
-          filename: fileName,
-        );
-        attachmentUrl = result['url'] ?? result['attachment_url'];
-      }
-
-      // Отправка PATCH запроса с обновленными данными
-      await api.patch('/transactions/${widget.transaction['id']}', queryParameters: {
-        'company_id': widget.companyId
-      }, data: {
-        'type': _type,
-        'amount': _selectedProducts.isNotEmpty ? _selectedProducts.fold(0.0, (sum, item) => sum + (item['total'] as double)) : _amount,
-        'date': _date.toIso8601String(),
-        'account_id': _accountId,
-        'category_id': _categoryId,
-        'description': _description,
-        'counterparty': _counterparty,
-        'attachment_url': attachmentUrl,
-        'products': _selectedProducts.isNotEmpty ? _selectedProducts : null,
-      });
-
-      await widget.onSuccess();
-      if (mounted) Navigator.pop(context);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
-      }
-    } finally {
-      if (mounted) setState(() => _loading = false);
+    // Если пользователь удалил вложение через кнопку удаления
+    if (!_hasExistingAttachment && _photo == null && _webFile == null) {
+      attachmentUrl = null;  // Явно удаляем вложение
     }
+    
+    // Если пользователь выбрал НОВЫЙ файл
+    if (_photo != null || _webFile != null) {
+      final bytes = _webFile != null ? _webFile!.bytes! : await _photo!.readAsBytes();
+      final fileName = _webFile != null ? _webFile!.name : _photo!.name;
+      
+      final compressedBytes = await ImageCompression.compressImage(bytes);
+      
+      final result = await api.uploadTransactionFile(
+        companyId: widget.companyId,
+        bytes: compressedBytes,
+        filename: fileName,
+      );
+      attachmentUrl = result['url'] ?? result['attachment_url'];
+    }
+    
+    // Формируем данные для отправки
+    final data = {
+      'type': _type,
+      'amount': _selectedProducts.isNotEmpty ? _selectedProducts.fold(0.0, (sum, item) => sum + (item['total'] as double)) : _amount,
+      'date': _date.toIso8601String(),
+      'account_id': _accountId,
+      'category_id': _categoryId,
+      'description': _description,
+      'counterparty': _counterparty,
+      'attachment_url': attachmentUrl,
+      'products': _selectedProducts.isNotEmpty ? _selectedProducts : null,
+    };
+    
+    // Добавляем флаг удаления, если нужно
+    if (!_hasExistingAttachment && _photo == null && _webFile == null && widget.transaction['attachment_url'] != null) {
+      data['delete_attachment'] = true;
+    }
+    
+    await api.patch('/transactions/${widget.transaction['id']}', queryParameters: {
+      'company_id': widget.companyId
+    }, data: data);
+    
+    await widget.onSuccess();
+    if (mounted) Navigator.pop(context);
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+    }
+  } finally {
+    if (mounted) setState(() => _loading = false);
   }
+}
 
   Future<void> _deleteTransaction() async {
     final t = AppLocalizations.of(context)!;
