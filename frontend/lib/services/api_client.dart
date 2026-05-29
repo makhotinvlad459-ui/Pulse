@@ -334,7 +334,13 @@ Future<Response> getFile(String path,
     return response.data;
   }
   Future<Response> getChatFile(int messageId) async {
-  return await get('/chat/file/$messageId');
+  final response = await dio.get(
+    '/api/chat/file/$messageId',
+    options: Options(
+      responseType: ResponseType.bytes,  // важно!
+    ),
+  );
+  return response;
 }
 
   Future<void> changePassword(String oldPassword, String newPassword) async {
