@@ -42,7 +42,7 @@ async def check_company_access(company_id: int, user: User, db: AsyncSession) ->
     print(f"Company access result: {company is not None}")
     return company is not None
 
-@router.websocket("/api/ws/chat/{company_id}")
+@router.websocket("/ws/chat/{company_id}")
 async def websocket_chat(
     websocket: WebSocket,
     company_id: int,
@@ -82,7 +82,7 @@ async def websocket_chat(
         print(f"🔌 Chat WebSocket disconnected for company {company_id}")
         manager.disconnect_chat(company_id, websocket)
 
-@router.websocket("/api/ws/tasks/{company_id}")
+@router.websocket("/ws/tasks/{company_id}")
 async def websocket_tasks(
     websocket: WebSocket,
     company_id: int,
