@@ -130,7 +130,6 @@ class _AddTransactionDialogState extends ConsumerState<AddTransactionDialog> {
     } else {
       final picker = ImagePicker();
       final picked = await picker.pickImage(source: ImageSource.camera);
-      // Сохраняем XFile, сжатие будет в _submit
       if (picked != null) {
         setState(() {
           _photo = picked;
@@ -265,22 +264,21 @@ class _AddTransactionDialogState extends ConsumerState<AddTransactionDialog> {
     try {
       String? attachmentUrl;
 
-      // Обработка файла: сжатие происходит здесь
+      // Обработка файла
       if (_photo != null || _webFile != null) {
         final bytes = _webFile != null ? _webFile!.bytes! : await _photo!.readAsBytes();
         final fileName = _webFile != null ? _webFile!.name : _photo!.name;
         
-        // Сжимаем байты
         final compressedBytes = await ImageCompression.compressImage(bytes);
         
-        // Отправляем сжатые байты
         final result = await api.uploadTransactionFile(
-       companyId: widget.companyId,
-       bytes: compressedBytes,
+          companyId: widget.companyId,
+          bytes: compressedBytes, 
           filename: fileName,
-              );
-        print('Upload result: $result');  // добавь
+        );
+        
         attachmentUrl = result['url'] ?? result['attachment_url'];
+      }
 
       // Отправка данных
       await api.post('/transactions/', queryParameters: {
