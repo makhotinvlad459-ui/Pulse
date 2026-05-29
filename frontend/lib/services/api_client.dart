@@ -318,13 +318,15 @@ Future<Response> getFile(String path,
   required Uint8List bytes,
   required String filename,
 }) async {
-  print('Uploading transaction file: $filename, size: ${bytes.length}');
   FormData formData = FormData.fromMap({
     "file": MultipartFile.fromBytes(bytes, filename: filename),
-    "company_id": companyId,
   });
-  final response = await _dio.post('/transactions/upload', data: formData);
-  print('Upload response: ${response.data}');
+  
+  final response = await _dio.post(
+    '/transactions/upload',
+    data: formData,
+    queryParameters: {'company_id': companyId},  // <-- company_id в query параметр
+  );
   return response.data;
 }
   
