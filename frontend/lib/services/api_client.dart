@@ -343,6 +343,16 @@ Future<Response> getFile(String path,
   return response;
 }
 
+  Future<Response> getTransactionFile(int transactionId) async {
+  final response = await dio.get(
+    '/transactions/$transactionId/file',
+    options: Options(
+      responseType: ResponseType.bytes,
+    ),
+  );
+  return response;
+}
+
   Future<void> changePassword(String oldPassword, String newPassword) async {
   await post('/auth/change-password', data: {
     'old_password': oldPassword,

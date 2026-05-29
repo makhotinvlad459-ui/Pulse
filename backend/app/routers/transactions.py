@@ -713,3 +713,23 @@ async def _sync_counterparty(company_id: int, name: str | None, db: AsyncSession
         )
         db.add(new_cp)
         await db.flush()
+
+@router.get("/{transaction_id}/file")
+async def get_transaction_file(
+    transaction_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    import aiohttp
+    from fastapi.responses import Response
+    
+    result = await db.execute(select(Transaction).where(Transaction.id == transaction_id))
+    transaction = result.scalar_one_or_none()
+    if not transaction or not transaction.attachment_url:
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    async with aiohttp.ClientSession() as session:
+        async with session.get(transaction.attachment_url) as resp:
+            content = await resp.read()
+    
+    return Response(content=content, media_type="application/octet-stream")        
