@@ -14,7 +14,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["websocket"])
 
 async def get_user_from_token(token: str, db: AsyncSession) -> User | None:
-    """Извлекает пользователя из JWT токена"""
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         user_id = payload.get("sub")
@@ -23,12 +22,11 @@ async def get_user_from_token(token: str, db: AsyncSession) -> User | None:
         result = await db.execute(select(User).where(User.id == int(user_id)))
         return result.scalar_one_or_none()
     except JWTError as e:
-        logger.error(f"JWT Error: {e}")
+        print(f"JWT Error: {e}")
         return None
 
 async def check_company_access(company_id: int, user: User, db: AsyncSession) -> bool:
-    """Проверяет, имеет ли пользователь доступ к компании"""
-    logger.info(f"Checking access for user {user.id} (role={user.role}) to company {company_id}")
+    print(f"Checking access for user {user.id} (role={user.role}) to company {company_id}")
     if user.role == "founder":
         result = await db.execute(
             select(Company).where(Company.id == company_id, Company.founder_id == user.id)
@@ -41,7 +39,7 @@ async def check_company_access(company_id: int, user: User, db: AsyncSession) ->
             )
         )
     company = result.scalar_one_or_none()
-    logger.info(f"Company access result: {company is not None}")
+    print(f"Company access result: {company is not None}")
     return company is not None
 
 @router.websocket("/ws/chat/{company_id}")
@@ -50,43 +48,38 @@ async def websocket_chat(
     company_id: int,
     db: AsyncSession = Depends(get_db)
 ):
-    logger.info(f"🔌 Chat WebSocket connection attempt for company {company_id}")
-    
-    try:
-        await websocket.accept()
-        logger.info("✅ WebSocket accepted")
-    except Exception as e:
-        logger.error(f"Failed to accept websocket: {e}")
-        return
+    print(f"🔴 WEBSOCKET CHAT CALLED for company {company_id}")
+    await websocket.accept()
+    print("✅ WebSocket accepted")
     
     token = websocket.query_params.get("token")
-    logger.info(f"🔑 Token received: {token[:50] if token else 'None'}...")
+    print(f"Token: {token[:50] if token else 'None'}...")
     
     if not token:
-        logger.error("❌ No token")
+        print("❌ No token")
         await websocket.close(code=1008, reason="Missing token")
         return
     
     user = await get_user_from_token(token, db)
-    logger.info(f"👤 User found: {user.id if user else None}")
+    print(f"User found: {user.id if user else None}")
     
     if not user:
-        logger.error("❌ Invalid token")
+        print("❌ Invalid token")
         await websocket.close(code=1008, reason="Invalid token")
         return
     
     if not await check_company_access(company_id, user, db):
-        logger.error(f"❌ Access denied to company {company_id}")
+        print(f"❌ Access denied to company {company_id}")
         await websocket.close(code=1008, reason="Access denied to this company")
         return
     
-    logger.info(f"✅ Access granted, connecting to chat {company_id}")
+    print(f"✅ Access granted, connecting to chat {company_id}")
     await manager.connect_chat(company_id, websocket)
     try:
         while True:
             await websocket.receive_text()
     except WebSocketDisconnect:
-        logger.info(f"🔌 Chat WebSocket disconnected for company {company_id}")
+        print(f"🔌 Chat WebSocket disconnected for company {company_id}")
         manager.disconnect_chat(company_id, websocket)
 
 @router.websocket("/ws/tasks/{company_id}")
@@ -96,21 +89,17 @@ async def websocket_tasks(
     db: AsyncSession = Depends(get_db)
 ):
     await websocket.accept()
-    
     token = websocket.query_params.get("token")
     if not token:
         await websocket.close(code=1008, reason="Missing token")
         return
-    
     user = await get_user_from_token(token, db)
     if not user:
         await websocket.close(code=1008, reason="Invalid token")
         return
-    
     if not await check_company_access(company_id, user, db):
         await websocket.close(code=1008, reason="Access denied to this company")
         return
-    
     await manager.connect_task(company_id, websocket)
     try:
         while True:
@@ -125,17 +114,14 @@ async def websocket_user(
     db: AsyncSession = Depends(get_db)
 ):
     await websocket.accept()
-    
     token = websocket.query_params.get("token")
     if not token:
         await websocket.close(code=1008, reason="Missing token")
         return
-    
     user = await get_user_from_token(token, db)
     if not user or user.id != user_id:
         await websocket.close(code=1008, reason="Unauthorized")
         return
-    
     await manager.connect_user(user_id, websocket)
     try:
         while True:
