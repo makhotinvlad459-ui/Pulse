@@ -59,7 +59,7 @@ app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
 routers = [
     auth_router, companies.router, accounts.router, categories.router,
     transactions.router, statistics.router, admin.router, chat.router,
-    tasks.router, websocket.router, notifications.router, products.router,
+    tasks.router, notifications.router, products.router,
     showcase.router, permissions.router, orders.router, counterparties.router,
     subscription.router
 ]
@@ -85,6 +85,7 @@ for router in routers:
             )
     
     app.include_router(router, prefix="/api")
+    app.include_router(websocket.router)
 
 # Статика
 UPLOAD_DIR = "uploads"
