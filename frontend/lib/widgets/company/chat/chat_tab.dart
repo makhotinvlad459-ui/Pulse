@@ -75,7 +75,7 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
     final origin = Uri.base.origin;
     final wsScheme = origin.startsWith('https') ? 'wss' : 'ws';
     final wsBase = origin.replaceFirst(RegExp(r'^https?://'), '');
-    final chatUrl = '$wsScheme://$wsBase/api/ws/chat/${widget.companyId}?token=$token';
+    final chatUrl = '$wsScheme://$wsBase/ws/chat/${widget.companyId}?token=$token';
 
 
     print('🔌 Connecting to Chat WebSocket: $chatUrl');
