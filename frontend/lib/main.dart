@@ -9,6 +9,7 @@ import 'providers/locale_provider.dart';
 import 'screens/forgot_password_screen.dart';
 import 'screens/reset_password_screen.dart';
 import 'services/websocket_service.dart';
+import 'services/push_notifications.dart';  // Добавь импорт
 import 'package:frontend/l10n/app_localizations.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -18,11 +19,23 @@ void main() {
   runApp(const ProviderScope(child: MyApp()));
 }
 
-class MyApp extends ConsumerWidget {
+class MyApp extends ConsumerStatefulWidget {
   const MyApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends ConsumerState<MyApp> {
+  @override
+  void initState() {
+    super.initState();
+    // Инициализация push-уведомлений
+    PushNotificationsService.init();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final appTheme = ref.watch(themeProvider);
     final themeData = getThemeData(appTheme);
     final locale = ref.watch(localeProvider);

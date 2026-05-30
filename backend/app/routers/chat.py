@@ -13,6 +13,7 @@ from app.deps import get_current_user
 from app.websocket_manager import manager
 import aiohttp
 from fastapi.responses import Response
+from app.websocket_manager import manager, send_push_notification
 
 router = APIRouter(prefix="/chat", tags=["chat"], redirect_slashes=False)
 
@@ -154,13 +155,47 @@ async def send_chat_message(
         print("✅ WebSocket broadcast sent")
     except Exception as ws_error:
         print(f"❌ WebSocket broadcast error: {ws_error}")
-        # Не прерываем выполнение, даже если WebSocket не работает
     
     # Уведомляем о необходимости обновить счетчики
     await manager.notify_company_members(company_id, {
         "type": "update_counters",
         "company_id": company_id
     }, db)
+    
+    # ========== PUSH УВЕДОМЛЕНИЯ ==========
+    # Получаем всех членов компании
+    from app.models import CompanyMember, User
+    
+    # Получаем ID всех членов компании
+    members_result = await db.execute(
+        select(CompanyMember.user_id).where(CompanyMember.company_id == company_id)
+    )
+    member_ids = [row[0] for row in members_result.all()]
+    
+    # Добавляем основателя
+    result = await db.execute(select(Company).where(Company.id == company_id))
+    company = result.scalar_one_or_none()
+    if company and company.founder_id not in member_ids:
+        member_ids.append(company.founder_id)
+    
+    # Отправляем push каждому члену компании (кроме отправителя)
+    for member_id in member_ids:
+        if member_id != current_user.id:
+            # Получаем токен пользователя
+            user_result = await db.execute(select(User).where(User.id == member_id))
+            user = user_result.scalar_one_or_none()
+            if user and user.fcm_token:
+                await send_push_notification(
+                    user.fcm_token,
+                    title=f"Новое сообщение от {current_user.display_name}",
+                    body=msg.message[:100] if msg.message else "📎 Вложение",
+                    data={
+                        "chat_id": str(company_id),
+                        "message_id": str(new_msg.id)
+                    }
+                )
+                print(f"📱 Push sent to user {member_id}")
+    # ===================================
     
     # Возвращаем ответ
     return ChatMessageResponse(

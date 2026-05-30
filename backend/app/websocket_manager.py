@@ -4,7 +4,11 @@ from typing import Dict, Set
 from fastapi import WebSocket
 import redis.asyncio as aioredis
 from app.config import settings
+import aiohttp
+import google.auth.transport.requests
+from google.oauth2 import service_account
 
+SERVICE_ACCOUNT_FILE = "firebase-key.json"
 
 class ConnectionManager:
     def __init__(self):
@@ -181,6 +185,50 @@ class ConnectionManager:
         
         for uid in member_ids:
             await self.send_to_user(uid, message)
+
+def get_firebase_token():
+    credentials = service_account.Credentials.from_service_account_file(
+        SERVICE_ACCOUNT_FILE,
+        scopes=['https://www.googleapis.com/auth/firebase.messaging']
+    )
+    auth_req = google.auth.transport.requests.Request()
+    credentials.refresh(auth_req)
+    return credentials.token
+
+async def send_push_notification(fcm_token: str, title: str, body: str, data: dict = None):
+    if not fcm_token:
+        return
+    
+    try:
+        access_token = get_firebase_token()
+        url = f"https://fcm.googleapis.com/v1/projects/pulse-yourmoney/messages:send"
+        
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "message": {
+                "token": fcm_token,
+                "notification": {
+                    "title": title,
+                    "body": body
+                },
+                "webpush": {
+                    "fcm_options": {
+                        "link": "https://pulse-yourmoney.com"
+                    }
+                }
+            }
+        }
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, json=payload) as resp:
+                if resp.status != 200:
+                    print(f"Push error: {await resp.text()}")
+    except Exception as e:
+        print(f"Push exception: {e}")            
 
 
 manager = ConnectionManager()
