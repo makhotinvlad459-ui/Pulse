@@ -244,29 +244,31 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
     });
   }
 
-  Future<void> _showPhotoViewer(String url) async {
+  // НОВЫЙ МЕТОД - загружает фото через API
+Future<void> _showPhotoViaApi(int messageId) async {
+  final api = ApiClient();
+  try {
     showDialog(
       context: context,
-      barrierDismissible: true,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+    
+    final response = await api.getChatFile(messageId);
+    final bytes = response.data is List<int> 
+        ? response.data as List<int>
+        : Uint8List.fromList((response.data as String).codeUnits);
+    
+    if (mounted) Navigator.pop(context);
+    
+    showDialog(
+      context: context,
       builder: (context) => Dialog(
-        insetPadding: EdgeInsets.zero,
         backgroundColor: Colors.transparent,
         child: Stack(
           children: [
-            PhotoView(
-              imageProvider: NetworkImage(url),
-              loadingBuilder: (context, event) => const Center(
-                child: CircularProgressIndicator(),
-              ),
-              errorBuilder: (context, error, stackTrace) => const Center(
-                child: Text(
-                  'Не удалось загрузить изображение',
-                  style: TextStyle(color: Colors.white),
-                ),
-              ),
-              backgroundDecoration: const BoxDecoration(color: Colors.black87),
-              minScale: PhotoViewComputedScale.contained * 0.8,
-              maxScale: PhotoViewComputedScale.covered * 3,
+            InteractiveViewer(
+              child: Image.memory(bytes),
             ),
             Positioned(
               top: 40,
@@ -276,11 +278,54 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
                 onPressed: () => Navigator.pop(context),
               ),
             ),
+            Positioned(
+              bottom: 20,
+              right: 20,
+              child: IconButton(
+                icon: const Icon(Icons.download, color: Colors.white, size: 30),
+                onPressed: () => _downloadFile(messageId, 'photo.jpg'),
+              ),
+            ),
           ],
         ),
       ),
     );
+  } catch (e) {
+    if (mounted) {
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка: $e')),
+      );
+    }
   }
+}
+
+
+// Скачивание файла через API (по ID)
+Future<void> _downloadFile(int messageId, String filename) async {
+  final api = ApiClient();
+  try {
+    final response = await api.getChatFile(messageId);
+    final bytes = response.data is List<int> 
+        ? response.data as List<int>
+        : Uint8List.fromList((response.data as String).codeUnits);
+    
+    final blob = html.Blob([bytes]);
+    final blobUrl = html.Url.createObjectUrlFromBlob(blob);
+    final anchor = html.AnchorElement(href: blobUrl)..download = filename;
+    anchor.click();
+    html.Url.revokeObjectUrl(blobUrl);
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Файл сохранен')),
+    );
+  } catch (e) {
+    print('Error: $e');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Ошибка: $e')),
+    );
+  }
+}
 
   // Скачивание файла через прямую ссылку (с авторизацией)
   Future<void> _downloadFile(int messageId, String filename) async {
@@ -719,7 +764,7 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
                       if (hasAttachment)
                         isImage
                             ? GestureDetector(
-                                onTap: () => _showPhotoViewer(msg['attachment_url']),
+                                onTap: () => _showPhotoViaApi(msg['id']),
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(12),
                                   child: Image.network(
