@@ -248,41 +248,68 @@ Future<Response> getFile(String path,
     });
   }
 
-    Future<Map<String, dynamic>> uploadChatFile({
+    // Замените существующий метод uploadChatFile на этот:
+Future<Map<String, dynamic>> uploadChatFile({
   required int companyId,
   required Uint8List bytes,
   required String filename,
 }) async {
   try {
-    final uri = Uri.parse('$baseUrl/chat/upload');
-    final request = http.MultipartRequest('POST', uri)
-      ..headers['Authorization'] = 'Bearer ${await getToken()}';
-    
-    // Добавляем файл
-    request.files.add(http.MultipartFile.fromBytes(
-      'file',
-      bytes,
-      filename: filename,
-    ));
-    
-    // Добавляем company_id как поле формы
-    request.fields['company_id'] = companyId.toString();
-    
-    print('Uploading file: $filename, size: ${bytes.length} bytes, company_id: $companyId');
-    
-    final streamedResponse = await request.send();
-    final response = await http.Response.fromStream(streamedResponse);
-    
-    print('Response status: ${response.statusCode}');
-    print('Response body: ${response.body}');
-    
-    if (response.statusCode != 200 && response.statusCode != 201) {
-      throw Exception('Failed to upload chat file: ${response.statusCode} - ${response.body}');
+    final token = await getToken();
+    if (token == null) {
+      throw Exception('No authentication token');
     }
     
-    return jsonDecode(response.body);
+    // Определяем content-type для файла
+    String contentType = 'application/octet-stream';
+    if (filename.toLowerCase().endsWith('.jpg') || 
+        filename.toLowerCase().endsWith('.jpeg')) {
+      contentType = 'image/jpeg';
+    } else if (filename.toLowerCase().endsWith('.png')) {
+      contentType = 'image/png';
+    } else if (filename.toLowerCase().endsWith('.gif')) {
+      contentType = 'image/gif';
+    } else if (filename.toLowerCase().endsWith('.pdf')) {
+      contentType = 'application/pdf';
+    }
+    
+    final formData = FormData.fromMap({
+      'company_id': companyId.toString(),
+      'file': MultipartFile.fromBytes(
+        bytes,
+        filename: filename,
+        contentType: MediaType.parse(contentType),
+      ),
+    });
+    
+    print('📤 Uploading to: /chat/upload');
+    print('   Company ID: $companyId');
+    print('   File: $filename (${bytes.length} bytes)');
+    print('   Content-Type: $contentType');
+    
+    final response = await _dio.post(
+      '/chat/upload',
+      data: formData,
+      options: Options(
+        headers: {
+          'Authorization': 'Bearer $token',
+        },
+        // Не устанавливайте contentType принудительно, Dio сам установит multipart/form-data с boundary
+      ),
+    );
+    
+    print('✅ Upload success: ${response.statusCode}');
+    print('   Response: ${response.data}');
+    
+    return response.data;
+  } on DioException catch (e) {
+    print('❌ Dio error in uploadChatFile:');
+    print('   Status: ${e.response?.statusCode}');
+    print('   Response: ${e.response?.data}');
+    print('   Headers: ${e.response?.headers}');
+    throw Exception('Upload failed: ${e.response?.data ?? e.message}');
   } catch (e) {
-    print('Error in uploadChatFile: $e');
+    print('❌ Unexpected error in uploadChatFile: $e');
     rethrow;
   }
 }
