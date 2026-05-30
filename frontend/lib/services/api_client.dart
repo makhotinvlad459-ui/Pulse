@@ -107,31 +107,53 @@ class ApiClient {
   }
 
   // Загрузка фото (мобильное устройство)
-  Future<String> uploadPhoto(String path, XFile photo,
-      {Map<String, dynamic>? queryParameters}) async {
-    final bytes = await photo.readAsBytes();
-    final multipartFile = MultipartFile.fromBytes(bytes, filename: photo.name);
-    final formData = FormData.fromMap({'file': multipartFile});
-    
-    final response = await _dio.post(path, data: formData, queryParameters: queryParameters);
-    
-    // Возвращаем URL, который прислал бэкенд
-    return response.data['url'] ?? response.data['attachment_url'] ?? '';
+  Future<Map<String, dynamic>> uploadChatFile({
+    required int companyId,
+    required Uint8List bytes,
+    required String filename,
+  }) async {
+    try {
+      final token = await getToken();
+      if (token == null) {
+        throw Exception('No authentication token');
+      }
+      
+      final formData = FormData.fromMap({
+        'company_id': companyId.toString(),
+        'file': MultipartFile.fromBytes(
+          bytes,
+          filename: filename,
+        ),
+      });
+      
+      print('📤 Uploading file to: /chat/upload');
+      print('   Company ID: $companyId');
+      print('   Filename: $filename');
+      print('   File size: ${bytes.length} bytes');
+      
+      final response = await _dio.post(
+        '/chat/upload',
+        data: formData,
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $token',
+          },
+        ),
+      );
+      
+      print('✅ Upload response: ${response.statusCode}');
+      print('   Data: ${response.data}');
+      
+      return response.data as Map<String, dynamic>;
+      
+    } on DioException catch (e) {
+      print('❌ Upload error: ${e.response?.statusCode} - ${e.response?.data}');
+      throw Exception('Upload failed: ${e.response?.data['detail'] ?? e.message}');
+    } catch (e) {
+      print('❌ Upload error: $e');
+      rethrow;
+    }
   }
-
-  // Загрузка байтов (для веб‑файлов)
-  Future<String> uploadPhotoBytes(String path, List<int> bytes, String filename,
-      {Map<String, dynamic>? queryParameters}) async {
-    final multipartFile = MultipartFile.fromBytes(bytes, filename: filename);
-    final formData = FormData.fromMap({'file': multipartFile});
-    
-    final response = await _dio.post(path, data: formData, queryParameters: queryParameters);
-    
-    // Возвращаем URL, который прислал бэкенд
-    return response.data['url'] ?? response.data['attachment_url'] ?? '';
-  }
-  // Получение файла
-  // Получение файла (с авторизацией)
 Future<Response> getFile(String path,
     {Map<String, dynamic>? queryParameters}) async {
   final token = await getToken();
