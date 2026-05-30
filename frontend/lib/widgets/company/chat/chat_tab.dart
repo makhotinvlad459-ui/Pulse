@@ -829,7 +829,8 @@ Future<void> _downloadFile(int messageId, String filename) async {
               constraints: const BoxConstraints(),
             ),
           ),
-      ],
-    ),
-  );
+        ],
+      ),
+    );
+  }
 }
