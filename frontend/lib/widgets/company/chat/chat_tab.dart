@@ -391,6 +391,21 @@ Future<void> _downloadFile(int messageId, String filename) async {
     }
   }
 
+  Future<Uint8List?> _getImageBytes(int messageId) async {
+  final api = ApiClient();
+  try {
+    final response = await api.getChatFile(messageId);
+    if (response.data is List<int>) {
+      return Uint8List.fromList(response.data as List<int>);
+    } else if (response.data is String) {
+      return Uint8List.fromList((response.data as String).codeUnits);
+    }
+  } catch (e) {
+    print('Error loading image $messageId: $e');
+  }
+  return null;
+}
+
   Future<void> _clearChat() async {
     final t = AppLocalizations.of(context)!;
     final confirm = await showDialog<bool>(
@@ -678,136 +693,143 @@ Future<void> _downloadFile(int messageId, String filename) async {
   }
 
   Widget _buildMessageBubble(
-      bool isMe, String displayName, Map<String, dynamic> msg, bool isFounder, ColorScheme colorScheme, AppLocalizations t) {
-    final hasAttachment = msg['attachment_url'] != null && msg['attachment_url'].toString().isNotEmpty;
-    final isImage = hasAttachment && msg['attachment_url'].toString().contains(RegExp(r'\.(jpg|jpeg|png|gif|webp)', caseSensitive: false));
-    
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          CircleAvatar(
-            radius: 16,
-            backgroundColor: isMe ? colorScheme.primary : colorScheme.primaryContainer,
-            child: Text(
-              displayName.isNotEmpty ? displayName[0].toUpperCase() : 'U',
-              style: TextStyle(
-                color: isMe ? colorScheme.onPrimary : colorScheme.onPrimaryContainer,
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-              ),
+    bool isMe, String displayName, Map<String, dynamic> msg, bool isFounder, ColorScheme colorScheme, AppLocalizations t) {
+  final hasAttachment = msg['attachment_url'] != null && msg['attachment_url'].toString().isNotEmpty;
+  final isImage = hasAttachment && msg['attachment_url'].toString().contains(RegExp(r'\.(jpg|jpeg|png|gif|webp)', caseSensitive: false));
+  
+  return Container(
+    margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        CircleAvatar(
+          radius: 16,
+          backgroundColor: isMe ? colorScheme.primary : colorScheme.primaryContainer,
+          child: Text(
+            displayName.isNotEmpty ? displayName[0].toUpperCase() : 'U',
+            style: TextStyle(
+              color: isMe ? colorScheme.onPrimary : colorScheme.onPrimaryContainer,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
             ),
           ),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+        ),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(
+                    displayName,
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: isMe ? colorScheme.primary : colorScheme.onSurface),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    DateFormat('HH:mm').format(DateTime.parse(msg['created_at']).toLocal()),
+                    style: TextStyle(fontSize: 10, color: colorScheme.onSurfaceVariant),
+                  ),
+                  if (msg['edited'] == true)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4),
+                      child: Text(t.editedLabel, style: TextStyle(fontSize: 9, color: colorScheme.onSurfaceVariant)),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: isMe ? colorScheme.primaryContainer : colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      displayName,
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: isMe ? colorScheme.primary : colorScheme.onSurface),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      DateFormat('HH:mm').format(DateTime.parse(msg['created_at']).toLocal()),
-                      style: TextStyle(fontSize: 10, color: colorScheme.onSurfaceVariant),
-                    ),
-                    if (msg['edited'] == true)
-                      Padding(
-                        padding: const EdgeInsets.only(left: 4),
-                        child: Text(t.editedLabel, style: TextStyle(fontSize: 9, color: colorScheme.onSurfaceVariant)),
+                    if (hasAttachment)
+                      isImage
+                          ? GestureDetector(
+                              onTap: () => _showPhotoViaApi(msg['id']),
+                              child: FutureBuilder<Uint8List?>(
+                                future: _getImageBytes(msg['id']),
+                                builder: (context, snapshot) {
+                                  if (snapshot.connectionState == ConnectionState.waiting) {
+                                    return Container(
+                                      height: 200,
+                                      width: double.infinity,
+                                      color: Colors.grey.shade300,
+                                      child: const Center(child: CircularProgressIndicator()),
+                                    );
+                                  }
+                                  if (snapshot.hasError || snapshot.data == null) {
+                                    return Container(
+                                      height: 200,
+                                      width: double.infinity,
+                                      color: Colors.grey.shade300,
+                                      child: const Icon(Icons.broken_image, size: 50),
+                                    );
+                                  }
+                                  return ClipRRect(
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: Image.memory(
+                                      snapshot.data!,
+                                      height: 200,
+                                      width: double.infinity,
+                                      fit: BoxFit.cover,
+                                    ),
+                                  );
+                                },
+                              ),
+                            )
+                          : GestureDetector(
+                              onTap: () => _downloadFile(msg['id'], msg['attachment_url'].split('/').last),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade200,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.insert_drive_file, color: Colors.blue),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      msg['attachment_url'].split('/').last,
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                    if (msg['message'] != null && msg['message'].toString().isNotEmpty)
+                      Text(
+                        msg['message'],
+                        style: TextStyle(
+                          color: isMe ? colorScheme.onPrimaryContainer : colorScheme.onSurface,
+                          fontSize: 14,
+                        ),
                       ),
                   ],
                 ),
-                const SizedBox(height: 4),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: isMe ? colorScheme.primaryContainer : colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (hasAttachment)
-                        isImage
-                            ? GestureDetector(
-                                onTap: () => _showPhotoViaApi(msg['id']),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: Image.network(
-                                    msg['attachment_url'],
-                                    height: 200,
-                                    width: double.infinity,
-                                    fit: BoxFit.cover,
-                                    loadingBuilder: (context, child, loadingProgress) {
-                                      if (loadingProgress == null) return child;
-                                      return Container(
-                                        height: 200,
-                                        color: Colors.grey.shade300,
-                                        child: const Center(child: CircularProgressIndicator()),
-                                      );
-                                    },
-                                    errorBuilder: (_, __, ___) => Container(
-                                      height: 200,
-                                      color: Colors.grey.shade300,
-                                      child: const Icon(Icons.broken_image, size: 50),
-                                    ),
-                                  ),
-                                ),
-                              )
-                            : GestureDetector(
-                                onTap: () => _downloadFile(msg['id'], msg['attachment_url'].split('/').last),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey.shade200,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Icon(Icons.insert_drive_file, color: Colors.blue),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        msg['attachment_url'].split('/').last,
-                                        style: const TextStyle(fontSize: 12),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                      if (msg['message'] != null && msg['message'].toString().isNotEmpty)
-                        Text(
-                          msg['message'],
-                          style: TextStyle(
-                            color: isMe ? colorScheme.onPrimaryContainer : colorScheme.onSurface,
-                            fontSize: 14,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ],
+              ),
+            ],
+          ),
+        ),
+        if (isMe || isFounder)
+          Padding(
+            padding: const EdgeInsets.only(left: 4),
+            child: IconButton(
+              icon: Icon(Icons.more_vert, size: 18, color: colorScheme.onSurfaceVariant),
+              onPressed: () => _showMessageActions(msg),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
             ),
           ),
-          if (isMe || isFounder)
-            Padding(
-              padding: const EdgeInsets.only(left: 4),
-              child: IconButton(
-                icon: Icon(Icons.more_vert, size: 18, color: colorScheme.onSurfaceVariant),
-                onPressed: () => _showMessageActions(msg),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
+      ],
+    ),
+  );
 }
