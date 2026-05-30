@@ -265,6 +265,21 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
     );
   }
 
+  Future<Uint8List?> _getTransactionImageBytes(int transactionId) async {
+  final api = ApiClient();
+  try {
+    final response = await api.getTransactionFile(transactionId);
+    if (response.data is List<int>) {
+      return Uint8List.fromList(response.data as List<int>);
+    } else if (response.data is String) {
+      return Uint8List.fromList((response.data as String).codeUnits);
+    }
+  } catch (e) {
+    print('Error loading transaction image $transactionId: $e');
+  }
+  return null;
+}
+
   Future<void> _showAttachment(String? url, int transactionId) async {
   final t = AppLocalizations.of(context)!;
   if (url == null) return;
@@ -272,7 +287,25 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
   final isImage = url.toLowerCase().contains(RegExp(r'\.(jpg|jpeg|png|gif|webp)'));
   
   if (isImage) {
-    // Для изображений - открываем через PhotoView с прямой ссылкой
+    // Загружаем изображение через авторизованный API
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+    
+    final bytes = await _getTransactionImageBytes(transactionId);
+    if (mounted) Navigator.pop(context);
+    
+    if (bytes == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Не удалось загрузить изображение')),
+        );
+      }
+      return;
+    }
+    
     showDialog(
       context: context,
       builder: (context) => Dialog(
@@ -281,7 +314,7 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
         child: Stack(
           children: [
             PhotoView(
-              imageProvider: NetworkImage(url),
+              imageProvider: MemoryImage(bytes),
               loadingBuilder: (context, event) => const Center(
                 child: CircularProgressIndicator(),
               ),
@@ -308,7 +341,7 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
       ),
     );
   } else {
-    // Для документов - скачиваем через бэкенд с авторизацией
+    // Для документов — скачиваем через бэкенд
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
