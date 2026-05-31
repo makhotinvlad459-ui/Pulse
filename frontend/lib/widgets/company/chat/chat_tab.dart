@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:html' as html;
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,14 +8,18 @@ import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:photo_view/photo_view.dart';
+import 'package:path_provider/path_provider.dart';
 import '../../../services/api_client.dart';
 import '../../../services/image_compression.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/locale_provider.dart';
 import '../../../models/user.dart';
 import 'package:frontend/l10n/app_localizations.dart';
-import 'chat_tab_platform.dart';
 import 'chat_tab_platform_interface.dart';
+import 'chat_tab_platform_factory.dart';
+// Условный импорт: на мобильные — mobile, на веб — web
+import 'chat_tab_mobile.dart'
+    if (dart.library.html) 'chat_tab_web.dart';
 
 enum _MessageAction { edit, delete, cancel }
 
@@ -50,14 +53,15 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
   bool get wantKeepAlive => true;
 
   @override
-  void initState() {
-    super.initState();
-    registerChatTabPlatform();
-    _loadChatMessages();
-    _connectWebSocket();
-    _markChatRead();
-    _lastVisit = DateTime.now();
-  }
+void initState() {
+  super.initState();
+  // Регистрация платформенной реализации через фабрику
+  ChatTabPlatformSingleton.register(createChatTabPlatform());
+  _loadChatMessages();
+  _connectWebSocket();
+  _markChatRead();
+  _lastVisit = DateTime.now();
+}
 
   @override
   void dispose() {
@@ -306,24 +310,25 @@ Future<void> _downloadFile(int messageId, String filename) async {
   final api = ApiClient();
   try {
     final response = await api.getChatFile(messageId);
-    final bytes = response.data is List<int> 
+    final bytes = response.data is List<int>
         ? Uint8List.fromList(response.data as List<int>)
         : Uint8List.fromList((response.data as String).codeUnits);
-    
-    final blob = html.Blob([bytes]);
-    final blobUrl = html.Url.createObjectUrlFromBlob(blob);
-    final anchor = html.AnchorElement(href: blobUrl)..download = filename;
-    anchor.click();
-    html.Url.revokeObjectUrl(blobUrl);
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Файл сохранен')),
-    );
+
+    // Платформенная реализация (веб или мобилка)
+    await ChatTabPlatformSingleton.instance.downloadFile(bytes, filename);
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Файл сохранён')),
+      );
+    }
   } catch (e) {
     print('Error: $e');
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Ошибка: $e')),
-    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка: $e')),
+      );
+    }
   }
 }
 

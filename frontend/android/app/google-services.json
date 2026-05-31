@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "267395124760",
+    "project_id": "pulse-yourmoney",
+    "storage_bucket": "pulse-yourmoney.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:267395124760:android:71ac769336c695d3f9bd6d",
+        "android_client_info": {
+          "package_name": "com.pulse.yourmoney"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBD4dMAyQ5VbRyHdi5sPgU31MpyUr1alD8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,4 +1,4 @@
-package com.example.frontend;
+package com.pulse.yourmoney;
 
 import io.flutter.embedding.android.FlutterFragmentActivity;
 import io.flutter.embedding.engine.FlutterEngine;

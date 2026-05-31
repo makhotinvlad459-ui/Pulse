@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/register_screen.dart';
@@ -9,13 +11,25 @@ import 'providers/locale_provider.dart';
 import 'screens/forgot_password_screen.dart';
 import 'screens/reset_password_screen.dart';
 import 'services/websocket_service.dart';
-import 'services/push_notifications.dart';  // Добавь импорт
+import 'services/push_notifications.dart';
 import 'package:frontend/l10n/app_localizations.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Инициализация Firebase
+  try {
+    await Firebase.initializeApp();
+    // Запрос разрешения на уведомления
+    await FirebaseMessaging.instance.requestPermission();
+    final token = await FirebaseMessaging.instance.getToken();
+    print("FCM Token: $token");
+  } catch (e, stack) {
+    print("Firebase initialization error: $e\n$stack");
+  }
+
   runApp(const ProviderScope(child: MyApp()));
 }
 
@@ -30,7 +44,6 @@ class _MyAppState extends ConsumerState<MyApp> {
   @override
   void initState() {
     super.initState();
-    // Инициализация push-уведомлений
     PushNotificationsService.init();
   }
 
@@ -52,33 +65,25 @@ class _MyAppState extends ConsumerState<MyApp> {
       ],
       supportedLocales: const [Locale('ru'), Locale('en')],
       navigatorKey: navigatorKey,
-      
       initialRoute: '/',
-      
       onGenerateRoute: (RouteSettings settings) {
         final routeName = settings.name ?? '';
-
         if (routeName == '/' || routeName.isEmpty || routeName.contains('reset-password')) {
           final uriBase = Uri.base;
-          
-          if (uriBase.path.contains('reset-password') || 
-              uriBase.fragment.contains('reset-password') || 
+          if (uriBase.path.contains('reset-password') ||
+              uriBase.fragment.contains('reset-password') ||
               routeName.contains('reset-password')) {
-            
-            final token = uriBase.queryParameters['token'] ?? 
-                          Uri.parse(uriBase.fragment).queryParameters['token'] ??
-                          Uri.parse(routeName).queryParameters['token'];
-
+            final token = uriBase.queryParameters['token'] ??
+                Uri.parse(uriBase.fragment).queryParameters['token'] ??
+                Uri.parse(routeName).queryParameters['token'];
             if (token != null && token.isNotEmpty) {
               return MaterialPageRoute(
                 builder: (_) => ResetPasswordScreen(token: token),
               );
             }
           }
-          
           return MaterialPageRoute(builder: (_) => const LoginScreen());
         }
-
         switch (routeName) {
           case '/login':
             return MaterialPageRoute(builder: (_) => const LoginScreen());
