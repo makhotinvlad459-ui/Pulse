@@ -72,30 +72,31 @@ void initState() {
   }
 
   Future<void> _connectWebSocket() async {
-    final api = ApiClient();
-    final token = await api.getToken();
-    if (token == null) return;
+  final api = ApiClient();
+  final token = await api.getToken();
+  if (token == null) return;
 
-    final origin = Uri.base.origin;
-    final wsScheme = origin.startsWith('https') ? 'wss' : 'ws';
-    final wsBase = origin.replaceFirst(RegExp(r'^https?://'), '');
-    final chatUrl = 'wss://pulse-yourmoney.com/api/ws/chat/${widget.companyId}?token=$token';
+  // Кодируем токен для безопасной передачи в URL
+  final encodedToken = Uri.encodeComponent(token);
+  final chatUrl = 'wss://pulse-yourmoney.com/api/ws/chat/${widget.companyId}?token=$encodedToken';
 
+  print('🔌 Connecting to Chat WebSocket: $chatUrl');
 
-    print('🔌 Connecting to Chat WebSocket: $chatUrl');
-
-    try {
-      _chatChannel = WebSocketChannel.connect(Uri.parse(chatUrl));
-      _chatChannel!.stream.listen((data) {
+  try {
+    _chatChannel = WebSocketChannel.connect(Uri.parse(chatUrl));
+    _chatChannel!.stream.listen(
+      (data) {
         print('📨 WebSocket received: $data');
         _handleChatEvent(data);
-      }, onError: (error) {
+      },
+      onError: (error) {
         print('❌ Chat WS error: $error');
-      });
-    } catch (e) {
-      print('❌ Failed to connect chat WS: $e');
-    }
+      },
+    );
+  } catch (e) {
+    print('❌ Failed to connect chat WS: $e');
   }
+}
 
   void _handleChatEvent(dynamic rawData) {
     final data = rawData is String ? jsonDecode(rawData) : rawData;
