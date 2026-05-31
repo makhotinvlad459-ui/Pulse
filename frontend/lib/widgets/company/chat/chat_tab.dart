@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -76,25 +77,37 @@ void initState() {
   final token = await api.getToken();
   if (token == null) return;
 
-  // Кодируем токен для безопасной передачи в URL
   final encodedToken = Uri.encodeComponent(token);
   final chatUrl = 'wss://pulse-yourmoney.com/api/ws/chat/${widget.companyId}?token=$encodedToken';
-
   print('🔌 Connecting to Chat WebSocket: $chatUrl');
 
   try {
     _chatChannel = WebSocketChannel.connect(Uri.parse(chatUrl));
+    await _chatChannel!.ready;
+    print('✅ WebSocket connected');
     _chatChannel!.stream.listen(
       (data) {
         print('📨 WebSocket received: $data');
         _handleChatEvent(data);
       },
       onError: (error) {
-        print('❌ Chat WS error: $error');
+        print('❌ Chat WS stream error: $error');
+        // Пробуем переподключиться через 3 секунды
+        Future.delayed(const Duration(seconds: 3), () {
+          if (mounted) _connectWebSocket();
+        });
+      },
+      onDone: () {
+        print('🔌 WebSocket closed, reconnecting...');
+        if (mounted) _connectWebSocket();
       },
     );
   } catch (e) {
     print('❌ Failed to connect chat WS: $e');
+    // Повторная попытка через 5 секунд
+    Future.delayed(const Duration(seconds: 5), () {
+      if (mounted) _connectWebSocket();
+    });
   }
 }
 
@@ -308,108 +321,138 @@ Future<void> _showPhotoViaApi(int messageId) async {
 
 // Скачивание файла через API (по ID)
 Future<void> _downloadFile(int messageId, String filename) async {
-  final api = ApiClient();
-  try {
-    final response = await api.getChatFile(messageId);
-    final bytes = response.data is List<int>
-        ? Uint8List.fromList(response.data as List<int>)
-        : Uint8List.fromList((response.data as String).codeUnits);
-
-    // Платформенная реализация (веб или мобилка)
-    await ChatTabPlatformSingleton.instance.downloadFile(bytes, filename);
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Файл сохранён')),
-      );
-    }
-  } catch (e) {
-    print('Error: $e');
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка: $e')),
-      );
-    }
-  }
-}
-
-  Future<void> _sendMessage() async {
-    final t = AppLocalizations.of(context)!;
-    final text = _messageController.text.trim();
-    final hasFile = _attachmentFile != null || _webFile != null;
-    
-    if (text.isEmpty && !hasFile) return;
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(child: CircularProgressIndicator()),
-    );
-
     final api = ApiClient();
     try {
-      String? attachmentUrl;
-      
-      if (hasFile) {
-        Uint8List fileBytes;
-        String fileName;
+      final response = await api.getChatFile(messageId);
+      final bytes = response.data is List<int>
+          ? Uint8List.fromList(response.data as List<int>)
+          : Uint8List.fromList((response.data as String).codeUnits);
 
-        if (_attachmentFile != null) {
-          fileBytes = await _attachmentFile!.readAsBytes();
-          fileName = _attachmentFile!.name;
-        } else {
-          fileBytes = _webFile!.bytes!;
-          fileName = _webFile!.name;
-        }
+      // Платформенная реализация (веб или мобилка)
+      await ChatTabPlatformSingleton.instance.downloadFile(bytes, filename);
 
-        final compressedBytes = await ImageCompression.compressImage(fileBytes);
-
-        final uploadRes = await api.uploadChatFile(
-          companyId: widget.companyId,
-          bytes: compressedBytes,
-          filename: fileName,
+      if (mounted) {
+        final t = AppLocalizations.of(context)!;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(t.fileSaved)),
         );
-        attachmentUrl = uploadRes['url'];
       }
-
-      await api.post('/chat/company/${widget.companyId}', data: {
-        'message': text,
-        'attachment_url': attachmentUrl,
-      });
-
-      _messageController.clear();
-      setState(() {
-        _attachmentFile = null;
-        _webFile = null;
-      });
-      
-      widget.onUnreadMessagesChanged?.call(0);
-      await _markChatRead();
-      _lastVisit = DateTime.now();
-      
-      if (mounted) Navigator.pop(context);
-      
     } catch (e) {
-      if (mounted) Navigator.pop(context);
-      print('Error sending message: $e');
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('${t.sendError}: $e')));
+      print('Error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('exception: $e')),
+        );
+      }
     }
   }
+
+  Future<void> _sendMessage() async {
+  final t = AppLocalizations.of(context)!;
+  final text = _messageController.text.trim();
+  final hasFile = _attachmentFile != null || _webFile != null;
+
+  if (text.isEmpty && !hasFile) return;
+
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => const Center(child: CircularProgressIndicator()),
+  );
+
+  final api = ApiClient();
+  try {
+    String? attachmentUrl;
+
+    if (hasFile) {
+      Uint8List fileBytes;
+      String fileName;
+      bool isImage = false;
+
+      if (_attachmentFile != null) {
+        // Изображение из галереи/камеры
+        fileBytes = await _attachmentFile!.readAsBytes();
+        fileName = _attachmentFile!.name;
+      } else {
+        // Файл через FilePicker
+        if (_webFile == null) throw Exception('No file selected');
+
+        // Получаем байты (читаем из файла, если bytes null)
+        if (_webFile!.bytes != null) {
+          fileBytes = _webFile!.bytes!;
+        } else if (_webFile!.path != null) {
+          final file = File(_webFile!.path!);
+          fileBytes = await file.readAsBytes();
+        } else {
+          throw Exception('Cannot read file bytes');
+        }
+        fileName = _webFile!.name;
+      }
+
+      // Проверяем, изображение ли это
+      final ext = fileName.toLowerCase();
+      isImage = ext.endsWith('.jpg') || ext.endsWith('.jpeg') ||
+                ext.endsWith('.png') || ext.endsWith('.gif') ||
+                ext.endsWith('.webp');
+
+      // Сжимаем только изображения
+      final compressedBytes = isImage
+          ? await ImageCompression.compressImage(fileBytes)
+          : fileBytes;
+
+      final uploadRes = await api.uploadChatFile(
+        companyId: widget.companyId,
+        bytes: compressedBytes,
+        filename: fileName,
+      );
+      attachmentUrl = uploadRes['url'];
+      if (attachmentUrl == null) throw Exception('Upload returned no URL');
+    }
+
+    await api.post('/chat/company/${widget.companyId}', data: {
+      'message': text,
+      'attachment_url': attachmentUrl,
+    });
+
+    _messageController.clear();
+    setState(() {
+      _attachmentFile = null;
+      _webFile = null;
+    });
+
+    widget.onUnreadMessagesChanged?.call(0);
+    await _markChatRead();
+    _lastVisit = DateTime.now();
+
+    if (mounted) Navigator.pop(context);
+  } catch (e) {
+    if (mounted) Navigator.pop(context);
+    print('Error sending message: $e');
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('${t.sendError}: $e')));
+  }
+}
 
   Future<Uint8List?> _getImageBytes(int messageId) async {
   final api = ApiClient();
   try {
     final response = await api.getChatFile(messageId);
+    if (response.statusCode != 200) {
+      print('Failed to load image $messageId: HTTP ${response.statusCode}');
+      return null;
+    }
     if (response.data is List<int>) {
       return Uint8List.fromList(response.data as List<int>);
     } else if (response.data is String) {
       return Uint8List.fromList((response.data as String).codeUnits);
+    } else {
+      print('Unexpected response data type: ${response.data.runtimeType}');
+      return null;
     }
   } catch (e) {
     print('Error loading image $messageId: $e');
+    return null;
   }
-  return null;
 }
 
   Future<void> _clearChat() async {

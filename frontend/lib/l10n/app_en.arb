@@ -661,5 +661,6 @@
   "failedTasksTab": "Failed",
   "assigneeField": "Assignee",
   "unassignedField": "Unassigned",
-  "deadlineField": "Deadline"
+  "deadlineField": "Deadline",
+  "fileSaved": "saved"
 }

@@ -1761,4 +1761,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get deadlineField => 'Дедлайн';
+
+  @override
+  String get fileSaved => 'Сохранено';
 }

@@ -3559,6 +3559,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Deadline'**
   String get deadlineField;
+
+  /// No description provided for @fileSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'saved'**
+  String get fileSaved;
 }
 
 class _AppLocalizationsDelegate

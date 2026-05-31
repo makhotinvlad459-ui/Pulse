@@ -661,5 +661,6 @@
   "failedTasksTab": "Провалено",
   "assigneeField": "Исполнитель",
   "unassignedField": "Не назначен",
-  "deadlineField": "Дедлайн"
+  "deadlineField": "Дедлайн",
+  "fileSaved": "Сохранено"
 }
