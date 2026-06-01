@@ -69,7 +69,7 @@ Future<bool> login(String username, String password, Locale currentLocale) async
     
     // СИНХРОНИЗИРУЕМ ЯЗЫК СРАЗУ ПОСЛЕ ЛОГИНА
     if (loaded) {
-      await syncLanguage(currentLocale);
+      await syncLanguage(currentLocale.languageCode);
     }
     
     return loaded;
