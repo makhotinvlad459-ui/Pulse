@@ -1,5 +1,4 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
-import '../services/api_client.dart';
 
 class PushNotificationsService {
   static final FirebaseMessaging _fcm = FirebaseMessaging.instance;
@@ -19,12 +18,7 @@ class PushNotificationsService {
       
       String? token = await _fcm.getToken();
       print('FCM Token: $token');
-      
-      if (token != null) {
-        final api = ApiClient();
-        await api.post('/chat/fcm-token', data: {'fcm_token': token});
-        print('Token sent to server');
-      }
+      // ❌ НЕ отправляем на сервер здесь
       
       FirebaseMessaging.onMessage.listen((RemoteMessage message) {
         print('Got message in foreground: ${message.notification?.title}');

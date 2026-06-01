@@ -29,6 +29,7 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     fcm_token: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    language: Mapped[str] = mapped_column(String(2), default='ru')
 
     
     last_login: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

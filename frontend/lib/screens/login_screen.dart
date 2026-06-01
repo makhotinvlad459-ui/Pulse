@@ -10,6 +10,8 @@ import '../providers/theme_provider.dart';
 import '../providers/locale_provider.dart';
 import '../widgets/video_background.dart';
 import 'package:frontend/l10n/app_localizations.dart';
+import '../services/api_client.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 final localAuthProvider = Provider<LocalAuthentication>((ref) {
   return LocalAuthentication();
@@ -106,28 +108,50 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _performLogin(String login, String password) async {
-    final authNotifier = ref.read(authProvider.notifier);
-    final success = await authNotifier.login(login, password);
-    if (!mounted) return;
-    if (success) {
-      if (_rememberMe) {
-        await _storage.write(key: 'saved_login', value: login);
-        await _storage.write(key: 'saved_password', value: password);
-        await _storage.write(key: 'remember_me', value: 'true');
-      } else {
-        await _storage.delete(key: 'saved_password');
-        await _storage.write(key: 'saved_login', value: login);
-        await _storage.write(key: 'remember_me', value: 'false');
-      }
-      Navigator.pushReplacementNamed(context, '/home');
+  final authNotifier = ref.read(authProvider.notifier);
+  final success = await authNotifier.login(login, password);
+  if (!mounted) return;
+  if (success) {
+    if (_rememberMe) {
+      await _storage.write(key: 'saved_login', value: login);
+      await _storage.write(key: 'saved_password', value: password);
+      await _storage.write(key: 'remember_me', value: 'true');
     } else {
-      final error = ref.read(authProvider).error ?? 'Неизвестная ошибка';
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(error)));
+      await _storage.delete(key: 'saved_password');
+      await _storage.write(key: 'saved_login', value: login);
+      await _storage.write(key: 'remember_me', value: 'false');
+    }
+
+    final api = ApiClient();
+
+    // Отправка FCM-токена
+    final fcmToken = await FirebaseMessaging.instance.getToken();
+    if (fcmToken != null) {
+      try {
+        await api.post('/chat/fcm-token', data: {'fcm_token': fcmToken});
+        print('FCM token sent to server');
+      } catch (e) {
+        print('Error sending FCM token: $e');
       }
     }
+
+    // Отправка языка
+    final currentLocale = ref.read(localeProvider);
+    try {
+      await api.post('/chat/user/language', data: {'language': currentLocale.languageCode});
+      print('Language sent after login: ${currentLocale.languageCode}');
+    } catch (e) {
+      print('Error sending language: $e');
+    }
+
+    Navigator.pushReplacementNamed(context, '/home');
+  } else {
+    final error = ref.read(authProvider).error ?? 'Неизвестная ошибка';
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
+    }
   }
+}
 
   String _getVideoPath(AppTheme theme) {
     switch (theme) {
@@ -142,9 +166,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
-  void _setLanguage(Locale locale) {
-    ref.read(localeProvider.notifier).setLocale(locale);
+  void _setLanguage(Locale locale) async {
+  final notifier = ref.read(localeProvider.notifier);
+  notifier.setLocale(locale);
+  final api = ApiClient();
+  try {
+    await api.post('/chat/user/language', data: {'language': locale.languageCode});
+    print('Language changed to ${locale.languageCode}');
+  } catch (e) {
+    print('Error saving language: $e');
   }
+}
 
   @override
   Widget build(BuildContext context) {
