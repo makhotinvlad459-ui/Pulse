@@ -19,6 +19,8 @@ class CompanyCreate(BaseModel):
     name: str
     inn: Optional[str] = None
     bank_account: Optional[str] = None
+    manager_full_name: Optional[str] = None   # добавить
+    manager_phone: Optional[str] = None
 
 class CompanyUpdate(BaseModel):
     name: str
