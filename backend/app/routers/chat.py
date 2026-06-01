@@ -163,38 +163,62 @@ async def send_chat_message(
     }, db)
     
     # ========== PUSH УВЕДОМЛЕНИЯ ==========
-    # Получаем всех членов компании
-    from app.models import CompanyMember, User
-    
-    # Получаем ID всех членов компании
-    members_result = await db.execute(
-        select(CompanyMember.user_id).where(CompanyMember.company_id == company_id)
-    )
-    member_ids = [row[0] for row in members_result.all()]
-    
-    # Добавляем основателя
-    result = await db.execute(select(Company).where(Company.id == company_id))
-    company = result.scalar_one_or_none()
-    if company and company.founder_id not in member_ids:
-        member_ids.append(company.founder_id)
-    
-    # Отправляем push каждому члену компании (кроме отправителя)
-    for member_id in member_ids:
-        if member_id != current_user.id:
-            # Получаем токен пользователя
-            user_result = await db.execute(select(User).where(User.id == member_id))
-            user = user_result.scalar_one_or_none()
-            if user and user.fcm_token:
-                await send_push_notification(
-                    user.fcm_token,
-                    title=f"Новое сообщение от {current_user.display_name}",
-                    body=msg.message[:100] if msg.message else "📎 Вложение",
-                    data={
-                        "chat_id": str(company_id),
-                        "message_id": str(new_msg.id)
-                    }
-                )
-                print(f"📱 Push sent to user {member_id}")
+    try:
+        from app.models import CompanyMember, User
+        
+        # Получаем ID всех членов компании
+        members_result = await db.execute(
+            select(CompanyMember.user_id).where(CompanyMember.company_id == company_id)
+        )
+        member_ids = [row[0] for row in members_result.all()]
+        
+        # Добавляем основателя
+        result = await db.execute(select(Company).where(Company.id == company_id))
+        company = result.scalar_one_or_none()
+        if company and company.founder_id not in member_ids:
+            member_ids.append(company.founder_id)
+        
+        # Убираем отправителя из списка получателей
+        receivers_ids = [m_id for m_id in member_ids if m_id != current_user.id]
+        
+        if receivers_ids:
+            # Получаем всех нужных пользователей одним запросом к БД
+            users_result = await db.execute(
+                select(User).where(User.id.in_(receivers_ids))
+            )
+            users_to_notify = users_result.scalars().all()
+            
+            # Отправляем push каждому члену компании
+            for user in users_to_notify:
+                if user.fcm_token:
+                    # 1. Достаем язык пользователя (по умолчанию 'ru')
+                    user_lang = getattr(user, 'language', 'ru') 
+                    
+                    # 2. Формируем локализованный текст
+                    if user_lang == 'en':
+                        push_title = f"New message from {current_user.display_name}"
+                        push_body = msg.message[:100] if msg.message else "📎 Attachment"
+                    else:
+                        push_title = f"Новое сообщение от {current_user.display_name}"
+                        push_body = msg.message[:100] if msg.message else "📎 Вложение"
+
+                    # 3. Отправляем пуш, защищая цикл от падения при сбое одного пуша
+                    try:
+                        await send_push_notification(
+                            user.fcm_token,
+                            title=push_title,
+                            body=push_body,
+                            data={
+                                "chat_id": str(company_id),
+                                "message_id": str(new_msg.id)
+                            }
+                        )
+                        print(f"📱 Push sent to user {user.id} in {user_lang}")
+                    except Exception as push_err:
+                        print(f"❌ Failed to send push to user {user.id}: {push_err}")
+                        
+    except Exception as general_err:
+        print(f"❌ General error in push notification block: {general_err}")
     # ===================================
     
     # Возвращаем ответ
