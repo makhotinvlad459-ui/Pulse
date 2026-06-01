@@ -48,6 +48,29 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.initState();
     _loadSavedCredentials();
   }
+  // Метод внутри _LoginScreenState
+  Future<void> _handleLogin() async {
+  final username = _loginController.text.trim();
+  final password = _passwordController.text.trim();
+  
+  // Получаем текущую локаль из провайдера
+  final currentLocale = ref.read(localeProvider); 
+  
+  // Передаем её в метод login
+  final success = await ref.read(authProvider.notifier).login(username, password, currentLocale);
+
+  if (success && mounted) {
+    Navigator.pushReplacementNamed(context, '/home');
+  } else {
+    // Ошибка отобразится через стейт AuthProvider
+    final error = ref.read(authProvider).error;
+    if (error != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error)),
+      );
+    }
+  }
+}
 
   Future<void> _loadSavedCredentials() async {
     final savedLogin = await _storage.read(key: 'saved_login');
@@ -110,9 +133,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Future<void> _performLogin(String login, String password) async {
   final authNotifier = ref.read(authProvider.notifier);
   final success = await authNotifier.login(login, password);
+  
   if (!mounted) return;
   
   if (success) {
+    // 1. Логика сохранения данных (Remember Me)
     if (_rememberMe) {
       await _storage.write(key: 'saved_login', value: login);
       await _storage.write(key: 'saved_password', value: password);
@@ -123,29 +148,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       await _storage.write(key: 'remember_me', value: 'false');
     }
 
-    final api = ApiClient();
-
-    // Отправка FCM-токена (только один вызов и строго внутри try-catch)
+    // 2. Отправка FCM-токена
     try {
       final fcmToken = await FirebaseMessaging.instance.getToken();
       if (fcmToken != null) {
-        await api.post('/chat/fcm-token', data: {'fcm_token': fcmToken});
-        print('FCM token sent to server');
+        // Оставляем прямой вызов для FCM, так как это разовая техническая задача
+        await ApiClient().post('/chat/fcm-token', data: {'fcm_token': fcmToken});
       }
     } catch (e) {
-      print('Error getting or sending FCM token: $e');
+      print('Error sending FCM token: $e');
     }
 
-    // Отправка языка
+    // 3. Синхронизация языка (через AuthNotifier)
     final currentLocale = ref.read(localeProvider);
-    try {
-      await api.post('/chat/user/language', data: {'language': currentLocale.languageCode});
-      print('Language sent after login: ${currentLocale.languageCode}');
-    } catch (e) {
-      print('Error sending language: $e');
-    }
+    await authNotifier.syncLanguage(currentLocale.languageCode);
 
-    Navigator.pushReplacementNamed(context, '/home');
+    if (mounted) {
+      Navigator.pushReplacementNamed(context, '/home');
+    }
   } else {
     final error = ref.read(authProvider).error ?? 'Неизвестная ошибка';
     if (mounted) {
@@ -168,14 +188,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   void _setLanguage(Locale locale) async {
+  // 1. Сначала меняем язык в приложении (чтобы интерфейс сразу стал нужным)
   final notifier = ref.read(localeProvider.notifier);
   notifier.setLocale(locale);
-  final api = ApiClient();
-  try {
-    await api.post('/chat/user/language', data: {'language': locale.languageCode});
-    print('Language changed to ${locale.languageCode}');
-  } catch (e) {
-    print('Error saving language: $e');
+  
+  // 2. Если пользователь уже авторизован, синхронизируем с сервером
+  final authState = ref.read(authProvider);
+  if (authState.user != null) {
+    try {
+      await ref.read(authProvider.notifier).syncLanguage(locale.languageCode);
+      print('Language synced to server: ${locale.languageCode}');
+    } catch (e) {
+      print('Error syncing language: $e');
+    }
   }
 }
 

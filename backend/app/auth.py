@@ -248,3 +248,14 @@ async def change_password(
     await db.commit()
     
     return {"detail": "Password changed successfully"}
+
+@router.post("/auth/update-language")
+async def update_language(
+    data: dict, 
+    db: AsyncSession = Depends(get_db), 
+    current_user: User = Depends(get_current_user)
+):
+    new_lang = data.get("language") # ожидаем 'en' или 'ru'
+    current_user.language = new_lang
+    await db.commit()
+    return {"message": "Language updated"}

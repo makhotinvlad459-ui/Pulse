@@ -72,9 +72,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     // Подписываемся на userStream для обновления счетчиков
     ref.listen(StreamProvider((ref) => WebSocketService().userStream), (previous, next) {
-      next.whenData((data) {
-        if (data['type'] == 'update_counters') {
-          ref.invalidate(homeProvider);
+      next.whenData((rawData) {
+        try {
+          // 1. Декодируем строку в Map, если это необходимо
+          final data = rawData is String ? jsonDecode(rawData) : rawData;
+          
+          // 2. Безопасно проверяем тип и наличие ключа
+          if (data is Map && data['type'] == 'update_counters') {
+            ref.invalidate(homeProvider);
+          }
+        } catch (e) {
+          // Игнорируем невалидный JSON, чтобы не крашить приложение
+          print('WS Parse Error in HomeScreen: $e');
         }
       });
     });

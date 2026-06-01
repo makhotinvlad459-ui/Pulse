@@ -268,20 +268,6 @@ async def get_chat_messages(
         for m in messages
     ]
 
-@router.post("/user/language")
-async def set_user_language(
-    language: str = 'ru',
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    print(f"🔵 [set_language] User {current_user.id} ({current_user.email}) set language to {language}")
-    if language not in ('ru', 'en'):
-        raise HTTPException(400, "Unsupported language")
-    current_user.language = language
-    await db.commit()
-    print(f"✅ [set_language] Language updated for user {current_user.id} to {language}")
-    return {"ok": True}
-
 @router.post("/company/{company_id}/mark-read")
 async def mark_chat_read(
     company_id: int,

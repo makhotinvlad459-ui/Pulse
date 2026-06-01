@@ -112,43 +112,54 @@ void initState() {
 }
 
   void _handleChatEvent(dynamic rawData) {
-    final data = rawData is String ? jsonDecode(rawData) : rawData;
-    final type = data['type'];
-    
-    setState(() {
-      switch (type) {
-        case 'new_message':
-          _messages.add(data['message']);
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (_scrollController.hasClients) {
-              _scrollController.animateTo(
-                _scrollController.position.maxScrollExtent,
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.easeOutCubic,
-              );
+    try {
+      final data = rawData is String ? jsonDecode(rawData) : rawData;
+      
+      // Если пришел не словарь, игнорируем
+      if (data is! Map) return; 
+      
+      final type = data['type'];
+      
+      // Игнорируем служебный ping, чтобы впустую не дергать setState и не нагружать UI
+      if (type == 'ping') return;
+      
+      setState(() {
+        switch (type) {
+          case 'new_message':
+            _messages.add(data['message']);
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (_scrollController.hasClients) {
+                _scrollController.animateTo(
+                  _scrollController.position.maxScrollExtent,
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOutCubic,
+                );
+              }
+            });
+            break;
+          case 'edit_message':
+            final messageId = data['message_id'];
+            final newText = data['new_message'];
+            final index = _messages.indexWhere((m) => m['id'] == messageId);
+            if (index != -1) {
+              _messages[index]['message'] = newText;
+              _messages[index]['edited'] = true;
+              _messages[index]['updated_at'] = data['updated_at'];
             }
-          });
-          break;
-        case 'edit_message':
-          final messageId = data['message_id'];
-          final newText = data['new_message'];
-          final index = _messages.indexWhere((m) => m['id'] == messageId);
-          if (index != -1) {
-            _messages[index]['message'] = newText;
-            _messages[index]['edited'] = true;
-            _messages[index]['updated_at'] = data['updated_at'];
-          }
-          break;
-        case 'delete_message':
-          final messageId = data['message_id'];
-          _messages.removeWhere((m) => m['id'] == messageId);
-          break;
-        case 'clear_chat':
-          _messages.clear();
-          break;
-      }
-      _updateUnreadCount();
-    });
+            break;
+          case 'delete_message':
+            final messageId = data['message_id'];
+            _messages.removeWhere((m) => m['id'] == messageId);
+            break;
+          case 'clear_chat':
+            _messages.clear();
+            break;
+        }
+        _updateUnreadCount();
+      });
+    } catch (e) {
+      print('Chat WS parse error: $e');
+    }
   }
 
   void _updateUnreadCount() {

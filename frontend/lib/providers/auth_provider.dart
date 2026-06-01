@@ -16,6 +16,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   final ApiClient _api = ApiClient();
 
+  Future<void> syncLanguage(String langCode) async {
+  await _api.updateLanguage(langCode);
+}
+
   Future<bool> register(String email, String? phone, String fullName, String password) async {
     state = AuthState(isLoading: true);
     try {
@@ -39,39 +43,37 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  Future<bool> login(String username, String password) async {
+
+
+Future<bool> login(String username, String password, Locale currentLocale) async {
   state = AuthState(isLoading: true);
   try {
-    print('>>> LOGIN START');
     final response = await _api.postForm('/auth/login', data: {
       'username': username,
       'password': password,
     });
-    print('>>> GOT RESPONSE: ${response.statusCode}');
-    print('>>> RESPONSE DATA TYPE: ${response.data.runtimeType}');
     
-    if (response.statusCode != 200) {
-      throw Exception('Server error: ${response.statusCode}');
-    }
-    
+    if (response.statusCode != 200) throw Exception('Server error: ${response.statusCode}');
+
     final data = response.data;
-    if (data is! Map<String, dynamic>) {
-      throw Exception('Invalid response format: ${data.runtimeType}');
-    }
+    if (data is! Map<String, dynamic>) throw Exception('Invalid response format');
     
     final token = data['access_token'] as String?;
-    if (token == null) throw Exception('No token in response: $data');
+    if (token == null) throw Exception('No token in response');
     
-    print('>>> TOKEN: $token');
     await _api.setToken(token);
-    print('>>> TOKEN SAVED');
     
+    // Загружаем профиль
     final loaded = await _loadUserProfile();
-    print('>>> PROFILE LOADED: $loaded');
+    
+    // СИНХРОНИЗИРУЕМ ЯЗЫК СРАЗУ ПОСЛЕ ЛОГИНА
+    if (loaded) {
+      await syncLanguage(currentLocale);
+    }
+    
     return loaded;
   } catch (e, stack) {
     print('login error: $e');
-    print('STACKTRACE:\n$stack');   // <-- вот это самое важное
     state = AuthState(error: e.toString());
     return false;
   }

@@ -205,6 +205,15 @@ class ApiClient {
     return FounderOverview.fromJson(response.data);
   }
 
+ 
+Future<void> updateLanguage(String langCode) async {
+  try {
+    await post('/auth/update-language', data: {'language': langCode});
+  } catch (e) {
+    print('Ошибка обновления языка на сервере: $e');
+  }
+}
+
   Future<Map<String, dynamic>> getUnreadCounts() async {
     final response = await get('/notifications/unread-counts');
     return response.data as Map<String, dynamic>;
