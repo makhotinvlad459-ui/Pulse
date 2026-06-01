@@ -14,13 +14,13 @@ class TransactionType(str, Enum):
 
 # --- COMPANY ---
 
-
 class CompanyCreate(BaseModel):
     name: str
     inn: Optional[str] = None
     bank_account: Optional[str] = None
-    manager_full_name: Optional[str] = None   # добавить
+    manager_full_name: Optional[str] = None
     manager_phone: Optional[str] = None
+    employees: Optional[List[dict]] = None   # добавлено
 
 class CompanyUpdate(BaseModel):
     name: str
@@ -28,6 +28,7 @@ class CompanyUpdate(BaseModel):
     bank_account: Optional[str] = None
     manager_full_name: Optional[str] = None
     manager_phone: Optional[str] = None
+    employees: Optional[List[dict]] = None   # добавлено
 
     @field_validator('manager_phone')
     def validate_phone_length(cls, v: Optional[str]) -> Optional[str]:
@@ -37,11 +38,11 @@ class CompanyUpdate(BaseModel):
 
 class CompanyResponse(BaseModel):
     id: int
-    inn: Optional[str] = None  # Сделали Optional на случай, если в базе Null
+    inn: Optional[str] = None
     name: str
-    bank_account: Optional[str] = None  # Сделали Optional
-    manager_full_name: Optional[str] = None  # Сделали Optional
-    manager_phone: Optional[str] = None  # Сделали Optional
+    bank_account: Optional[str] = None
+    manager_full_name: Optional[str] = None
+    manager_phone: Optional[str] = None
     total_balance: float = 0.0
     employees_credentials: List[dict] = []
     current_user_role: Optional[str] = None  
@@ -93,8 +94,8 @@ class TransactionCreate(BaseModel):
     category_id: Optional[int] = None
     description: Optional[str] = None
     transfer_to_account_id: Optional[int] = None
-    attachment_url: Optional[str] = None  # Ссылка на файл в Firebase Storage
-    delete_attachment: bool = False       # Сохранили для обратной совместимости при редактировании
+    attachment_url: Optional[str] = None
+    delete_attachment: bool = False
     items: Optional[List[TransactionItemCreate]] = []
     counterparty: Optional[str] = None  
     showcase_item_id: Optional[int] = None
@@ -229,7 +230,7 @@ class OrderUpdate(BaseModel):
     assignee_id: Optional[int] = None
     deadline: Optional[datetime] = None
     work_price: Optional[float] = 0.0
-    items: Optional[List[OrderItemCreate]] = None  # полная замена
+    items: Optional[List[OrderItemCreate]] = None
 
 class OrderResponse(BaseModel):
     id: int
