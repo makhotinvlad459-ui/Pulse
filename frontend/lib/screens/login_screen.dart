@@ -111,6 +111,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final authNotifier = ref.read(authProvider.notifier);
   final success = await authNotifier.login(login, password);
   if (!mounted) return;
+  
   if (success) {
     if (_rememberMe) {
       await _storage.write(key: 'saved_login', value: login);
@@ -124,15 +125,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     final api = ApiClient();
 
-    // Отправка FCM-токена
-    final fcmToken = await FirebaseMessaging.instance.getToken();
-    if (fcmToken != null) {
-      try {
+    // Отправка FCM-токена (только один вызов и строго внутри try-catch)
+    try {
+      final fcmToken = await FirebaseMessaging.instance.getToken();
+      if (fcmToken != null) {
         await api.post('/chat/fcm-token', data: {'fcm_token': fcmToken});
         print('FCM token sent to server');
-      } catch (e) {
-        print('Error sending FCM token: $e');
       }
+    } catch (e) {
+      print('Error getting or sending FCM token: $e');
     }
 
     // Отправка языка

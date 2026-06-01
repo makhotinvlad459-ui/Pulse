@@ -10,6 +10,17 @@ def main():
     Session = sessionmaker(bind=engine)
     session = Session()
 
+    # --- СОЗДАЁМ ТАБЛИЦУ, ЕСЛИ ЕЁ НЕТ ---
+    session.execute(text("""
+        CREATE TABLE IF NOT EXISTS permissions (
+            id SERIAL PRIMARY KEY,
+            name VARCHAR(100) NOT NULL UNIQUE,
+            description VARCHAR(255)
+        )
+    """))
+    session.commit()
+    # ------------------------------------
+
     permissions = [
         ('view_operations', 'Просмотр операций'),
         ('create_transaction', 'Создание операций'),
@@ -27,7 +38,6 @@ def main():
         ('edit_task', 'Редактирование задач'),
         ('manage_employees', 'Управление сотрудниками'),
         ('manage_permissions', 'Управление правами'),
-        ('view_accounts', 'Просмотр счетов'),
         ('create_account', 'Создание счетов'),
         ('manage_categories', 'Управление категориями'),
         ('view_reports', 'Просмотр отчётов'),
@@ -47,7 +57,6 @@ def main():
     ]
 
     for name, desc in permissions:
-        # Проверяем, есть ли уже
         exists = session.execute(text("SELECT 1 FROM permissions WHERE name = :name"), {"name": name}).fetchone()
         if not exists:
             session.execute(text("INSERT INTO permissions (name, description) VALUES (:name, :desc)"), {"name": name, "desc": desc})

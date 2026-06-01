@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart'; // Добавлен импорт для kIsWeb
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -21,7 +22,23 @@ void main() async {
   
   // Инициализация Firebase
   try {
-    await Firebase.initializeApp();
+    if (kIsWeb) {
+      // Явная инициализация для Flutter Web
+      await Firebase.initializeApp(
+        options: const FirebaseOptions(
+          apiKey: "AIzaSyBXoRO7sp49PotOrUEPmTsbRxCpcDpdyZ0",
+          authDomain: "pulse-yourmoney.firebaseapp.com",
+          projectId: "pulse-yourmoney",
+          storageBucket: "pulse-yourmoney.firebasestorage.app",
+          messagingSenderId: "267395124760",
+          appId: "1:267395124760:web:93231e40b80650ccf9bd6d",
+        ),
+      );
+    } else {
+      // Инициализация для Android/iOS
+      await Firebase.initializeApp();
+    }
+
     // Запрос разрешения на уведомления
     await FirebaseMessaging.instance.requestPermission();
     final token = await FirebaseMessaging.instance.getToken();
