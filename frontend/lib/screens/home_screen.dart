@@ -16,6 +16,7 @@ import '../services/websocket_service.dart';
 import 'package:frontend/l10n/app_localizations.dart';
 import '../screens/subscription_screen.dart';
 import '../widgets/company/change_password_dialog.dart';
+import '../services/websocket_service.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -31,38 +32,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     _initWebSocket();
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    
-    // Используем ref.listen для обработки событий WebSocket
-    ref.listen(StreamProvider((ref) => WebSocketService().userStream), (previous, next) {
-      next.whenData((rawData) {
-        try {
-          Map<String, dynamic> data;
-          if (rawData is String) {
-            data = Map<String, dynamic>.from(jsonDecode(rawData));
-          } else if (rawData is Map) {
-            data = Map<String, dynamic>.from(rawData);
-          } else {
-            return;
-          }
-          
-          if (data['type'] == 'update_counters') {
-            ref.invalidate(homeProvider);
-          }
-        } catch (e) {
-          print('WS Parse Error in HomeScreen: $e');
-        }
-      });
-    });
-  }
-
   Future<void> _initWebSocket() async {
     final authState = ref.read(authProvider);
     final user = authState.user;
     if (user == null) return;
-    
     final api = ApiClient();
     final token = await api.getToken();
     if (token == null) return;
@@ -70,12 +43,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     WebSocketService().connectUser(user.id, token);
   }
 
+  @override
+  void dispose() {
+    // Не закрываем здесь, потому что другие экраны могут использовать
+    super.dispose();
+  }
+
   String _getVideoPath(AppTheme theme) {
     switch (theme) {
-      case AppTheme.light: return 'assets/videos/for_home.mp4';
-      case AppTheme.dark: return 'assets/videos/dark1.mp4';
-      case AppTheme.blue: return 'assets/videos/city_blue.mp4';
-      case AppTheme.green: return 'assets/videos/city_green.mp4';
+      case AppTheme.light:
+        return 'assets/videos/for_home.mp4';
+      case AppTheme.dark:
+        return 'assets/videos/dark1.mp4';
+      case AppTheme.blue:
+        return 'assets/videos/city_blue.mp4';
+      case AppTheme.green:
+        return 'assets/videos/city_green.mp4';
     }
   }
 
@@ -86,6 +69,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final videoPath = _getVideoPath(currentTheme);
     final colorScheme = Theme.of(context).colorScheme;
     final t = AppLocalizations.of(context)!;
+
+    // Подписываемся на userStream для обновления счетчиков
+    ref.listen(StreamProvider((ref) => WebSocketService().userStream), (previous, next) {
+      next.whenData((data) {
+        if (data['type'] == 'update_counters') {
+          ref.invalidate(homeProvider);
+        }
+      });
+    });
 
     return VideoBackground(
       key: ValueKey(videoPath),
@@ -195,7 +187,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       );
                     },
                     loading: () => const Center(child: CircularProgressIndicator()),
-                    error: (error, stack) => Center(child: Text('${t.error}: $error', style: TextStyle(color: colorScheme.error))),
+                    error: (error, stack) {
+                      print('Home error: $error\n$stack');
+                      final errorMessage = error is String
+                          ? error
+                          : error is Exception
+                              ? error.toString()
+                              : '${t.error}: $error';
+                      return Center(
+                        child: Text(
+                          errorMessage,
+                          style: TextStyle(color: colorScheme.error),
+                        ),
+                      );
+                    },
                   ),
                 ),
               ),
@@ -218,6 +223,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 }
+
 
 class _StatCard extends StatelessWidget {
   final String title;
