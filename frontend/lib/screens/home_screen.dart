@@ -75,7 +75,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       next.whenData((rawData) {
         try {
           // 1. Декодируем строку в Map, если это необходимо
-          final data = rawData is String ? jsonDecode(rawData) : rawData;
+          Map<String, dynamic> data;
+    if (rawData is String) {
+      data = Map<String, dynamic>.from(jsonDecode(rawData));
+    } else if (rawData is Map) {
+      data = Map<String, dynamic>.from(rawData);
+      } else {
+    // На случай если пришел какой-то неожиданный формат
+        data = {}; 
+        }
           
           // 2. Безопасно проверяем тип и наличие ключа
           if (data is Map && data['type'] == 'update_counters') {
