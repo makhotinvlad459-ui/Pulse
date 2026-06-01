@@ -1,8 +1,8 @@
-"""initial_schema
+"""initial_migration
 
-Revision ID: de48a557b2f9
+Revision ID: b74b78a0dbf0
 Revises: 
-Create Date: 2026-05-13 09:34:01.452504
+Create Date: 2026-06-01 18:52:41.579799
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'de48a557b2f9'
+revision: str = 'b74b78a0dbf0'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -38,6 +38,8 @@ def upgrade() -> None:
     sa.Column('soft_delete_retention_days', sa.Integer(), nullable=False),
     sa.Column('created_at', sa.DateTime(), nullable=False),
     sa.Column('is_active', sa.Boolean(), nullable=False),
+    sa.Column('fcm_token', sa.String(length=500), nullable=True),
+    sa.Column('language', sa.String(length=2), nullable=False),
     sa.Column('last_login', sa.DateTime(), nullable=True),
     sa.Column('subscription_plan', sa.String(length=50), nullable=True),
     sa.Column('extra_companies', sa.Integer(), nullable=False),
@@ -71,15 +73,16 @@ def upgrade() -> None:
     op.create_table('payment_orders',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('user_id', sa.Integer(), nullable=False),
-    sa.Column('plan', sa.String(length=50), nullable=False),
-    sa.Column('amount', sa.Numeric(precision=10, scale=2), nullable=False),
-    sa.Column('status', sa.String(length=20), nullable=False),
-    sa.Column('payment_id', sa.String(length=100), nullable=True),
+    sa.Column('plan', sa.String(), nullable=False),
+    sa.Column('amount', sa.Float(), nullable=False),
+    sa.Column('status', sa.String(), nullable=False),
+    sa.Column('payment_id', sa.String(), nullable=True),
     sa.Column('created_at', sa.DateTime(), nullable=False),
     sa.Column('updated_at', sa.DateTime(), nullable=False),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
+    op.create_index(op.f('ix_payment_orders_id'), 'payment_orders', ['id'], unique=False)
     op.create_table('accounts',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('company_id', sa.Integer(), nullable=False),
@@ -131,17 +134,6 @@ def upgrade() -> None:
     sa.ForeignKeyConstraint(['company_id'], ['companies.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['invited_by'], ['users.id'], ),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_table('company_usage',
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('company_id', sa.Integer(), nullable=False),
-    sa.Column('period_start', sa.DateTime(), nullable=False),
-    sa.Column('transactions_count', sa.Integer(), nullable=False),
-    sa.Column('messages_count', sa.Integer(), nullable=False),
-    sa.Column('tasks_count', sa.Integer(), nullable=False),
-    sa.Column('orders_count', sa.Integer(), nullable=False),
-    sa.ForeignKeyConstraint(['company_id'], ['companies.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_table('counterparties',
@@ -383,11 +375,11 @@ def downgrade() -> None:
     op.drop_table('products')
     op.drop_table('orders')
     op.drop_table('counterparties')
-    op.drop_table('company_usage')
     op.drop_table('company_members')
     op.drop_table('chat_messages')
     op.drop_table('categories')
     op.drop_table('accounts')
+    op.drop_index(op.f('ix_payment_orders_id'), table_name='payment_orders')
     op.drop_table('payment_orders')
     op.drop_index(op.f('ix_password_reset_tokens_token'), table_name='password_reset_tokens')
     op.drop_table('password_reset_tokens')
