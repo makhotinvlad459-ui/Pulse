@@ -662,5 +662,6 @@
   "assigneeField": "Assignee",
   "unassignedField": "Unassigned",
   "deadlineField": "Deadline",
-  "fileSaved": "saved"
+  "fileSaved": "saved",
+  "noMatches": "No matches found"
 }

@@ -3565,6 +3565,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'saved'**
   String get fileSaved;
+
+  /// No description provided for @noMatches.
+  ///
+  /// In en, this message translates to:
+  /// **'No matches found'**
+  String get noMatches;
 }
 
 class _AppLocalizationsDelegate

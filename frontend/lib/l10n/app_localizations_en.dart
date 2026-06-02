@@ -1766,4 +1766,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get fileSaved => 'saved';
+
+  @override
+  String get noMatches => 'No matches found';
 }

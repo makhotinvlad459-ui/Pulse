@@ -33,6 +33,10 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
   final ApiClient _api = ApiClient();
   List<Map<String, dynamic>> _bulkSaleItems = [];
 
+  // Для автодополнения контрагентов
+  List<String> _existingCounterparties = [];
+  bool _loadingCounterparties = false;
+
   // Функция перевода категорий (системные)
   String _translateCategoryName(String name, AppLocalizations t) {
     switch (name) {
@@ -59,6 +63,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
   void initState() {
     super.initState();
     _loadData();
+    _loadCounterparties();
   }
 
   Future<void> _loadData() async {
@@ -82,6 +87,20 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
       _categories = res.data;
     } catch (e) {
       print('Load categories error: $e');
+    }
+  }
+
+  Future<void> _loadCounterparties() async {
+    setState(() => _loadingCounterparties = true);
+    try {
+      final res = await _api.get('/counterparties', queryParameters: {'company_id': widget.companyId});
+      setState(() {
+        _existingCounterparties = List<String>.from(res.data.map((cp) => cp['name']));
+        _loadingCounterparties = false;
+      });
+    } catch (e) {
+      setState(() => _loadingCounterparties = false);
+      print('Error loading counterparties: $e');
     }
   }
 
@@ -251,125 +270,117 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
   }
 
   Future<void> _editItem(ShowcaseItem item) async {
-  if (!_canEdit) return;
-  final t = AppLocalizations.of(context)!;
-  final nameController = TextEditingController(text: item.name);
-  final priceController = TextEditingController(text: item.price.toString());
-  int? categoryId = item.categoryId;
-  List<Map<String, dynamic>> localRecipeItems = [];
-
-  if (item.recipe != null && item.recipe!.isNotEmpty) {
-    try {
-      final decoded = jsonDecode(item.recipe!);
-      if (decoded is List) {
-        // Получаем список всех product_id из рецепта
-        List<int> productIds = decoded.map<int>((r) => r['product_id'] as int).toList();
-        // Загружаем все продукты компании
-        final api = ApiClient();
-        final productsRes = await api.get('/products', queryParameters: {'company_id': widget.companyId});
-        final products = (productsRes.data as List).cast<Map<String, dynamic>>();
-        // Создаём словарь product_id => product_name
-        final Map<int, String> productNames = {};
-        for (var p in products) {
-          productNames[p['id']] = p['name'];
+    if (!_canEdit) return;
+    final t = AppLocalizations.of(context)!;
+    final nameController = TextEditingController(text: item.name);
+    final priceController = TextEditingController(text: item.price.toString());
+    int? categoryId = item.categoryId;
+    List<Map<String, dynamic>> localRecipeItems = [];
+    if (item.recipe != null && item.recipe!.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(item.recipe!);
+        if (decoded is List) {
+          // Загружаем продукты, чтобы получить названия
+          final productsRes = await _api.get('/products', queryParameters: {'company_id': widget.companyId});
+          final products = (productsRes.data as List).cast<Map<String, dynamic>>();
+          final Map<int, String> productNames = {};
+          for (var p in products) {
+            productNames[p['id']] = p['name'];
+          }
+          localRecipeItems = decoded.map((r) => {
+            'product_id': r['product_id'],
+            'product_name': productNames[r['product_id']] ?? 'Неизвестный товар',
+            'quantity': (r['quantity'] as num).toDouble(),
+          }).toList();
         }
-        // Формируем список с названиями
-        localRecipeItems = decoded.map((r) => {
-          'product_id': r['product_id'],
-          'product_name': productNames[r['product_id']] ?? 'Неизвестный товар',
-          'quantity': (r['quantity'] as num).toDouble(),
-        }).toList();
+      } catch (e) {
+        print('Error parsing recipe: $e');
       }
-    } catch (e) {
-      print('Error parsing recipe: $e');
     }
+    await showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setStateDialog) {
+          final colorScheme = Theme.of(context).colorScheme;
+          return AlertDialog(
+            title: Text(t.editShowcaseItem, style: TextStyle(color: colorScheme.onSurface)),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameController,
+                    decoration: InputDecoration(labelText: t.nameLabel, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+                    style: TextStyle(color: colorScheme.onSurface),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: priceController,
+                    decoration: InputDecoration(labelText: t.priceLabel, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+                    keyboardType: TextInputType.number,
+                    style: TextStyle(color: colorScheme.onSurface),
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<int>(
+                    initialValue: categoryId,
+                    items: [
+                      DropdownMenuItem(value: null, child: Text(t.withoutCategory)),
+                      ..._categories.map((c) {
+                        String catName = _translateCategoryName(c['name'], t);
+                        return DropdownMenuItem(value: c['id'], child: Text('${c['icon'] ?? '📁'} $catName'));
+                      }),
+                    ],
+                    onChanged: (v) => categoryId = v,
+                    decoration: InputDecoration(labelText: t.categoryOptional, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+                    dropdownColor: colorScheme.surface,
+                    style: TextStyle(color: colorScheme.onSurface),
+                  ),
+                  const SizedBox(height: 8),
+                  RecipeEditor(
+                    companyId: widget.companyId,
+                    initialItems: localRecipeItems,
+                    onChanged: (newItems) {
+                      localRecipeItems = newItems;
+                      setStateDialog(() {});
+                    },
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context), child: Text(t.cancel, style: TextStyle(color: colorScheme.onSurfaceVariant))),
+              ElevatedButton(
+                onPressed: () async {
+                  final name = nameController.text.trim();
+                  final price = double.tryParse(priceController.text);
+                  if (name.isEmpty || price == null) return;
+                  final recipeJson = localRecipeItems.isNotEmpty
+                      ? jsonEncode(localRecipeItems.map((i) => ({
+                          'product_id': i['product_id'],
+                          'quantity': i['quantity'],
+                        })).toList())
+                      : null;
+                  try {
+                    await _api.patch('/showcase/${item.id}', queryParameters: {'company_id': widget.companyId}, data: {
+                      'name': name,
+                      'price': price,
+                      'category_id': categoryId,
+                      'recipe': recipeJson,
+                    });
+                    Navigator.pop(context);
+                    _loadData();
+                  } catch (e) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+                  }
+                },
+                child: Text(t.save),
+              ),
+            ],
+          );
+        },
+      ),
+    );
   }
-
-  // Далее остаётся без изменений код диалога редактирования
-  await showDialog(
-    context: context,
-    builder: (context) => StatefulBuilder(
-      builder: (context, setStateDialog) {
-        final colorScheme = Theme.of(context).colorScheme;
-        return AlertDialog(
-          title: Text(t.editShowcaseItem, style: TextStyle(color: colorScheme.onSurface)),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nameController,
-                  decoration: InputDecoration(labelText: t.nameLabel, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
-                  style: TextStyle(color: colorScheme.onSurface),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: priceController,
-                  decoration: InputDecoration(labelText: t.priceLabel, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
-                  keyboardType: TextInputType.number,
-                  style: TextStyle(color: colorScheme.onSurface),
-                ),
-                const SizedBox(height: 8),
-                DropdownButtonFormField<int>(
-                  initialValue: categoryId,
-                  items: [
-                    DropdownMenuItem(value: null, child: Text(t.withoutCategory)),
-                    ..._categories.map((c) {
-                      String catName = _translateCategoryName(c['name'], t);
-                      return DropdownMenuItem(value: c['id'], child: Text('${c['icon'] ?? '📁'} $catName'));
-                    }),
-                  ],
-                  onChanged: (v) => categoryId = v,
-                  decoration: InputDecoration(labelText: t.categoryOptional, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
-                  dropdownColor: colorScheme.surface,
-                  style: TextStyle(color: colorScheme.onSurface),
-                ),
-                const SizedBox(height: 8),
-                RecipeEditor(
-                  companyId: widget.companyId,
-                  initialItems: localRecipeItems,
-                  onChanged: (newItems) {
-                    localRecipeItems = newItems;
-                    setStateDialog(() {});
-                  },
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: Text(t.cancel, style: TextStyle(color: colorScheme.onSurfaceVariant))),
-            ElevatedButton(
-              onPressed: () async {
-                final name = nameController.text.trim();
-                final price = double.tryParse(priceController.text);
-                if (name.isEmpty || price == null) return;
-                final recipeJson = localRecipeItems.isNotEmpty
-                    ? jsonEncode(localRecipeItems.map((i) => ({
-                        'product_id': i['product_id'],
-                        'quantity': i['quantity'],
-                      })).toList())
-                    : null;
-                try {
-                  await _api.patch('/showcase/${item.id}', queryParameters: {'company_id': widget.companyId}, data: {
-                    'name': name,
-                    'price': price,
-                    'category_id': categoryId,
-                    'recipe': recipeJson,
-                  });
-                  Navigator.pop(context);
-                  _loadData();
-                } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
-                }
-              },
-              child: Text(t.save),
-            ),
-          ],
-        );
-      },
-    ),
-  );
-}
 
   Future<void> _deleteItem(ShowcaseItem item) async {
     if (!_canEdit) return;
@@ -394,6 +405,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
     }
   }
 
+  // Продажа одного товара
   Future<void> _sellItem(ShowcaseItem item) async {
     if (!_canSell) return;
     final t = AppLocalizations.of(context)!;
@@ -401,6 +413,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
     double quantity = 1.0;
     double salePrice = item.price;
     final quantityController = TextEditingController(text: quantity.toString());
+    final counterpartyController = TextEditingController();
 
     final accountsRes = await _api.get('/accounts', queryParameters: {'company_id': widget.companyId});
     final accounts = accountsRes.data as List;
@@ -408,7 +421,6 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
     int? bankAccountId = accounts.firstWhere((a) => a['type'] == 'bank', orElse: () => null)?['id'];
     int? selectedAccountId = cashAccountId;
     DateTime date = DateTime.now();
-    String counterparty = '';
 
     await showDialog(
       context: context,
@@ -502,10 +514,69 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                     },
                   ),
                   const SizedBox(height: 8),
-                  TextField(
-                    onChanged: (v) => counterparty = v,
-                    decoration: InputDecoration(labelText: t.counterpartyOptional, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
-                    style: TextStyle(color: colorScheme.onSurface),
+                  // Автодополнение для контрагента
+                  Autocomplete<String>(
+                    optionsBuilder: (TextEditingValue textEditingValue) {
+                      if (textEditingValue.text.isEmpty) {
+                        return const Iterable<String>.empty();
+                      }
+                      final lower = textEditingValue.text.toLowerCase();
+                      return _existingCounterparties.where((c) => c.toLowerCase().contains(lower));
+                    },
+                    onSelected: (String selection) {
+                      counterpartyController.text = selection;
+                    },
+                    fieldViewBuilder: (context, textController, focusNode, onFieldSubmitted) {
+                      if (counterpartyController.text != textController.text) {
+                        textController.text = counterpartyController.text;
+                      }
+                      textController.addListener(() {
+                        if (counterpartyController.text != textController.text) {
+                          counterpartyController.text = textController.text;
+                        }
+                      });
+                      return TextFormField(
+                        controller: textController,
+                        focusNode: focusNode,
+                        decoration: InputDecoration(
+                          labelText: t.counterpartyOptional,
+                          labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+                          border: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
+                          enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
+                          focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.primary)),
+                          suffixIcon: _loadingCounterparties
+                              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                              : IconButton(
+                                  icon: const Icon(Icons.refresh),
+                                  onPressed: _loadCounterparties,
+                                  tooltip: t.refreshList,
+                                ),
+                        ),
+                        style: TextStyle(color: colorScheme.onSurface),
+                      );
+                    },
+                    optionsViewBuilder: (context, onSelected, options) {
+                      return Align(
+                        alignment: Alignment.topLeft,
+                        child: Material(
+                          elevation: 4,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxHeight: 200),
+                            child: ListView.builder(
+                              shrinkWrap: true,
+                              itemCount: options.length,
+                              itemBuilder: (context, index) {
+                                final option = options.elementAt(index);
+                                return ListTile(
+                                  title: Text(option),
+                                  onTap: () => onSelected(option),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),
@@ -529,7 +600,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                         items.add({
                           'product_id': productId,
                           'quantity': totalQty,
-                          'price_per_unit': item.price,
+                          'price_per_unit': item.price, // цена из витрины
                         });
                       }
                     } catch (e) {
@@ -542,7 +613,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                     'date': date.toIso8601String(),
                     'account_id': selectedAccountId,
                     'description': '${t.saleFromShowcase}: ${item.name} (${quantity.toStringAsFixed(2)} ${t.pcs})',
-                    'counterparty': counterparty.isNotEmpty ? counterparty : null,
+                    'counterparty': counterpartyController.text.isNotEmpty ? counterpartyController.text : null,
                     'items': items,
                     'category_id': item.categoryId,
                     'showcase_item_id': item.id,
@@ -567,6 +638,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
     );
   }
 
+  // Массовая продажа
   Future<void> _openBulkSaleDialog() async {
     if (!_canSell) return;
     final t = AppLocalizations.of(context)!;
@@ -587,7 +659,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
 
     int? cashAccountId, bankAccountId, selectedAccountId;
     DateTime date = DateTime.now();
-    String counterparty = '';
+    final counterpartyController = TextEditingController();
 
     final accountsRes = await _api.get('/accounts', queryParameters: {'company_id': widget.companyId});
     final accounts = accountsRes.data as List;
@@ -706,10 +778,69 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                     },
                   ),
                   const SizedBox(height: 8),
-                  TextField(
-                    onChanged: (v) => counterparty = v,
-                    decoration: InputDecoration(labelText: t.counterpartyOptional, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
-                    style: TextStyle(color: colorScheme.onSurface),
+                  // Автодополнение для контрагента в массовой продаже
+                  Autocomplete<String>(
+                    optionsBuilder: (TextEditingValue textEditingValue) {
+                      if (textEditingValue.text.isEmpty) {
+                        return const Iterable<String>.empty();
+                      }
+                      final lower = textEditingValue.text.toLowerCase();
+                      return _existingCounterparties.where((c) => c.toLowerCase().contains(lower));
+                    },
+                    onSelected: (String selection) {
+                      counterpartyController.text = selection;
+                    },
+                    fieldViewBuilder: (context, textController, focusNode, onFieldSubmitted) {
+                      if (counterpartyController.text != textController.text) {
+                        textController.text = counterpartyController.text;
+                      }
+                      textController.addListener(() {
+                        if (counterpartyController.text != textController.text) {
+                          counterpartyController.text = textController.text;
+                        }
+                      });
+                      return TextFormField(
+                        controller: textController,
+                        focusNode: focusNode,
+                        decoration: InputDecoration(
+                          labelText: t.counterpartyOptional,
+                          labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+                          border: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
+                          enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
+                          focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.primary)),
+                          suffixIcon: _loadingCounterparties
+                              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                              : IconButton(
+                                  icon: const Icon(Icons.refresh),
+                                  onPressed: _loadCounterparties,
+                                  tooltip: t.refreshList,
+                                ),
+                        ),
+                        style: TextStyle(color: colorScheme.onSurface),
+                      );
+                    },
+                    optionsViewBuilder: (context, onSelected, options) {
+                      return Align(
+                        alignment: Alignment.topLeft,
+                        child: Material(
+                          elevation: 4,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxHeight: 200),
+                            child: ListView.builder(
+                              shrinkWrap: true,
+                              itemCount: options.length,
+                              itemBuilder: (context, index) {
+                                final option = options.elementAt(index);
+                                return ListTile(
+                                  title: Text(option),
+                                  onTap: () => onSelected(option),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),
@@ -739,7 +870,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                           items.add({
                             'product_id': r['product_id'],
                             'quantity': r['quantity'] * qty,
-                            'price_per_unit': si['price'],
+                            'price_per_unit': price, // цена из витрины
                           });
                         }
                       } catch (e) {
@@ -752,7 +883,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                       'date': date.toIso8601String(),
                       'account_id': selectedAccountId,
                       'description': '${t.saleFromShowcase}: ${si['name']} (${qty.toStringAsFixed(2)} ${t.pcs})',
-                      'counterparty': counterparty.isNotEmpty ? counterparty : null,
+                      'counterparty': counterpartyController.text.isNotEmpty ? counterpartyController.text : null,
                       'items': items,
                       'category_id': si['category_id'],
                       'showcase_item_id': si['id'],

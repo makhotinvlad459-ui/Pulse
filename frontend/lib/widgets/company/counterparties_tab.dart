@@ -20,19 +20,32 @@ class _CounterpartiesTabState extends ConsumerState<CounterpartiesTab> {
   List<Map<String, dynamic>> _counterparties = [];
   bool _loading = true;
   String? _error;
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
 
   bool get _canView => ref.read(authProvider).user?.role == UserRole.founder ||
       widget.permissions.contains('view_counterparties');
   bool get _canEdit => ref.read(authProvider).user?.role == UserRole.founder ||
       widget.permissions.contains('manage_counterparties');
 
+  List<Map<String, dynamic>> get _filteredCounterparties {
+    if (_searchQuery.isEmpty) return _counterparties;
+    return _counterparties.where((cp) =>
+        cp['name'].toLowerCase().contains(_searchQuery.toLowerCase())).toList();
+  }
+
   @override
   void initState() {
     super.initState();
-    // Откладываем загрузку до первого кадра, чтобы context был готов
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadCounterparties();
     });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadCounterparties() async {
@@ -42,8 +55,6 @@ class _CounterpartiesTabState extends ConsumerState<CounterpartiesTab> {
       _error = null;
     });
     final api = ApiClient();
-    // Не используем AppLocalizations.of(context) здесь, чтобы не рисковать.
-    // Получим его один раз в методе build или передадим в параметры.
     try {
       final res = await api.get('/counterparties', queryParameters: {'company_id': widget.companyId});
       if (!mounted) return;
@@ -58,7 +69,6 @@ class _CounterpartiesTabState extends ConsumerState<CounterpartiesTab> {
         _error = e.toString();
         _loading = false;
       });
-      // Используем context после mounted
       if (mounted) {
         final t = AppLocalizations.of(context)!;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
@@ -261,15 +271,33 @@ class _CounterpartiesTabState extends ConsumerState<CounterpartiesTab> {
               label: Text(t.addCounterparty),
             ),
           ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: TextField(
+            controller: _searchController,
+            onChanged: (v) => setState(() => _searchQuery = v),
+            decoration: InputDecoration(
+              hintText: t.searchByNameOrArticle,
+              hintStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+              prefixIcon: Icon(Icons.search, color: colorScheme.onSurfaceVariant),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            style: TextStyle(color: colorScheme.onSurface),
+          ),
+        ),
         Expanded(
           child: _loading
               ? const Center(child: CircularProgressIndicator())
-              : _counterparties.isEmpty
-                  ? Center(child: Text(t.noCounterparties, style: TextStyle(color: colorScheme.onSurfaceVariant)))
+              : _filteredCounterparties.isEmpty
+                  ? Center(child: Text(
+                      _searchQuery.isEmpty 
+                          ? t.noCounterparties 
+                          : t.noMatches,
+                      style: TextStyle(color: colorScheme.onSurfaceVariant)))
                   : ListView.builder(
-                      itemCount: _counterparties.length,
+                      itemCount: _filteredCounterparties.length,
                       itemBuilder: (context, index) {
-                        final cp = _counterparties[index];
+                        final cp = _filteredCounterparties[index];
                         return Card(
                           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                           child: ListTile(

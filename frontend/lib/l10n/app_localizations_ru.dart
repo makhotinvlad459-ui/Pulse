@@ -1764,4 +1764,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get fileSaved => 'Сохранено';
+
+  @override
+  String get noMatches => 'Совпадений не найдено';
 }
