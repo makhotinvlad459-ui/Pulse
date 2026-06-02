@@ -292,7 +292,7 @@ class _AddTransactionDialogState extends ConsumerState<AddTransactionDialog> {
         'description': _description,
         'counterparty': _counterparty,
         'attachment_url': attachmentUrl,
-        'products': _selectedProducts.isNotEmpty ? _selectedProducts : null,
+        'items': _selectedProducts.isNotEmpty ? _selectedProducts : null,
       });
 
       widget.onSuccess();
