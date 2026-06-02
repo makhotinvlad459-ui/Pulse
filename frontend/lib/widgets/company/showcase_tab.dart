@@ -251,26 +251,39 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
   }
 
   Future<void> _editItem(ShowcaseItem item) async {
-    if (!_canEdit) return;
-    final t = AppLocalizations.of(context)!;
-    final nameController = TextEditingController(text: item.name);
-    final priceController = TextEditingController(text: item.price.toString());
-    int? categoryId = item.categoryId;
-    List<Map<String, dynamic>> localRecipeItems = [];
-    if (item.recipe != null && item.recipe!.isNotEmpty) {
-      try {
-        final decoded = jsonDecode(item.recipe!);
-        if (decoded is List) {
-          localRecipeItems = decoded.map((r) => ({
-            'product_id': r['product_id'],
-            'product_name': '',
-            'quantity': (r['quantity'] as num).toDouble(),
-          })).toList();
+  if (!_canEdit) return;
+  final t = AppLocalizations.of(context)!;
+  final nameController = TextEditingController(text: item.name);
+  final priceController = TextEditingController(text: item.price.toString());
+  int? categoryId = item.categoryId;
+  List<Map<String, dynamic>> localRecipeItems = [];
+
+  if (item.recipe != null && item.recipe!.isNotEmpty) {
+    try {
+      final decoded = jsonDecode(item.recipe!);
+      if (decoded is List) {
+        // Получаем список всех product_id из рецепта
+        List<int> productIds = decoded.map<int>((r) => r['product_id'] as int).toList();
+        // Загружаем все продукты компании
+        final api = ApiClient();
+        final productsRes = await api.get('/products', queryParameters: {'company_id': widget.companyId});
+        final products = (productsRes.data as List).cast<Map<String, dynamic>>();
+        // Создаём словарь product_id => product_name
+        final Map<int, String> productNames = {};
+        for (var p in products) {
+          productNames[p['id']] = p['name'];
         }
-      } catch (e) {
-        print('Error parsing recipe: $e');
+        // Формируем список с названиями
+        localRecipeItems = decoded.map((r) => {
+          'product_id': r['product_id'],
+          'product_name': productNames[r['product_id']] ?? 'Неизвестный товар',
+          'quantity': (r['quantity'] as num).toDouble(),
+        }).toList();
       }
+    } catch (e) {
+      print('Error parsing recipe: $e');
     }
+  }
     await showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
