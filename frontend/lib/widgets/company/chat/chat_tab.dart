@@ -305,77 +305,73 @@ Future<void> _reconnectWebSocket() async {
 
   // НОВЫЙ МЕТОД - загружает фото через API
   Future<void> _showPhotoViaApi(int messageId) async {
-    final api = ApiClient();
-    try {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => const Center(child: CircularProgressIndicator()),
-      );
+  final api = ApiClient();
+  try {
+    showDialog(
+      context: context,
+      barrierDismissible: true,  // чтобы можно было закрыть тапом по фону
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
 
-      final response = await api.getChatFile(messageId);
-      final bytes = response.data is List<int>
-          ? Uint8List.fromList(response.data as List<int>)
-          : Uint8List.fromList((response.data as String).codeUnits);
+    final response = await api.getChatFile(messageId);
+    final bytes = response.data is List<int>
+        ? Uint8List.fromList(response.data as List<int>)
+        : Uint8List.fromList((response.data as String).codeUnits);
 
-      if (mounted) Navigator.pop(context);
+    if (mounted) Navigator.pop(context);
 
-      final size = MediaQuery.of(context).size;
-      final dialogWidth = size.width * 0.9;
-      final dialogHeight = size.height * 0.8;
+    // Размер экрана
+    final size = MediaQuery.of(context).size;
 
-      showDialog(
-        context: context,
-        builder: (context) => Dialog(
-          backgroundColor: Colors.transparent,
-          insetPadding: EdgeInsets.symmetric(
-            horizontal: size.width * 0.05,
-            vertical: size.height * 0.1,
-          ),
-          child: Container(
-            width: dialogWidth,
-            height: dialogHeight,
-            decoration: BoxDecoration(
-              color: Colors.black87,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Stack(
-              children: [
-                Center(
-                  child: InteractiveViewer(
-                    child: Image.memory(bytes, fit: BoxFit.contain),
-                  ),
+    showDialog(
+      context: context,
+      barrierDismissible: true,  // закрытие по тапу вне фото
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,   // полностью прозрачный фон
+        insetPadding: EdgeInsets.zero,          // убираем внутренние отступы
+        child: SizedBox(
+          width: size.width,
+          height: size.height,
+          child: Stack(
+            children: [
+              // Фото на весь экран
+              Center(
+                child: InteractiveViewer(
+                  child: Image.memory(bytes, fit: BoxFit.contain),
                 ),
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white, size: 30),
-                    onPressed: () => Navigator.pop(context),
-                  ),
+              ),
+              // Кнопка закрытия (верхний правый угол)
+              Positioned(
+                top: 40,
+                right: 20,
+                child: IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                  onPressed: () => Navigator.pop(context),
                 ),
-                Positioned(
-                  bottom: 8,
-                  right: 8,
-                  child: IconButton(
-                    icon: const Icon(Icons.download, color: Colors.white, size: 30),
-                    onPressed: () => _downloadFile(messageId, 'photo.jpg'),
-                  ),
+              ),
+              // Кнопка скачивания (нижний правый угол)
+              Positioned(
+                bottom: 40,
+                right: 20,
+                child: IconButton(
+                  icon: const Icon(Icons.download, color: Colors.white, size: 30),
+                  onPressed: () => _downloadFile(messageId, 'photo.jpg'),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
+      ),
+    );
+  } catch (e) {
+    if (mounted) {
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error load photo: $e')),
       );
-    } catch (e) {
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
-        );
-      }
     }
   }
+}
 
   // Скачивание файла через API (по ID)
   Future<void> _downloadFile(int messageId, String filename) async {
