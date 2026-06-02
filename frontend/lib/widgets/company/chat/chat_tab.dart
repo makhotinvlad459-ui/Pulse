@@ -38,7 +38,8 @@ class ChatTab extends ConsumerStatefulWidget {
   ConsumerState<ChatTab> createState() => _ChatTabState();
 }
 
-class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClientMixin {
+class _ChatTabState extends ConsumerState<ChatTab>
+    with AutomaticKeepAliveClientMixin, WidgetsBindingObserver {
   List<Map<String, dynamic>> _messages = [];
   bool _loadingMessages = true;
   final TextEditingController _messageController = TextEditingController();
@@ -54,75 +55,95 @@ class _ChatTabState extends ConsumerState<ChatTab> with AutomaticKeepAliveClient
   bool get wantKeepAlive => true;
 
   @override
-void initState() {
-  super.initState();
-  // Регистрация платформенной реализации через фабрику
-  ChatTabPlatformSingleton.register(createChatTabPlatform());
-  _loadChatMessages();
-  _connectWebSocket();
-  _markChatRead();
-  _lastVisit = DateTime.now();
-}
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    // Регистрация платформенной реализации через фабрику
+    ChatTabPlatformSingleton.register(createChatTabPlatform());
+    _loadChatMessages();
+    _connectWebSocket();
+    _markChatRead();
+    _lastVisit = DateTime.now();
+  }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _chatChannel?.sink.close();
     _scrollController.dispose();
     _messageController.dispose();
     super.dispose();
   }
 
-  Future<void> _connectWebSocket() async {
-  final api = ApiClient();
-  final token = await api.getToken();
-  if (token == null) return;
-
-  final encodedToken = Uri.encodeComponent(token);
-  final chatUrl = 'wss://pulse-yourmoney.com/api/ws/chat/${widget.companyId}?token=$encodedToken';
-  print('🔌 Connecting to Chat WebSocket: $chatUrl');
-
-  try {
-    _chatChannel = WebSocketChannel.connect(Uri.parse(chatUrl));
-    await _chatChannel!.ready;
-    print('✅ WebSocket connected');
-    _chatChannel!.stream.listen(
-      (data) {
-        print('📨 WebSocket received: $data');
-        _handleChatEvent(data);
-      },
-      onError: (error) {
-        print('❌ Chat WS stream error: $error');
-        // Пробуем переподключиться через 3 секунды
-        Future.delayed(const Duration(seconds: 3), () {
-          if (mounted) _connectWebSocket();
-        });
-      },
-      onDone: () {
-        print('🔌 WebSocket closed, reconnecting...');
-        if (mounted) _connectWebSocket();
-      },
-    );
-  } catch (e) {
-    print('❌ Failed to connect chat WS: $e');
-    // Повторная попытка через 5 секунд
-    Future.delayed(const Duration(seconds: 5), () {
-      if (mounted) _connectWebSocket();
-    });
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Приложение вернулось на передний план
+      _reconnectWebSocket();
+      _loadChatMessages();
+    }
   }
-}
+
+  Future<void> _reconnectWebSocket() async {
+    if (_chatChannel != null) {
+      await _chatChannel!.sink.close();
+      _chatChannel = null;
+    }
+    await _connectWebSocket();
+  }
+
+  Future<void> _connectWebSocket() async {
+    final api = ApiClient();
+    final token = await api.getToken();
+    if (token == null) return;
+
+    final encodedToken = Uri.encodeComponent(token);
+    final chatUrl =
+        'wss://pulse-yourmoney.com/api/ws/chat/${widget.companyId}?token=$encodedToken';
+    print('🔌 Connecting to Chat WebSocket: $chatUrl');
+
+    try {
+      _chatChannel = WebSocketChannel.connect(Uri.parse(chatUrl));
+      await _chatChannel!.ready;
+      print('✅ WebSocket connected');
+      _chatChannel!.stream.listen(
+        (data) {
+          print('📨 WebSocket received: $data');
+          _handleChatEvent(data);
+        },
+        onError: (error) {
+          print('❌ Chat WS stream error: $error');
+          // Пробуем переподключиться через 3 секунды
+          Future.delayed(const Duration(seconds: 3), () {
+            if (mounted) _reconnectWebSocket();
+          });
+        },
+        onDone: () {
+          print('🔌 WebSocket closed, reconnecting...');
+          if (mounted) _reconnectWebSocket();
+        },
+      );
+    } catch (e) {
+      print('❌ Failed to connect chat WS: $e');
+      // Повторная попытка через 5 секунд
+      Future.delayed(const Duration(seconds: 5), () {
+        if (mounted) _reconnectWebSocket();
+      });
+    }
+  }
 
   void _handleChatEvent(dynamic rawData) {
     try {
       final data = rawData is String ? jsonDecode(rawData) : rawData;
-      
+
       // Если пришел не словарь, игнорируем
-      if (data is! Map) return; 
-      
+      if (data is! Map) return;
+
       final type = data['type'];
-      
+
       // Игнорируем служебный ping, чтобы впустую не дергать setState и не нагружать UI
       if (type == 'ping') return;
-      
+
       setState(() {
         switch (type) {
           case 'new_message':
@@ -166,7 +187,8 @@ void initState() {
     int unread = 0;
     if (_lastVisit != null) {
       unread = _messages
-          .where((msg) => DateTime.parse(msg['created_at']).isAfter(_lastVisit!))
+          .where((msg) =>
+              DateTime.parse(msg['created_at']).isAfter(_lastVisit!))
           .length;
     }
     widget.onUnreadMessagesChanged?.call(unread);
@@ -193,7 +215,7 @@ void initState() {
       await _markChatRead();
       _lastVisit = DateTime.now();
       _updateUnreadCount();
-      
+
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_scrollController.hasClients && _messages.isNotEmpty) {
           _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
@@ -274,64 +296,81 @@ void initState() {
   }
 
   // НОВЫЙ МЕТОД - загружает фото через API
-Future<void> _showPhotoViaApi(int messageId) async {
-  final api = ApiClient();
-  try {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(child: CircularProgressIndicator()),
-    );
-    
-    final response = await api.getChatFile(messageId);
-    final bytes = response.data is List<int> 
-        ? Uint8List.fromList(response.data as List<int>)
-        : Uint8List.fromList((response.data as String).codeUnits);
-    
-    if (mounted) Navigator.pop(context);
-    
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        backgroundColor: Colors.transparent,
-        child: Stack(
-          children: [
-            InteractiveViewer(
-              child: Image.memory(bytes),  // bytes теперь Uint8List
-            ),
-            Positioned(
-              top: 40,
-              right: 20,
-              child: IconButton(
-                icon: const Icon(Icons.close, color: Colors.white, size: 30),
-                onPressed: () => Navigator.pop(context),
-              ),
-            ),
-            Positioned(
-              bottom: 20,
-              right: 20,
-              child: IconButton(
-                icon: const Icon(Icons.download, color: Colors.white, size: 30),
-                onPressed: () => _downloadFile(messageId, 'photo.jpg'),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  } catch (e) {
-    if (mounted) {
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка: $e')),
+  Future<void> _showPhotoViaApi(int messageId) async {
+    final api = ApiClient();
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
       );
+
+      final response = await api.getChatFile(messageId);
+      final bytes = response.data is List<int>
+          ? Uint8List.fromList(response.data as List<int>)
+          : Uint8List.fromList((response.data as String).codeUnits);
+
+      if (mounted) Navigator.pop(context);
+
+      final size = MediaQuery.of(context).size;
+      final dialogWidth = size.width * 0.9;
+      final dialogHeight = size.height * 0.8;
+
+      showDialog(
+        context: context,
+        builder: (context) => Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: EdgeInsets.symmetric(
+            horizontal: size.width * 0.05,
+            vertical: size.height * 0.1,
+          ),
+          child: Container(
+            width: dialogWidth,
+            height: dialogHeight,
+            decoration: BoxDecoration(
+              color: Colors.black87,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Stack(
+              children: [
+                Center(
+                  child: InteractiveViewer(
+                    child: Image.memory(bytes, fit: BoxFit.contain),
+                  ),
+                ),
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ),
+                Positioned(
+                  bottom: 8,
+                  right: 8,
+                  child: IconButton(
+                    icon: const Icon(Icons.download, color: Colors.white, size: 30),
+                    onPressed: () => _downloadFile(messageId, 'photo.jpg'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка: $e')),
+        );
+      }
     }
   }
-}
 
-
-// Скачивание файла через API (по ID)
-Future<void> _downloadFile(int messageId, String filename) async {
+  // Скачивание файла через API (по ID)
+  Future<void> _downloadFile(int messageId, String filename) async {
     final api = ApiClient();
     try {
       final response = await api.getChatFile(messageId);
@@ -359,112 +398,114 @@ Future<void> _downloadFile(int messageId, String filename) async {
   }
 
   Future<void> _sendMessage() async {
-  final t = AppLocalizations.of(context)!;
-  final text = _messageController.text.trim();
-  final hasFile = _attachmentFile != null || _webFile != null;
+    final t = AppLocalizations.of(context)!;
+    final text = _messageController.text.trim();
+    final hasFile = _attachmentFile != null || _webFile != null;
 
-  if (text.isEmpty && !hasFile) return;
+    if (text.isEmpty && !hasFile) return;
 
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (context) => const Center(child: CircularProgressIndicator()),
-  );
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
 
-  final api = ApiClient();
-  try {
-    String? attachmentUrl;
+    final api = ApiClient();
+    try {
+      String? attachmentUrl;
 
-    if (hasFile) {
-      Uint8List fileBytes;
-      String fileName;
-      bool isImage = false;
+      if (hasFile) {
+        Uint8List fileBytes;
+        String fileName;
+        bool isImage = false;
 
-      if (_attachmentFile != null) {
-        // Изображение из галереи/камеры
-        fileBytes = await _attachmentFile!.readAsBytes();
-        fileName = _attachmentFile!.name;
-      } else {
-        // Файл через FilePicker
-        if (_webFile == null) throw Exception('No file selected');
-
-        // Получаем байты (читаем из файла, если bytes null)
-        if (_webFile!.bytes != null) {
-          fileBytes = _webFile!.bytes!;
-        } else if (_webFile!.path != null) {
-          final file = File(_webFile!.path!);
-          fileBytes = await file.readAsBytes();
+        if (_attachmentFile != null) {
+          // Изображение из галереи/камеры
+          fileBytes = await _attachmentFile!.readAsBytes();
+          fileName = _attachmentFile!.name;
         } else {
-          throw Exception('Cannot read file bytes');
+          // Файл через FilePicker
+          if (_webFile == null) throw Exception('No file selected');
+
+          // Получаем байты (читаем из файла, если bytes null)
+          if (_webFile!.bytes != null) {
+            fileBytes = _webFile!.bytes!;
+          } else if (_webFile!.path != null) {
+            final file = File(_webFile!.path!);
+            fileBytes = await file.readAsBytes();
+          } else {
+            throw Exception('Cannot read file bytes');
+          }
+          fileName = _webFile!.name;
         }
-        fileName = _webFile!.name;
+
+        // Проверяем, изображение ли это
+        final ext = fileName.toLowerCase();
+        isImage = ext.endsWith('.jpg') ||
+            ext.endsWith('.jpeg') ||
+            ext.endsWith('.png') ||
+            ext.endsWith('.gif') ||
+            ext.endsWith('.webp');
+
+        // Сжимаем только изображения
+        final compressedBytes = isImage
+            ? await ImageCompression.compressImage(fileBytes)
+            : fileBytes;
+
+        final uploadRes = await api.uploadChatFile(
+          companyId: widget.companyId,
+          bytes: compressedBytes,
+          filename: fileName,
+        );
+        attachmentUrl = uploadRes['url'];
+        if (attachmentUrl == null) throw Exception('Upload returned no URL');
       }
 
-      // Проверяем, изображение ли это
-      final ext = fileName.toLowerCase();
-      isImage = ext.endsWith('.jpg') || ext.endsWith('.jpeg') ||
-                ext.endsWith('.png') || ext.endsWith('.gif') ||
-                ext.endsWith('.webp');
+      await api.post('/chat/company/${widget.companyId}', data: {
+        'message': text,
+        'attachment_url': attachmentUrl,
+      });
 
-      // Сжимаем только изображения
-      final compressedBytes = isImage
-          ? await ImageCompression.compressImage(fileBytes)
-          : fileBytes;
+      _messageController.clear();
+      setState(() {
+        _attachmentFile = null;
+        _webFile = null;
+      });
 
-      final uploadRes = await api.uploadChatFile(
-        companyId: widget.companyId,
-        bytes: compressedBytes,
-        filename: fileName,
-      );
-      attachmentUrl = uploadRes['url'];
-      if (attachmentUrl == null) throw Exception('Upload returned no URL');
+      widget.onUnreadMessagesChanged?.call(0);
+      await _markChatRead();
+      _lastVisit = DateTime.now();
+
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) Navigator.pop(context);
+      print('Error sending message: $e');
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('${t.sendError}: $e')));
     }
-
-    await api.post('/chat/company/${widget.companyId}', data: {
-      'message': text,
-      'attachment_url': attachmentUrl,
-    });
-
-    _messageController.clear();
-    setState(() {
-      _attachmentFile = null;
-      _webFile = null;
-    });
-
-    widget.onUnreadMessagesChanged?.call(0);
-    await _markChatRead();
-    _lastVisit = DateTime.now();
-
-    if (mounted) Navigator.pop(context);
-  } catch (e) {
-    if (mounted) Navigator.pop(context);
-    print('Error sending message: $e');
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text('${t.sendError}: $e')));
   }
-}
 
   Future<Uint8List?> _getImageBytes(int messageId) async {
-  final api = ApiClient();
-  try {
-    final response = await api.getChatFile(messageId);
-    if (response.statusCode != 200) {
-      print('Failed to load image $messageId: HTTP ${response.statusCode}');
+    final api = ApiClient();
+    try {
+      final response = await api.getChatFile(messageId);
+      if (response.statusCode != 200) {
+        print('Failed to load image $messageId: HTTP ${response.statusCode}');
+        return null;
+      }
+      if (response.data is List<int>) {
+        return Uint8List.fromList(response.data as List<int>);
+      } else if (response.data is String) {
+        return Uint8List.fromList((response.data as String).codeUnits);
+      } else {
+        print('Unexpected response data type: ${response.data.runtimeType}');
+        return null;
+      }
+    } catch (e) {
+      print('Error loading image $messageId: $e');
       return null;
     }
-    if (response.data is List<int>) {
-      return Uint8List.fromList(response.data as List<int>);
-    } else if (response.data is String) {
-      return Uint8List.fromList((response.data as String).codeUnits);
-    } else {
-      print('Unexpected response data type: ${response.data.runtimeType}');
-      return null;
-    }
-  } catch (e) {
-    print('Error loading image $messageId: $e');
-    return null;
   }
-}
 
   Future<void> _clearChat() async {
     final t = AppLocalizations.of(context)!;
@@ -500,13 +541,15 @@ Future<void> _downloadFile(int messageId, String filename) async {
     final action = await showDialog<_MessageAction>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(t.messageActions, style: TextStyle(color: colorScheme.onSurface)),
+        title: Text(t.messageActions,
+            style: TextStyle(color: colorScheme.onSurface)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
               leading: Icon(Icons.edit, color: colorScheme.primary),
-              title: Text(t.edit, style: TextStyle(color: colorScheme.onSurface)),
+              title:
+                  Text(t.edit, style: TextStyle(color: colorScheme.onSurface)),
               onTap: () => Navigator.pop(context, _MessageAction.edit),
             ),
             ListTile(
@@ -519,7 +562,8 @@ Future<void> _downloadFile(int messageId, String filename) async {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, _MessageAction.cancel),
-            child: Text(t.cancel, style: TextStyle(color: colorScheme.onSurfaceVariant)),
+            child: Text(t.cancel,
+                style: TextStyle(color: colorScheme.onSurfaceVariant)),
           ),
         ],
       ),
@@ -538,17 +582,21 @@ Future<void> _downloadFile(int messageId, String filename) async {
     await showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(t.editMessage, style: TextStyle(color: colorScheme.onSurface)),
+        title: Text(t.editMessage,
+            style: TextStyle(color: colorScheme.onSurface)),
         content: TextField(
           controller: controller,
-          decoration: InputDecoration(hintText: t.newText, hintStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+          decoration: InputDecoration(
+              hintText: t.newText,
+              hintStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
           style: TextStyle(color: colorScheme.onSurface),
           maxLines: 3,
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text(t.cancel, style: TextStyle(color: colorScheme.onSurfaceVariant)),
+            child: Text(t.cancel,
+                style: TextStyle(color: colorScheme.onSurfaceVariant)),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -556,10 +604,12 @@ Future<void> _downloadFile(int messageId, String filename) async {
               if (newText.isEmpty) return;
               final api = ApiClient();
               try {
-                await api.patch('/chat/message/${msg['id']}', data: {'message': newText});
+                await api.patch('/chat/message/${msg['id']}',
+                    data: {'message': newText});
                 if (mounted) Navigator.pop(context);
               } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+                ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('${t.error}: $e')));
               }
             },
             style: ElevatedButton.styleFrom(
@@ -581,8 +631,12 @@ Future<void> _downloadFile(int messageId, String filename) async {
         title: Text(t.deleteMessageTitle),
         content: Text(t.deleteMessageContent),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(t.cancel)),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: Text(t.delete, style: const TextStyle(color: Colors.red))),
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(t.cancel)),
+          TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(t.delete, style: const TextStyle(color: Colors.red))),
         ],
       ),
     );
@@ -596,7 +650,8 @@ Future<void> _downloadFile(int messageId, String filename) async {
       });
       _updateUnreadCount();
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('${t.error}: $e')));
     }
   }
 
@@ -634,7 +689,8 @@ Future<void> _downloadFile(int messageId, String filename) async {
                     final displayName = (originalName == 'Основатель')
                         ? t.founderRole
                         : originalName;
-                    return _buildMessageBubble(isMe, displayName, msg, isFounder, colorScheme, t);
+                    return _buildMessageBubble(
+                        isMe, displayName, msg, isFounder, colorScheme, t);
                   },
                 ),
         ),
@@ -643,12 +699,15 @@ Future<void> _downloadFile(int messageId, String filename) async {
           height: hasAttachment ? 70 : 0,
           child: hasAttachment
               ? Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  margin:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
                     color: colorScheme.primaryContainer.withOpacity(0.3),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: colorScheme.primary.withOpacity(0.3)),
+                    border: Border.all(
+                        color: colorScheme.primary.withOpacity(0.3)),
                   ),
                   child: Row(
                     children: [
@@ -668,8 +727,13 @@ Future<void> _downloadFile(int messageId, String filename) async {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              _attachmentFile != null ? _attachmentFile!.name : _webFile!.name,
-                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: colorScheme.onSurface),
+                              _attachmentFile != null
+                                  ? _attachmentFile!.name
+                                  : _webFile!.name,
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                  color: colorScheme.onSurface),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -677,7 +741,9 @@ Future<void> _downloadFile(int messageId, String filename) async {
                             if (_webFile != null)
                               Text(
                                 '${(_webFile!.size ~/ 1024).toString()} KB',
-                                style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant),
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    color: colorScheme.onSurfaceVariant),
                               ),
                             if (_attachmentFile != null)
                               FutureBuilder<int>(
@@ -686,7 +752,9 @@ Future<void> _downloadFile(int messageId, String filename) async {
                                   if (snapshot.hasData) {
                                     return Text(
                                       '${(snapshot.data! ~/ 1024).toString()} KB',
-                                      style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant),
+                                      style: TextStyle(
+                                          fontSize: 11,
+                                          color: colorScheme.onSurfaceVariant),
                                     );
                                   }
                                   return const SizedBox.shrink();
@@ -741,7 +809,8 @@ Future<void> _downloadFile(int messageId, String filename) async {
               CircleAvatar(
                 backgroundColor: colorScheme.primaryContainer,
                 child: IconButton(
-                  icon: Icon(Icons.send, color: colorScheme.onPrimaryContainer),
+                  icon: Icon(Icons.send,
+                      color: colorScheme.onPrimaryContainer),
                   onPressed: _sendMessage,
                 ),
               ),
@@ -753,142 +822,182 @@ Future<void> _downloadFile(int messageId, String filename) async {
   }
 
   Widget _buildMessageBubble(
-    bool isMe, String displayName, Map<String, dynamic> msg, bool isFounder, ColorScheme colorScheme, AppLocalizations t) {
-  final hasAttachment = msg['attachment_url'] != null && msg['attachment_url'].toString().isNotEmpty;
-  final isImage = hasAttachment && msg['attachment_url'].toString().contains(RegExp(r'\.(jpg|jpeg|png|gif|webp)', caseSensitive: false));
-  
-  return Container(
-    margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
-    child: Row(
-      mainAxisAlignment: MainAxisAlignment.start,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        CircleAvatar(
-          radius: 16,
-          backgroundColor: isMe ? colorScheme.primary : colorScheme.primaryContainer,
-          child: Text(
-            displayName.isNotEmpty ? displayName[0].toUpperCase() : 'U',
-            style: TextStyle(
-              color: isMe ? colorScheme.onPrimary : colorScheme.onPrimaryContainer,
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
+    bool isMe,
+    String displayName,
+    Map<String, dynamic> msg,
+    bool isFounder,
+    ColorScheme colorScheme,
+    AppLocalizations t,
+  ) {
+    final hasAttachment = msg['attachment_url'] != null &&
+        msg['attachment_url'].toString().isNotEmpty;
+    final isImage = hasAttachment &&
+        msg['attachment_url']
+            .toString()
+            .contains(RegExp(r'\.(jpg|jpeg|png|gif|webp)',
+                caseSensitive: false));
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CircleAvatar(
+            radius: 16,
+            backgroundColor:
+                isMe ? colorScheme.primary : colorScheme.primaryContainer,
+            child: Text(
+              displayName.isNotEmpty ? displayName[0].toUpperCase() : 'U',
+              style: TextStyle(
+                color: isMe
+                    ? colorScheme.onPrimary
+                    : colorScheme.onPrimaryContainer,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
-        ),
-        const SizedBox(width: 8),
-        Flexible(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Text(
-                    displayName,
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: isMe ? colorScheme.primary : colorScheme.onSurface),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    DateFormat('HH:mm').format(DateTime.parse(msg['created_at']).toLocal()),
-                    style: TextStyle(fontSize: 10, color: colorScheme.onSurfaceVariant),
-                  ),
-                  if (msg['edited'] == true)
-                    Padding(
-                      padding: const EdgeInsets.only(left: 4),
-                      child: Text(t.editedLabel, style: TextStyle(fontSize: 9, color: colorScheme.onSurfaceVariant)),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  color: isMe ? colorScheme.primaryContainer : colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
+          const SizedBox(width: 8),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    if (hasAttachment)
-                      isImage
-                          ? GestureDetector(
-                              onTap: () => _showPhotoViaApi(msg['id']),
-                              child: FutureBuilder<Uint8List?>(
-                                future: _getImageBytes(msg['id']),
-                                builder: (context, snapshot) {
-                                  if (snapshot.connectionState == ConnectionState.waiting) {
-                                    return Container(
-                                      height: 200,
-                                      width: double.infinity,
-                                      color: Colors.grey.shade300,
-                                      child: const Center(child: CircularProgressIndicator()),
-                                    );
-                                  }
-                                  if (snapshot.hasError || snapshot.data == null) {
-                                    return Container(
-                                      height: 200,
-                                      width: double.infinity,
-                                      color: Colors.grey.shade300,
-                                      child: const Icon(Icons.broken_image, size: 50),
-                                    );
-                                  }
-                                  return ClipRRect(
-                                    borderRadius: BorderRadius.circular(12),
-                                    child: Image.memory(
-                                      snapshot.data!,
-                                      height: 200,
-                                      width: double.infinity,
-                                      fit: BoxFit.cover,
-                                    ),
-                                  );
-                                },
-                              ),
-                            )
-                          : GestureDetector(
-                              onTap: () => _downloadFile(msg['id'], msg['attachment_url'].split('/').last),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                decoration: BoxDecoration(
-                                  color: Colors.grey.shade200,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(Icons.insert_drive_file, color: Colors.blue),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      msg['attachment_url'].split('/').last,
-                                      style: const TextStyle(fontSize: 12),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                    if (msg['message'] != null && msg['message'].toString().isNotEmpty)
-                      Text(
-                        msg['message'],
-                        style: TextStyle(
-                          color: isMe ? colorScheme.onPrimaryContainer : colorScheme.onSurface,
-                          fontSize: 14,
-                        ),
+                    Text(
+                      displayName,
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: isMe
+                              ? colorScheme.primary
+                              : colorScheme.onSurface),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      DateFormat('HH:mm').format(
+                          DateTime.parse(msg['created_at']).toLocal()),
+                      style: TextStyle(
+                          fontSize: 10,
+                          color: colorScheme.onSurfaceVariant),
+                    ),
+                    if (msg['edited'] == true)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 4),
+                        child: Text(t.editedLabel,
+                            style: TextStyle(
+                                fontSize: 9,
+                                color: colorScheme.onSurfaceVariant)),
                       ),
                   ],
                 ),
-              ),
-            ],
-          ),
-        ),
-        if (isMe || isFounder)
-          Padding(
-            padding: const EdgeInsets.only(left: 4),
-            child: IconButton(
-              icon: Icon(Icons.more_vert, size: 18, color: colorScheme.onSurfaceVariant),
-              onPressed: () => _showMessageActions(msg),
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
+                const SizedBox(height: 4),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isMe
+                        ? colorScheme.primaryContainer
+                        : colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (hasAttachment)
+                        isImage
+                            ? GestureDetector(
+                                onTap: () => _showPhotoViaApi(msg['id']),
+                                child: FutureBuilder<Uint8List?>(
+                                  future: _getImageBytes(msg['id']),
+                                  builder: (context, snapshot) {
+                                    if (snapshot.connectionState ==
+                                        ConnectionState.waiting) {
+                                      return Container(
+                                        height: 200,
+                                        width: double.infinity,
+                                        color: Colors.grey.shade300,
+                                        child: const Center(
+                                            child: CircularProgressIndicator()),
+                                      );
+                                    }
+                                    if (snapshot.hasError ||
+                                        snapshot.data == null) {
+                                      return Container(
+                                        height: 200,
+                                        width: double.infinity,
+                                        color: Colors.grey.shade300,
+                                        child: const Icon(Icons.broken_image,
+                                            size: 50),
+                                      );
+                                    }
+                                    return ClipRRect(
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: Image.memory(
+                                        snapshot.data!,
+                                        height: 200,
+                                        width: double.infinity,
+                                        fit: BoxFit.cover,
+                                      ),
+                                    );
+                                  },
+                                ),
+                              )
+                            : GestureDetector(
+                                onTap: () => _downloadFile(
+                                    msg['id'],
+                                    msg['attachment_url'].split('/').last),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade200,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.insert_drive_file,
+                                          color: Colors.blue),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        msg['attachment_url'].split('/').last,
+                                        style: const TextStyle(fontSize: 12),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                      if (msg['message'] != null &&
+                          msg['message'].toString().isNotEmpty)
+                        Text(
+                          msg['message'],
+                          style: TextStyle(
+                            color: isMe
+                                ? colorScheme.onPrimaryContainer
+                                : colorScheme.onSurface,
+                            fontSize: 14,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
+          if (isMe || isFounder)
+            Padding(
+              padding: const EdgeInsets.only(left: 4),
+              child: IconButton(
+                icon: Icon(Icons.more_vert,
+                    size: 18, color: colorScheme.onSurfaceVariant),
+                onPressed: () => _showMessageActions(msg),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+            ),
         ],
       ),
     );
