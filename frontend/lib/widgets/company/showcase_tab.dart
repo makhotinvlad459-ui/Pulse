@@ -284,90 +284,92 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
       print('Error parsing recipe: $e');
     }
   }
-    await showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setStateDialog) {
-          final colorScheme = Theme.of(context).colorScheme;
-          return AlertDialog(
-            title: Text(t.editShowcaseItem, style: TextStyle(color: colorScheme.onSurface)),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: nameController,
-                    decoration: InputDecoration(labelText: t.nameLabel, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
-                    style: TextStyle(color: colorScheme.onSurface),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: priceController,
-                    decoration: InputDecoration(labelText: t.priceLabel, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
-                    keyboardType: TextInputType.number,
-                    style: TextStyle(color: colorScheme.onSurface),
-                  ),
-                  const SizedBox(height: 8),
-                  DropdownButtonFormField<int>(
-                    initialValue: categoryId,
-                    items: [
-                      DropdownMenuItem(value: null, child: Text(t.withoutCategory)),
-                      ..._categories.map((c) {
-                        String catName = _translateCategoryName(c['name'], t);
-                        return DropdownMenuItem(value: c['id'], child: Text('${c['icon'] ?? '📁'} $catName'));
-                      }),
-                    ],
-                    onChanged: (v) => categoryId = v,
-                    decoration: InputDecoration(labelText: t.categoryOptional, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
-                    dropdownColor: colorScheme.surface,
-                    style: TextStyle(color: colorScheme.onSurface),
-                  ),
-                  const SizedBox(height: 8),
-                  RecipeEditor(
-                    companyId: widget.companyId,
-                    initialItems: localRecipeItems,
-                    onChanged: (newItems) {
-                      localRecipeItems = newItems;
-                      setStateDialog(() {});
-                    },
-                  ),
-                ],
-              ),
+
+  // Далее остаётся без изменений код диалога редактирования
+  await showDialog(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setStateDialog) {
+        final colorScheme = Theme.of(context).colorScheme;
+        return AlertDialog(
+          title: Text(t.editShowcaseItem, style: TextStyle(color: colorScheme.onSurface)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: InputDecoration(labelText: t.nameLabel, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+                  style: TextStyle(color: colorScheme.onSurface),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: priceController,
+                  decoration: InputDecoration(labelText: t.priceLabel, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+                  keyboardType: TextInputType.number,
+                  style: TextStyle(color: colorScheme.onSurface),
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<int>(
+                  initialValue: categoryId,
+                  items: [
+                    DropdownMenuItem(value: null, child: Text(t.withoutCategory)),
+                    ..._categories.map((c) {
+                      String catName = _translateCategoryName(c['name'], t);
+                      return DropdownMenuItem(value: c['id'], child: Text('${c['icon'] ?? '📁'} $catName'));
+                    }),
+                  ],
+                  onChanged: (v) => categoryId = v,
+                  decoration: InputDecoration(labelText: t.categoryOptional, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
+                  dropdownColor: colorScheme.surface,
+                  style: TextStyle(color: colorScheme.onSurface),
+                ),
+                const SizedBox(height: 8),
+                RecipeEditor(
+                  companyId: widget.companyId,
+                  initialItems: localRecipeItems,
+                  onChanged: (newItems) {
+                    localRecipeItems = newItems;
+                    setStateDialog(() {});
+                  },
+                ),
+              ],
             ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: Text(t.cancel, style: TextStyle(color: colorScheme.onSurfaceVariant))),
-              ElevatedButton(
-                onPressed: () async {
-                  final name = nameController.text.trim();
-                  final price = double.tryParse(priceController.text);
-                  if (name.isEmpty || price == null) return;
-                  final recipeJson = localRecipeItems.isNotEmpty
-                      ? jsonEncode(localRecipeItems.map((i) => ({
-                          'product_id': i['product_id'],
-                          'quantity': i['quantity'],
-                        })).toList())
-                      : null;
-                  try {
-                    await _api.patch('/showcase/${item.id}', queryParameters: {'company_id': widget.companyId}, data: {
-                      'name': name,
-                      'price': price,
-                      'category_id': categoryId,
-                      'recipe': recipeJson,
-                    });
-                    Navigator.pop(context);
-                    _loadData();
-                  } catch (e) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
-                  }
-                },
-                child: Text(t.save),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: Text(t.cancel, style: TextStyle(color: colorScheme.onSurfaceVariant))),
+            ElevatedButton(
+              onPressed: () async {
+                final name = nameController.text.trim();
+                final price = double.tryParse(priceController.text);
+                if (name.isEmpty || price == null) return;
+                final recipeJson = localRecipeItems.isNotEmpty
+                    ? jsonEncode(localRecipeItems.map((i) => ({
+                        'product_id': i['product_id'],
+                        'quantity': i['quantity'],
+                      })).toList())
+                    : null;
+                try {
+                  await _api.patch('/showcase/${item.id}', queryParameters: {'company_id': widget.companyId}, data: {
+                    'name': name,
+                    'price': price,
+                    'category_id': categoryId,
+                    'recipe': recipeJson,
+                  });
+                  Navigator.pop(context);
+                  _loadData();
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+                }
+              },
+              child: Text(t.save),
+            ),
+          ],
+        );
+      },
+    ),
+  );
+}
 
   Future<void> _deleteItem(ShowcaseItem item) async {
     if (!_canEdit) return;

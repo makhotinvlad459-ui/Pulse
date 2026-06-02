@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../../services/api_client.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/locale_provider.dart';
@@ -26,7 +25,7 @@ class _TasksTabState extends ConsumerState<TasksTab> with AutomaticKeepAliveClie
   List<Map<String, dynamic>> _tasks = [];
   List<Map<String, dynamic>> _employees = [];
   bool _loadingTasks = true;
-  String _taskFilter = 'pending';
+  String _taskFilter = 'pending'; // pending, accepted, completed, failed
 
   @override
   bool get wantKeepAlive => true;
@@ -153,7 +152,9 @@ class _TasksTabState extends ConsumerState<TasksTab> with AutomaticKeepAliveClie
                       'assignee_id': assigneeId,
                       'deadline': deadline?.toIso8601String(),
                     });
-                    Navigator.pop(context);
+                    // После создания задачи обновляем список
+                    await _loadTasks();
+                    if (mounted) Navigator.pop(context);
                   } catch (e) {
                     ScaffoldMessenger.of(context)
                         .showSnackBar(SnackBar(content: Text('${t.error}: $e')));
@@ -233,14 +234,21 @@ class _TasksTabState extends ConsumerState<TasksTab> with AutomaticKeepAliveClie
     }
   }
 
-  List<Map<String, dynamic>> get _pendingTasks =>
-      _tasks.where((t) => t['status'] == 'pending').toList();
-  List<Map<String, dynamic>> get _acceptedTasks =>
-      _tasks.where((t) => t['status'] == 'accepted').toList();
-  List<Map<String, dynamic>> get _completedTasks =>
-      _tasks.where((t) => t['status'] == 'completed').toList();
-  List<Map<String, dynamic>> get _failedTasks =>
-      _tasks.where((t) => t['status'] == 'failed').toList();
+  // Фильтрованные списки в зависимости от _taskFilter
+  List<Map<String, dynamic>> get _filteredTasks {
+    switch (_taskFilter) {
+      case 'pending':
+        return _tasks.where((t) => t['status'] == 'pending').toList();
+      case 'accepted':
+        return _tasks.where((t) => t['status'] == 'accepted').toList();
+      case 'completed':
+        return _tasks.where((t) => t['status'] == 'completed').toList();
+      case 'failed':
+        return _tasks.where((t) => t['status'] == 'failed').toList();
+      default:
+        return [];
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -271,7 +279,23 @@ class _TasksTabState extends ConsumerState<TasksTab> with AutomaticKeepAliveClie
                         borderRadius: BorderRadius.circular(20)),
                   ),
                 ),
-              _buildFilterChips(t, colorScheme),
+              // Горизонтальный скролл для чипсов на мобильных
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _filterBtn('pending', t.pendingTasksTab, colorScheme),
+                      const SizedBox(width: 8),
+                      _filterBtn('accepted', t.acceptedTasksTab, colorScheme),
+                      const SizedBox(width: 8),
+                      _filterBtn('completed', t.completedTasksTab, colorScheme),
+                      const SizedBox(width: 8),
+                      _filterBtn('failed', t.failedTasksTab, colorScheme),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -280,45 +304,88 @@ class _TasksTabState extends ConsumerState<TasksTab> with AutomaticKeepAliveClie
               ? const Center(child: CircularProgressIndicator())
               : RefreshIndicator(
                   onRefresh: _loadTasks,
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      children: [
-                        if (_pendingTasks.isNotEmpty)
-                          _buildTaskSection(t.pendingStatus, _pendingTasks,
-                              Colors.orange, currentUser, isFounder, colorScheme, t),
-                        if (_acceptedTasks.isNotEmpty)
-                          _buildTaskSection(t.acceptedStatus, _acceptedTasks,
-                              Colors.blue, currentUser, isFounder, colorScheme, t),
-                        if (_completedTasks.isNotEmpty)
-                          _buildTaskSection(t.completedStatus, _completedTasks,
-                              Colors.green, currentUser, isFounder, colorScheme, t),
-                        if (_failedTasks.isNotEmpty)
-                          _buildTaskSection(t.failedStatus, _failedTasks,
-                              Colors.red, currentUser, isFounder, colorScheme, t),
-                        if (_tasks.isEmpty)
-                          Padding(
-                              padding: const EdgeInsets.all(16.0),
-                              child: Text(t.noTasks, style: TextStyle(color: colorScheme.onSurfaceVariant))),
-                      ],
-                    ),
-                  ),
+                  child: _filteredTasks.isEmpty
+                      ? Center(
+                          child: Text(t.noTasks, style: TextStyle(color: colorScheme.onSurfaceVariant)),
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.all(12),
+                          itemCount: _filteredTasks.length,
+                          itemBuilder: (context, index) {
+                            final task = _filteredTasks[index];
+                            final isAssignee = task['assignee_id'] == currentUser?.id;
+                            final isAuthor = task['author_id'] == currentUser?.id;
+                            final canDelete = isFounder || isAuthor;
+                            final originalAuthor = task['author_name'];
+                            final originalAssignee = task['assignee_name'];
+                            final authorName = (originalAuthor == 'Основатель') ? t.founderRole : originalAuthor;
+                            final assigneeName = (originalAssignee == 'Основатель') ? t.founderRole : originalAssignee;
+                            return Card(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              elevation: 2,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              color: colorScheme.surface,
+                              child: ExpansionTile(
+                                leading: Container(
+                                  width: 12,
+                                  height: 12,
+                                  decoration: BoxDecoration(color: _statusColor(task['status']), shape: BoxShape.circle),
+                                ),
+                                title: Text(task['title'], style: TextStyle(fontWeight: FontWeight.w500, color: colorScheme.onSurface)),
+                                subtitle: Text('${t.taskAuthorLabel}: $authorName', style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant)),
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.all(12.0),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        if (task['description'] != null && task['description'].toString().isNotEmpty)
+                                          Text('📄 ${task['description']}', style: TextStyle(fontSize: 13, color: colorScheme.onSurfaceVariant)),
+                                        const SizedBox(height: 4),
+                                        if (assigneeName != null)
+                                          Text('👤 ${t.taskAssigneeLabel}: $assigneeName', style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant)),
+                                        if (task['deadline'] != null)
+                                          Text('⏰ ${t.deadlineLabel}: ${DateFormat('dd.MM.yyyy HH:mm').format(DateTime.parse(task['deadline']).toLocal())}',
+                                              style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant)),
+                                        const SizedBox(height: 8),
+                                        Wrap(
+                                          spacing: 8,
+                                          children: [
+                                            if (task['status'] == 'pending' && isAssignee)
+                                              ElevatedButton(
+                                                onPressed: () => _updateTaskStatus(task['id'], 'accepted'),
+                                                style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white),
+                                                child: Text(t.acceptButton),
+                                              ),
+                                            if (task['status'] == 'accepted' && isAssignee)
+                                              ElevatedButton(
+                                                onPressed: () => _updateTaskStatus(task['id'], 'completed'),
+                                                style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+                                                child: Text(t.completeButton),
+                                              ),
+                                            if (task['status'] == 'accepted' && isAssignee)
+                                              ElevatedButton(
+                                                onPressed: () => _updateTaskStatus(task['id'], 'failed'),
+                                                style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+                                                child: Text(t.failButton),
+                                              ),
+                                            if (canDelete)
+                                              IconButton(
+                                                icon: const Icon(Icons.delete, color: Colors.red),
+                                                onPressed: () => _deleteTask(task['id']),
+                                              ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
                 ),
         ),
-      ],
-    );
-  }
-
-  Widget _buildFilterChips(AppLocalizations t, ColorScheme colorScheme) {
-    return Row(
-      children: [
-        _filterBtn('pending', t.pendingTasksTab, colorScheme),
-        const SizedBox(width: 8),
-        _filterBtn('accepted', t.acceptedTasksTab, colorScheme),
-        const SizedBox(width: 8),
-        _filterBtn('completed', t.completedTasksTab, colorScheme),
-        const SizedBox(width: 8),
-        _filterBtn('failed', t.failedTasksTab, colorScheme),
       ],
     );
   }
@@ -334,102 +401,9 @@ class _TasksTabState extends ConsumerState<TasksTab> with AutomaticKeepAliveClie
         if (val) {
           setState(() {
             _taskFilter = slug;
-            _loadingTasks = true;
           });
-          _loadTasks();
         }
       },
-    );
-  }
-
-  Widget _buildTaskSection(String title, List<Map<String, dynamic>> tasks,
-      Color color, User? currentUser, bool isFounder, ColorScheme colorScheme, AppLocalizations t) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      color: colorScheme.surface,
-      child: ExpansionTile(
-        title: Row(
-          children: [
-            Container(width: 14, height: 14, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-            const SizedBox(width: 10),
-            Text('$title (${tasks.length})', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: colorScheme.onSurface)),
-          ],
-        ),
-        children: tasks.map((task) {
-          final isAssignee = task['assignee_id'] == currentUser?.id;
-          final isAuthor = task['author_id'] == currentUser?.id;
-          final canDelete = isFounder || isAuthor;
-          final originalAuthor = task['author_name'];
-          final originalAssignee = task['assignee_name'];
-          final authorName = (originalAuthor == 'Основатель') ? t.founderRole : originalAuthor;
-          final assigneeName = (originalAssignee == 'Основатель') ? t.founderRole : originalAssignee;
-          return Card(
-            margin: const EdgeInsets.only(bottom: 8),
-            elevation: 1,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            color: colorScheme.surfaceContainerHighest,
-            child: ExpansionTile(
-              title: Row(
-                children: [
-                  Container(width: 12, height: 12, decoration: BoxDecoration(color: _statusColor(task['status']), shape: BoxShape.circle)),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text(task['title'], style: TextStyle(fontWeight: FontWeight.w500, color: colorScheme.onSurface))),
-                ],
-              ),
-              subtitle: Text('${t.taskAuthorLabel}: $authorName', style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant)),
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(12.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (task['description'] != null && task['description'].toString().isNotEmpty)
-                        Text('📄 ${task['description']}', style: TextStyle(fontSize: 13, color: colorScheme.onSurfaceVariant)),
-                      const SizedBox(height: 4),
-                      if (assigneeName != null)
-                        Text('👤 ${t.taskAssigneeLabel}: $assigneeName', style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant)),
-                      if (task['deadline'] != null)
-                        Text('⏰ ${t.deadlineLabel}: ${DateFormat('dd.MM.yyyy HH:mm').format(DateTime.parse(task['deadline']).toLocal())}',
-                            style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant)),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        children: [
-                          if (task['status'] == 'pending' && isAssignee)
-                            ElevatedButton(
-                              onPressed: () => _updateTaskStatus(task['id'], 'accepted'),
-                              style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white),
-                              child: Text(t.acceptButton),
-                            ),
-                          if (task['status'] == 'accepted' && isAssignee)
-                            ElevatedButton(
-                              onPressed: () => _updateTaskStatus(task['id'], 'completed'),
-                              style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
-                              child: Text(t.completeButton),
-                            ),
-                          if (task['status'] == 'accepted' && isAssignee)
-                            ElevatedButton(
-                              onPressed: () => _updateTaskStatus(task['id'], 'failed'),
-                              style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-                              child: Text(t.failButton),
-                            ),
-                          if (canDelete)
-                            IconButton(
-                              icon: const Icon(Icons.delete, color: Colors.red),
-                              onPressed: () => _deleteTask(task['id']),
-                            ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          );
-        }).toList(),
-      ),
     );
   }
 }
