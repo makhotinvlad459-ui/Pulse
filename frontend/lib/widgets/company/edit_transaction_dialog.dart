@@ -126,7 +126,7 @@ class _EditTransactionDialogState extends ConsumerState<EditTransactionDialog> {
       final picked = await picker.pickImage(source: ImageSource.gallery);
       if (picked != null) {
         setState(() {
-          _photo = picked; // Сохраняем XFile, сжатие будет в _save
+          _photo = picked;
           _webFile = null;
           _hasExistingAttachment = false;
         });
@@ -142,7 +142,7 @@ class _EditTransactionDialogState extends ConsumerState<EditTransactionDialog> {
       final picked = await picker.pickImage(source: ImageSource.camera);
       if (picked != null) {
         setState(() {
-          _photo = picked; // Сохраняем XFile, сжатие будет в _save
+          _photo = picked;
           _webFile = null;
           _hasExistingAttachment = false;
         });
@@ -328,67 +328,69 @@ class _EditTransactionDialogState extends ConsumerState<EditTransactionDialog> {
   }
 
   Future<void> _save() async {
-  final t = AppLocalizations.of(context)!;
-  if (!_formKey.currentState!.validate()) return;
-  
-  setState(() => _loading = true);
-  final api = ApiClient();
-  
-  try {
-    String? attachmentUrl = widget.transaction['attachment_url'];
+    final t = AppLocalizations.of(context)!;
+    if (!_formKey.currentState!.validate()) return;
     
-    // Если пользователь удалил вложение через кнопку удаления
-    if (!_hasExistingAttachment && _photo == null && _webFile == null) {
-      attachmentUrl = null;  // Явно удаляем вложение
-    }
+    setState(() => _loading = true);
+    final api = ApiClient();
     
-    // Если пользователь выбрал НОВЫЙ файл
-    if (_photo != null || _webFile != null) {
-      final bytes = _webFile != null ? _webFile!.bytes! : await _photo!.readAsBytes();
-      final fileName = _webFile != null ? _webFile!.name : _photo!.name;
+    try {
+      String? attachmentUrl = widget.transaction['attachment_url'];
       
-      final compressedBytes = await ImageCompression.compressImage(bytes);
+      if (!_hasExistingAttachment && _photo == null && _webFile == null) {
+        attachmentUrl = null;
+      }
       
-      final result = await api.uploadTransactionFile(
-        companyId: widget.companyId,
-        bytes: compressedBytes,
-        filename: fileName,
-      );
-      attachmentUrl = result['url'] ?? result['attachment_url'];
+      if (_photo != null || _webFile != null) {
+        final bytes = _webFile != null ? _webFile!.bytes! : await _photo!.readAsBytes();
+        final fileName = _webFile != null ? _webFile!.name : _photo!.name;
+        final compressedBytes = await ImageCompression.compressImage(bytes);
+        final result = await api.uploadTransactionFile(
+          companyId: widget.companyId,
+          bytes: compressedBytes,
+          filename: fileName,
+        );
+        attachmentUrl = result['url'] ?? result['attachment_url'];
+      }
+      
+      final data = {
+        'type': _type,
+        'amount': _selectedProducts.isNotEmpty 
+            ? _selectedProducts.fold(0.0, (sum, item) => sum + (item['total'] as double))
+            : _amount,
+        'date': _date.toIso8601String(),
+        'account_id': _accountId,
+        'category_id': _categoryId,
+        'description': _description,
+        'counterparty': _counterparty,
+        'attachment_url': attachmentUrl,
+        'items': _selectedProducts.isNotEmpty 
+            ? _selectedProducts.map((item) => {
+                'product_id': item['product_id'],
+                'quantity': item['quantity'],
+                'price_per_unit': item['price_per_unit'],
+              }).toList()
+            : null,
+      };
+      
+      if (!_hasExistingAttachment && _photo == null && _webFile == null && widget.transaction['attachment_url'] != null) {
+        data['delete_attachment'] = true;
+      }
+      
+      await api.patch('/transactions/${widget.transaction['id']}', queryParameters: {
+        'company_id': widget.companyId
+      }, data: data);
+      
+      await widget.onSuccess();
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
-    
-    // Формируем данные для отправки
-    final data = {
-      'type': _type,
-      'amount': _selectedProducts.isNotEmpty ? _selectedProducts.fold(0.0, (sum, item) => sum + (item['total'] as double)) : _amount,
-      'date': _date.toIso8601String(),
-      'account_id': _accountId,
-      'category_id': _categoryId,
-      'description': _description,
-      'counterparty': _counterparty,
-      'attachment_url': attachmentUrl,
-      'products': _selectedProducts.isNotEmpty ? _selectedProducts : null,
-    };
-    
-    // Добавляем флаг удаления, если нужно
-    if (!_hasExistingAttachment && _photo == null && _webFile == null && widget.transaction['attachment_url'] != null) {
-      data['delete_attachment'] = true;
-    }
-    
-    await api.patch('/transactions/${widget.transaction['id']}', queryParameters: {
-      'company_id': widget.companyId
-    }, data: data);
-    
-    await widget.onSuccess();
-    if (mounted) Navigator.pop(context);
-  } catch (e) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
-    }
-  } finally {
-    if (mounted) setState(() => _loading = false);
   }
-}
 
   Future<void> _deleteTransaction() async {
     final t = AppLocalizations.of(context)!;
@@ -745,59 +747,62 @@ class _EditTransactionDialogState extends ConsumerState<EditTransactionDialog> {
                   ],
                 ],
                 const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    ElevatedButton.icon(
-                      onPressed: _pickFile,
-                      icon: const Icon(Icons.attach_file),
-                      label: Text(t.fileButton),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: colorScheme.primary.withOpacity(0.2),
-                        foregroundColor: colorScheme.onSurface,
-                      ),
-                    ),
-                    ElevatedButton.icon(
-                      onPressed: _takePhoto,
-                      icon: const Icon(Icons.camera_alt),
-                      label: Text(t.cameraButton),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: colorScheme.primary.withOpacity(0.2),
-                        foregroundColor: colorScheme.onSurface,
-                      ),
-                    ),
-                  ],
-                ),
-                if (_hasExistingAttachment && _photo == null && _webFile == null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Row(
-                      children: [
-                        Icon(Icons.attachment, color: colorScheme.primary),
-                        const SizedBox(width: 8),
-                        Text(t.hasAttachment, style: TextStyle(color: colorScheme.onSurface)),
-                        TextButton(onPressed: _deleteAttachment, child: Text(t.delete, style: const TextStyle(color: Colors.red))),
-                      ],
-                    ),
-                  ),
-                if (_photo != null || _webFile != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.check_circle, color: Colors.green),
-                        const SizedBox(width: 8),
-                        Text(_photo != null ? _photo!.name : _webFile!.name, style: TextStyle(color: colorScheme.onSurface)),
-                        IconButton(
-                          icon: const Icon(Icons.clear, size: 16),
-                          onPressed: () => setState(() {
-                            _photo = null;
-                            _webFile = null;
-                          }),
+                // 🔒 Блокируем всё, что связано с вложениями, для витринных транзакций
+                if (widget.transaction['showcase_item_id'] == null) ...[
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      ElevatedButton.icon(
+                        onPressed: _pickFile,
+                        icon: const Icon(Icons.attach_file),
+                        label: Text(t.fileButton),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: colorScheme.primary.withOpacity(0.2),
+                          foregroundColor: colorScheme.onSurface,
                         ),
-                      ],
-                    ),
+                      ),
+                      ElevatedButton.icon(
+                        onPressed: _takePhoto,
+                        icon: const Icon(Icons.camera_alt),
+                        label: Text(t.cameraButton),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: colorScheme.primary.withOpacity(0.2),
+                          foregroundColor: colorScheme.onSurface,
+                        ),
+                      ),
+                    ],
                   ),
+                  if (_hasExistingAttachment && _photo == null && _webFile == null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Row(
+                        children: [
+                          Icon(Icons.attachment, color: colorScheme.primary),
+                          const SizedBox(width: 8),
+                          Text(t.hasAttachment, style: TextStyle(color: colorScheme.onSurface)),
+                          TextButton(onPressed: _deleteAttachment, child: Text(t.delete, style: const TextStyle(color: Colors.red))),
+                        ],
+                      ),
+                    ),
+                  if (_photo != null || _webFile != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.check_circle, color: Colors.green),
+                          const SizedBox(width: 8),
+                          Text(_photo != null ? _photo!.name : _webFile!.name, style: TextStyle(color: colorScheme.onSurface)),
+                          IconButton(
+                            icon: const Icon(Icons.clear, size: 16),
+                            onPressed: () => setState(() {
+                              _photo = null;
+                              _webFile = null;
+                            }),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
               ],
             ),
           ),
