@@ -3589,6 +3589,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'An error occurred: {message}'**
   String error_unknown(Object message);
+
+  /// No description provided for @error_invalid_credentials.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid email or password'**
+  String get error_invalid_credentials;
 }
 
 class _AppLocalizationsDelegate

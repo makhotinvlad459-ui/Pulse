@@ -1781,4 +1781,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String error_unknown(Object message) {
     return 'Произошла ошибка: $message';
   }
+
+  @override
+  String get error_invalid_credentials => 'Неверный email или пароль';
 }

@@ -1783,4 +1783,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String error_unknown(Object message) {
     return 'An error occurred: $message';
   }
+
+  @override
+  String get error_invalid_credentials => 'Invalid email or password';
 }

@@ -43,51 +43,51 @@ class ApiClient {
     );
 
     _dio.interceptors.add(InterceptorsWrapper(
-      onRequest: (options, handler) async {
-        final token = await _storage.read(key: 'access_token');
-        if (token != null) {
-          options.headers ??= {};
-          options.headers['Authorization'] = 'Bearer $token';
+  onRequest: (options, handler) async {
+    final token = await _storage.read(key: 'access_token');
+    if (token != null) {
+      options.headers ??= {};
+      options.headers['Authorization'] = 'Bearer $token';
+    }
+    return handler.next(options);
+  },
+  onError: (DioException e, handler) async {
+    final isAuthEndpoint = e.requestOptions.path.contains('/auth/login') ||
+                           e.requestOptions.path.contains('/auth/register');
+
+    if (e.response?.statusCode == 401 && !isAuthEndpoint) {
+      final container = ProviderScope.containerOf(navigatorKey.currentContext!);
+      final authNotifier = container.read(authProvider.notifier);
+      final refreshed = await authNotifier.refreshAccessToken();
+
+      if (refreshed) {
+        final newToken = await _storage.read(key: 'access_token');
+        e.requestOptions.headers['Authorization'] = 'Bearer $newToken';
+        try {
+          final response = await _dio.fetch(e.requestOptions);
+          return handler.resolve(response);
+        } catch (_) {
+          _redirectToLogin();
+          return handler.reject(e);
         }
-        return handler.next(options);
-      },
-      onError: (DioException e, handler) async {
-        final isAuthEndpoint = e.requestOptions.path.contains('/auth/login') ||
-                               e.requestOptions.path.contains('/auth/register');
+      } else {
+        _redirectToLogin();
+        return handler.reject(e);
+      }
+    }
 
-        if (e.response?.statusCode == 401 && !isAuthEndpoint) {
-          final container = ProviderScope.containerOf(navigatorKey.currentContext!);
-          final authNotifier = container.read(authProvider.notifier);
-          final refreshed = await authNotifier.refreshAccessToken();
+    final errorMessage = _getLocalizedErrorMessage(e);
+    final userFriendlyError = DioException(
+      requestOptions: e.requestOptions,
+      response: e.response,
+      type: e.type,
+      error: errorMessage,
+    );
+    return handler.reject(userFriendlyError);
+  },
+));
 
-          if (refreshed) {
-            final newToken = await _storage.read(key: 'access_token');
-            e.requestOptions.headers['Authorization'] = 'Bearer $newToken';
-            try {
-              final response = await _dio.fetch(e.requestOptions);
-              return handler.resolve(response);
-            } catch (_) {
-              _redirectToLogin();
-              return handler.reject(e);
-            }
-          } else {
-            _redirectToLogin();
-            return handler.reject(e);
-          }
-        }
-
-        final errorMessage = _getLocalizedErrorMessage(e);
-        final userFriendlyError = DioException(
-          requestOptions: e.requestOptions,
-          response: e.response,
-          type: e.type,
-          error: errorMessage,
-        );
-        return handler.reject(userFriendlyError);
-      },
-    ));
-
-    _dio.interceptors.add(LogInterceptor(responseBody: true, requestBody: true));
+_dio.interceptors.add(LogInterceptor(responseBody: true, requestBody: true));
   }
 
   void _redirectToLogin() {
@@ -97,53 +97,61 @@ class ApiClient {
   }
 
   String _getLocalizedErrorMessage(DioException e) {
-    final context = navigatorKey.currentContext;
-    AppLocalizations? t;
-    if (context != null) {
-      t = AppLocalizations.of(context);
+  // Получаем локализацию
+  final context = navigatorKey.currentContext;
+  final t = context != null ? AppLocalizations.of(context) : null;
+
+  String tr(String key, [String fallback = '']) {
+    if (t == null) return fallback.isEmpty ? key : fallback;
+    try {
+      final value = (t as dynamic)[key];
+      if (value is String) return value;
+      return fallback.isEmpty ? key : fallback;
+    } catch (_) {
+      return fallback.isEmpty ? key : fallback;
     }
-
-    String tr(String key, [String fallback = '']) {
-      if (t == null) return fallback.isEmpty ? key : fallback;
-      try {
-        final value = (t as dynamic)[key];
-        if (value is String) return value;
-        return fallback.isEmpty ? key : fallback;
-      } catch (_) {
-        return fallback.isEmpty ? key : fallback;
-      }
-    }
-
-    if (e.type == DioExceptionType.connectionTimeout ||
-        e.type == DioExceptionType.receiveTimeout ||
-        e.type == DioExceptionType.connectionError) {
-      return tr('error_connection', 'No connection to server. Check your internet.');
-    }
-
-    if (e.response != null) {
-      final statusCode = e.response!.statusCode;
-      final data = e.response!.data;
-
-      if (data is Map<String, dynamic>) {
-        if (data.containsKey('detail') && data['detail'] is String) {
-          return data['detail'] as String;
-        }
-        if (data.containsKey('message') && data['message'] is String) {
-          return data['message'] as String;
-        }
-        if (data.containsKey('error') && data['error'] is String) {
-          return data['error'] as String;
-        }
-      }
-
-      if (statusCode != null) {
-        return tr('error_server', 'Server error: $statusCode').replaceFirst('{code}', '$statusCode');
-      }
-    }
-
-    final msg = e.message ?? '';
-    return tr('error_unknown', 'An error occurred: $msg').replaceFirst('{message}', msg);
   }
+
+  // Сетевые ошибки
+  if (e.type == DioExceptionType.connectionTimeout ||
+      e.type == DioExceptionType.receiveTimeout ||
+      e.type == DioExceptionType.connectionError) {
+    return tr('error_connection', 'No connection to server. Check your internet.');
+  }
+
+  // Ошибки с ответом сервера
+  if (e.response != null) {
+    final statusCode = e.response!.statusCode;
+    final data = e.response!.data;
+
+    // Пытаемся извлечь сообщение из поля detail
+    if (data is Map<String, dynamic>) {
+      if (data.containsKey('detail') && data['detail'] is String) {
+        final detail = data['detail'] as String;
+        // Переводим стандартное сообщение о неверных учётных данных
+        if (detail == 'Invalid credentials' && t != null) {
+          return tr('error_invalid_credentials', 'Invalid email or password');
+        }
+        return detail;
+      }
+      if (data.containsKey('message') && data['message'] is String) {
+        return data['message'];
+      }
+      if (data.containsKey('error') && data['error'] is String) {
+        return data['error'];
+      }
+    }
+
+    // Если не удалось извлечь, возвращаем сообщение с кодом
+    if (statusCode != null) {
+      return tr('error_server', 'Server error: $statusCode').replaceFirst('{code}', '$statusCode');
+    }
+  }
+
+  // Неизвестная ошибка
+  final msg = e.message ?? '';
+  return tr('error_unknown', 'An error occurred: $msg').replaceFirst('{message}', msg);
+}
 
   // Базовые методы
   Future<Response> post(String path, {dynamic data, Map<String, dynamic>? queryParameters}) =>

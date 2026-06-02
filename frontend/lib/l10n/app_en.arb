@@ -666,5 +666,6 @@
   "noMatches": "No matches found",
   "error_connection": "No connection to server. Check your internet.",
   "error_server": "Server error: {code}",
-  "error_unknown": "An error occurred: {message}"
+  "error_unknown": "An error occurred: {message}",
+  "error_invalid_credentials": "Invalid email or password"
 }

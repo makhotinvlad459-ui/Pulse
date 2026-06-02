@@ -4,7 +4,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/status.dart' as status;
-import 'secure_storage.dart'; // добавить импорт
+import 'secure_storage.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode, kReleaseMode; // добавить импорт
 
 class WebSocketService {
   static final WebSocketService _instance = WebSocketService._internal();
@@ -36,20 +37,20 @@ class WebSocketService {
   Stream<Map<String, dynamic>> get userStream => _userStreamController.stream;
 
   static String get _baseUrl {
-    if (kIsWeb) {
-      if (bool.fromEnvironment('dart.vm.product')) {
-        return 'wss://pulse-yourmoney.com';
-      }
-      return 'ws://localhost:8000';
-    }
-    if (bool.fromEnvironment('dart.vm.product')) {
+  if (kIsWeb) {
+    if (kReleaseMode) {
       return 'wss://pulse-yourmoney.com';
-    }
-    if (Platform.isAndroid) {
-      return 'ws://10.0.2.2:8000';
     }
     return 'ws://localhost:8000';
   }
+  if (kReleaseMode) {
+    return 'wss://pulse-yourmoney.com';
+  }
+  if (Platform.isAndroid) {
+    return 'ws://10.0.2.2:8000';
+  }
+  return 'ws://localhost:8000';
+}
 
   void connectChat(int companyId, String token) {
     if (_chatChannel != null && _currentChatCompanyId == companyId) {

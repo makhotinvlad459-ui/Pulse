@@ -666,6 +666,7 @@
   "noMatches": "Совпадений не найдено",
   "error_connection": "Нет соединения с сервером. Проверьте интернет.",
   "error_server": "Ошибка сервера: {code}",
-  "error_unknown": "Произошла ошибка: {message}"
+  "error_unknown": "Произошла ошибка: {message}",
+  "error_invalid_credentials": "Неверный email или пароль"
 
 }
