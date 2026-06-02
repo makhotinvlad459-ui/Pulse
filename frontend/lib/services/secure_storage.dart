@@ -20,6 +20,18 @@ class SecureStorage {
       return await _secureStorage.read(key: key);
     }
   }
+  Future<void> setRefreshToken(String token) async {
+  await write(key: 'refresh_token', value: token);
+}
+
+Future<String?> getRefreshToken() async {
+  return await read(key: 'refresh_token');
+}
+
+Future<void> clearTokens() async {
+  await delete(key: 'access_token');
+  await delete(key: 'refresh_token');
+}
 
   Future<void> delete({required String key}) async {
     if (kIsWeb) {

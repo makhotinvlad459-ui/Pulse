@@ -663,5 +663,9 @@
   "unassignedField": "Не назначен",
   "deadlineField": "Дедлайн",
   "fileSaved": "Сохранено",
-    "noMatches": "Совпадений не найдено"
+  "noMatches": "Совпадений не найдено",
+  "error_connection": "Нет соединения с сервером. Проверьте интернет.",
+  "error_server": "Ошибка сервера: {code}",
+  "error_unknown": "Произошла ошибка: {message}"
+
 }

@@ -663,5 +663,8 @@
   "unassignedField": "Unassigned",
   "deadlineField": "Deadline",
   "fileSaved": "saved",
-  "noMatches": "No matches found"
+  "noMatches": "No matches found",
+  "error_connection": "No connection to server. Check your internet.",
+  "error_server": "Server error: {code}",
+  "error_unknown": "An error occurred: {message}"
 }

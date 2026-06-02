@@ -1767,4 +1767,18 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get noMatches => 'Совпадений не найдено';
+
+  @override
+  String get error_connection =>
+      'Нет соединения с сервером. Проверьте интернет.';
+
+  @override
+  String error_server(Object code) {
+    return 'Ошибка сервера: $code';
+  }
+
+  @override
+  String error_unknown(Object message) {
+    return 'Произошла ошибка: $message';
+  }
 }

@@ -3571,6 +3571,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No matches found'**
   String get noMatches;
+
+  /// No description provided for @error_connection.
+  ///
+  /// In en, this message translates to:
+  /// **'No connection to server. Check your internet.'**
+  String get error_connection;
+
+  /// No description provided for @error_server.
+  ///
+  /// In en, this message translates to:
+  /// **'Server error: {code}'**
+  String error_server(Object code);
+
+  /// No description provided for @error_unknown.
+  ///
+  /// In en, this message translates to:
+  /// **'An error occurred: {message}'**
+  String error_unknown(Object message);
 }
 
 class _AppLocalizationsDelegate

@@ -1,21 +1,22 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:dio/dio.dart';
-import 'secure_storage.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:image_picker/image_picker.dart';
-import 'package:file_picker/file_picker.dart';
-import 'package:flutter/widgets.dart';
+import 'secure_storage.dart';
 import '../models/company.dart';
 import '../models/statistics.dart';
 import '../main.dart';
+import '../providers/auth_provider.dart';
+import '../l10n/app_localizations.dart';
 
 class ApiClient {
   static String get baseUrl {
     const bool isProduction = bool.fromEnvironment('dart.vm.product');
     if (isProduction) {
       if (kIsWeb) {
-        return '/api'; 
+        return '/api';
       }
       return 'https://pulse-yourmoney.com/api';
     } else {
@@ -51,41 +52,113 @@ class ApiClient {
         return handler.next(options);
       },
       onError: (DioException e, handler) async {
-        if (e.response?.statusCode == 401) {
-          await clearToken();
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            navigatorKey.currentState?.pushNamedAndRemoveUntil(
-              '/login',
-              (route) => false,
-            );
-          });
-          return handler.reject(e);
+        final isAuthEndpoint = e.requestOptions.path.contains('/auth/login') ||
+                               e.requestOptions.path.contains('/auth/register');
+
+        if (e.response?.statusCode == 401 && !isAuthEndpoint) {
+          final container = ProviderScope.containerOf(navigatorKey.currentContext!);
+          final authNotifier = container.read(authProvider.notifier);
+          final refreshed = await authNotifier.refreshAccessToken();
+
+          if (refreshed) {
+            final newToken = await _storage.read(key: 'access_token');
+            e.requestOptions.headers['Authorization'] = 'Bearer $newToken';
+            try {
+              final response = await _dio.fetch(e.requestOptions);
+              return handler.resolve(response);
+            } catch (_) {
+              _redirectToLogin();
+              return handler.reject(e);
+            }
+          } else {
+            _redirectToLogin();
+            return handler.reject(e);
+          }
         }
-        return handler.next(e);
+
+        final errorMessage = _getLocalizedErrorMessage(e);
+        final userFriendlyError = DioException(
+          requestOptions: e.requestOptions,
+          response: e.response,
+          type: e.type,
+          error: errorMessage,
+        );
+        return handler.reject(userFriendlyError);
       },
     ));
 
     _dio.interceptors.add(LogInterceptor(responseBody: true, requestBody: true));
   }
 
+  void _redirectToLogin() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      navigatorKey.currentState?.pushNamedAndRemoveUntil('/login', (route) => false);
+    });
+  }
+
+  String _getLocalizedErrorMessage(DioException e) {
+    final context = navigatorKey.currentContext;
+    AppLocalizations? t;
+    if (context != null) {
+      t = AppLocalizations.of(context);
+    }
+
+    String tr(String key, [String fallback = '']) {
+      if (t == null) return fallback.isEmpty ? key : fallback;
+      try {
+        final value = (t as dynamic)[key];
+        if (value is String) return value;
+        return fallback.isEmpty ? key : fallback;
+      } catch (_) {
+        return fallback.isEmpty ? key : fallback;
+      }
+    }
+
+    if (e.type == DioExceptionType.connectionTimeout ||
+        e.type == DioExceptionType.receiveTimeout ||
+        e.type == DioExceptionType.connectionError) {
+      return tr('error_connection', 'No connection to server. Check your internet.');
+    }
+
+    if (e.response != null) {
+      final statusCode = e.response!.statusCode;
+      final data = e.response!.data;
+
+      if (data is Map<String, dynamic>) {
+        if (data.containsKey('detail') && data['detail'] is String) {
+          return data['detail'] as String;
+        }
+        if (data.containsKey('message') && data['message'] is String) {
+          return data['message'] as String;
+        }
+        if (data.containsKey('error') && data['error'] is String) {
+          return data['error'] as String;
+        }
+      }
+
+      if (statusCode != null) {
+        return tr('error_server', 'Server error: $statusCode').replaceFirst('{code}', '$statusCode');
+      }
+    }
+
+    final msg = e.message ?? '';
+    return tr('error_unknown', 'An error occurred: $msg').replaceFirst('{message}', msg);
+  }
+
   // Базовые методы
-  Future<Response> post(String path,
-          {dynamic data, Map<String, dynamic>? queryParameters}) =>
+  Future<Response> post(String path, {dynamic data, Map<String, dynamic>? queryParameters}) =>
       _dio.post(path, data: data, queryParameters: queryParameters);
 
   Future<Response> get(String path, {Map<String, dynamic>? queryParameters}) =>
       _dio.get(path, queryParameters: queryParameters);
 
-  Future<Response> put(String path,
-          {dynamic data, Map<String, dynamic>? queryParameters}) =>
+  Future<Response> put(String path, {dynamic data, Map<String, dynamic>? queryParameters}) =>
       _dio.put(path, data: data, queryParameters: queryParameters);
 
-  Future<Response> patch(String path,
-          {dynamic data, Map<String, dynamic>? queryParameters}) =>
+  Future<Response> patch(String path, {dynamic data, Map<String, dynamic>? queryParameters}) =>
       _dio.patch(path, data: data, queryParameters: queryParameters);
 
-  Future<Response> delete(String path,
-          {Map<String, dynamic>? queryParameters}) =>
+  Future<Response> delete(String path, {Map<String, dynamic>? queryParameters}) =>
       _dio.delete(path, queryParameters: queryParameters);
 
   Future<Response> postForm(String path, {required Map<String, String> data}) async {
@@ -99,7 +172,7 @@ class ApiClient {
     );
   }
 
-  // Загрузка файлов в чат (ТОЛЬКО ОДИН МЕТОД - РАБОЧИЙ)
+  // Загрузка файлов
   Future<Map<String, dynamic>> uploadChatFile({
     required int companyId,
     required Uint8List bytes,
@@ -107,80 +180,42 @@ class ApiClient {
   }) async {
     try {
       final token = await getToken();
-      if (token == null) {
-        throw Exception('No authentication token');
-      }
-      
+      if (token == null) throw Exception('No authentication token');
       final formData = FormData.fromMap({
         'company_id': companyId.toString(),
-        'file': MultipartFile.fromBytes(
-          bytes,
-          filename: filename,
-        ),
+        'file': MultipartFile.fromBytes(bytes, filename: filename),
       });
-      
-      print('📤 Uploading file to: /chat/upload');
-      print('   Company ID: $companyId');
-      print('   Filename: $filename');
-      print('   File size: ${bytes.length} bytes');
-      
       final response = await _dio.post(
         '/chat/upload',
         data: formData,
-        options: Options(
-          headers: {
-            'Authorization': 'Bearer $token',
-          },
-        ),
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
       );
-      
-      print('✅ Upload response: ${response.statusCode}');
-      print('   Data: ${response.data}');
-      
       return response.data as Map<String, dynamic>;
-      
     } on DioException catch (e) {
-      print('❌ Upload error: ${e.response?.statusCode} - ${e.response?.data}');
-      throw Exception('Upload failed: ${e.response?.data['detail'] ?? e.message}');
+      throw Exception(_getLocalizedErrorMessage(e));
     } catch (e) {
-      print('❌ Upload error: $e');
-      rethrow;
+      throw Exception('Upload error: $e');
     }
   }
 
-  Future<Response> getFile(String path,
-      {Map<String, dynamic>? queryParameters}) async {
+  Future<Response> getFile(String path, {Map<String, dynamic>? queryParameters}) async {
     final token = await getToken();
-    
     if (path.startsWith('http')) {
       return await _dio.get(
         path,
-        options: Options(
-          responseType: ResponseType.bytes,
-          headers: {
-            'Authorization': 'Bearer $token',
-          },
-        ),
+        options: Options(responseType: ResponseType.bytes, headers: {'Authorization': 'Bearer $token'}),
       );
     } else {
       return await _dio.get(
         path,
         queryParameters: queryParameters,
-        options: Options(
-          responseType: ResponseType.bytes,
-          headers: {
-            'Authorization': 'Bearer $token',
-          },
-        ),
+        options: Options(responseType: ResponseType.bytes, headers: {'Authorization': 'Bearer $token'}),
       );
     }
   }
 
   // Управление токеном
-  Future<void> setToken(String token) async {
-    await _storage.write(key: 'access_token', value: token);
-  }
-
+  Future<void> setToken(String token) async => await _storage.write(key: 'access_token', value: token);
   Future<void> clearToken() async => await _storage.delete(key: 'access_token');
   Future<String?> getToken() async => await _storage.read(key: 'access_token');
 
@@ -205,14 +240,13 @@ class ApiClient {
     return FounderOverview.fromJson(response.data);
   }
 
- 
-Future<void> updateLanguage(String langCode) async {
-  try {
-    await post('/auth/update-language', data: {'language': langCode});
-  } catch (e) {
-    print('Ошибка обновления языка на сервере: $e');
+  Future<void> updateLanguage(String langCode) async {
+    try {
+      await post('/auth/update-language', data: {'language': langCode});
+    } catch (e) {
+      print('Error updating language on server: $e');
+    }
   }
-}
 
   Future<Map<String, dynamic>> getUnreadCounts() async {
     final response = await get('/notifications/unread-counts');
@@ -304,7 +338,6 @@ Future<void> updateLanguage(String langCode) async {
     FormData formData = FormData.fromMap({
       "file": MultipartFile.fromBytes(bytes, filename: filename),
     });
-    
     final response = await _dio.post(
       '/transactions/upload',
       data: formData,
@@ -314,9 +347,9 @@ Future<void> updateLanguage(String langCode) async {
   }
 
   Future<Map<String, dynamic>> uploadCompanyLogo({
-    required int companyId, 
-    required Uint8List bytes, 
-    required String filename
+    required int companyId,
+    required Uint8List bytes,
+    required String filename,
   }) async {
     FormData formData = FormData.fromMap({
       "file": MultipartFile.fromBytes(bytes, filename: filename),
@@ -329,9 +362,7 @@ Future<void> updateLanguage(String langCode) async {
   Future<Response> getChatFile(int messageId) async {
     final response = await dio.get(
       '/chat/file/$messageId',
-      options: Options(
-        responseType: ResponseType.bytes,
-      ),
+      options: Options(responseType: ResponseType.bytes),
     );
     return response;
   }
@@ -339,9 +370,7 @@ Future<void> updateLanguage(String langCode) async {
   Future<Response> getTransactionFile(int transactionId) async {
     final response = await dio.get(
       '/transactions/$transactionId/file',
-      options: Options(
-        responseType: ResponseType.bytes,
-      ),
+      options: Options(responseType: ResponseType.bytes),
     );
     return response;
   }

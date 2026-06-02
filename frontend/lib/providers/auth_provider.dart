@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../services/api_client.dart';
-import '../models/user.dart';
 import 'package:flutter/material.dart';
+import '../services/api_client.dart';
+import '../services/secure_storage.dart';
+import '../services/websocket_service.dart';
+import '../models/user.dart';
 
 final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) => AuthNotifier());
 
@@ -16,10 +18,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
   AuthNotifier() : super(AuthState());
 
   final ApiClient _api = ApiClient();
+  final SecureStorage _storage = SecureStorage();
 
   Future<void> syncLanguage(String langCode) async {
-  await _api.updateLanguage(langCode);
-}
+    await _api.updateLanguage(langCode);
+  }
 
   Future<bool> register(String email, String? phone, String fullName, String password) async {
     state = AuthState(isLoading: true);
@@ -44,41 +47,63 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-
-
-Future<bool> login(String username, String password, Locale currentLocale) async {
-  state = AuthState(isLoading: true);
-  try {
-    final response = await _api.postForm('/auth/login', data: {
-      'username': username,
-      'password': password,
-    });
-    
-    if (response.statusCode != 200) throw Exception('Server error: ${response.statusCode}');
-
-    final data = response.data;
-    if (data is! Map<String, dynamic>) throw Exception('Invalid response format');
-    
-    final token = data['access_token'] as String?;
-    if (token == null) throw Exception('No token in response');
-    
-    await _api.setToken(token);
-    
-    // Загружаем профиль
-    final loaded = await _loadUserProfile();
-    
-    // СИНХРОНИЗИРУЕМ ЯЗЫК СРАЗУ ПОСЛЕ ЛОГИНА
-    if (loaded) {
-      await syncLanguage(currentLocale.languageCode);
+  Future<bool> refreshAccessToken() async {
+    final refreshToken = await _storage.getRefreshToken();
+    if (refreshToken == null) return false;
+    try {
+      final response = await _api.post('/auth/refresh', data: {'refresh_token': refreshToken});
+      if (response.statusCode != 200) return false;
+      final newAccess = response.data['access_token'] as String?;
+      if (newAccess == null) return false;
+      await _api.setToken(newAccess);
+      // Обновляем WebSocket соединения с новым токеном
+      WebSocketService().refreshAllConnections();
+      return true;
+    } catch (e) {
+      print('Refresh error: $e');
+      return false;
     }
-    
-    return loaded;
-  } catch (e, stack) {
-    print('login error: $e');
-    state = AuthState(error: e.toString());
-    return false;
   }
-}
+
+  Future<bool> login(String username, String password, Locale currentLocale) async {
+    state = AuthState(isLoading: true);
+    try {
+      final response = await _api.postForm('/auth/login', data: {
+        'username': username,
+        'password': password,
+      });
+      
+      if (response.statusCode != 200) throw Exception('Server error: ${response.statusCode}');
+
+      final data = response.data;
+      if (data is! Map<String, dynamic>) throw Exception('Invalid response format');
+      
+      final token = data['access_token'] as String?;
+      if (token == null) throw Exception('No token in response');
+      
+      // Сохраняем refresh token, если он есть
+      final refreshToken = data['refresh_token'] as String?;
+      if (refreshToken != null) {
+        await _storage.setRefreshToken(refreshToken);
+      }
+      
+      await _api.setToken(token);
+      
+      // Загружаем профиль
+      final loaded = await _loadUserProfile();
+      
+      // Синхронизируем язык после логина
+      if (loaded) {
+        await syncLanguage(currentLocale.languageCode);
+      }
+      
+      return loaded;
+    } catch (e, stack) {
+      print('login error: $e');
+      state = AuthState(error: e.toString());
+      return false;
+    }
+  }
 
   Future<bool> _loadUserProfile() async {
     try {
@@ -89,7 +114,6 @@ Future<bool> login(String username, String password, Locale currentLocale) async
 
       print('Profile data: $data');
 
-      // Безопасное извлечение
       final id = (data['id'] as num).toInt();
       final email = data['email'] as String;
       final fullName = data['full_name'] as String;
@@ -128,6 +152,8 @@ Future<bool> login(String username, String password, Locale currentLocale) async
 
   Future<void> logout() async {
     await _api.clearToken();
+    await _storage.clearTokens(); // очищаем и refresh token
+    WebSocketService().disconnectAll();
     state = AuthState();
   }
 }

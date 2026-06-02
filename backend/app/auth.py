@@ -13,6 +13,7 @@ from app.database import get_db
 from app.models import User, UserRole, PasswordResetToken
 from app.config import settings
 from app.deps import get_current_user
+from datetime import datetime, timedelta
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -95,6 +96,12 @@ def create_access_token(data: dict):
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
+def create_refresh_token(data: dict) -> str:
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
 # ---------- Регистрация ----------
 @router.post("/register")
 async def register(register_data: RegisterRequest, db: AsyncSession = Depends(get_db)):
@@ -135,19 +142,16 @@ async def register(register_data: RegisterRequest, db: AsyncSession = Depends(ge
 # ---------- Логин ----------
 @router.post("/login")
 async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
-    # Приводим к нижнему регистру логин, если это email
     username_clean = form_data.username.lower().strip()
-    
     user = await db.execute(
         select(User).where(
             or_(
-                User.email == username_clean, 
+                User.email == username_clean,
                 User.phone == form_data.username.strip()
             )
         )
     )
     user = user.scalar_one_or_none()
-    
     if not user or not verify_password(form_data.password, user.password_hash):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid credentials")
     if not user.is_active:
@@ -156,10 +160,18 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSessi
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Subscription expired")
         
     user.last_login = datetime.utcnow()
+    
+    # Генерируем токены
+    access_token = create_access_token(data={"sub": str(user.id), "role": user.role.value})
+    refresh_token = create_refresh_token(data={"sub": str(user.id)})
+    user.refresh_token = refresh_token
     await db.commit()
     
-    token = create_access_token(data={"sub": str(user.id), "role": user.role.value})
-    return {"access_token": token, "token_type": "bearer"}
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer"
+    }
 
 # ---------- Текущий пользователь ----------
 @router.get("/me")
@@ -259,3 +271,35 @@ async def update_language(
     current_user.language = new_lang
     await db.commit()
     return {"message": "Language updated"}
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+@router.post("/refresh")
+async def refresh_token(
+    req: RefreshRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    try:
+        payload = jwt.decode(req.refresh_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        user_id = payload.get("sub")
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="Invalid refresh token")
+        result = await db.execute(select(User).where(User.id == int(user_id)))
+        user = result.scalar_one_or_none()
+        if not user or user.refresh_token != req.refresh_token:
+            raise HTTPException(status_code=401, detail="Invalid refresh token")
+        # Проверка срока действия refresh-токена (JWT уже проверил exp, но дополнительно)
+        new_access = create_access_token(data={"sub": str(user.id), "role": user.role.value})
+        return {"access_token": new_access}
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
+    
+@router.post("/logout")
+async def logout(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    current_user.refresh_token = None
+    await db.commit()
+    return {"detail": "Logged out"}    

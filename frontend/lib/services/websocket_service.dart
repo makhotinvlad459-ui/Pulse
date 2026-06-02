@@ -4,11 +4,14 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/status.dart' as status;
+import 'secure_storage.dart'; // добавить импорт
 
 class WebSocketService {
   static final WebSocketService _instance = WebSocketService._internal();
   factory WebSocketService() => _instance;
   WebSocketService._internal();
+
+  final SecureStorage _storage = SecureStorage(); // добавить
 
   WebSocketChannel? _chatChannel;
   WebSocketChannel? _tasksChannel;
@@ -48,7 +51,6 @@ class WebSocketService {
     return 'ws://localhost:8000';
   }
 
-  // ✅ ИСПРАВЛЕНО: добавлен /ws/ в путь
   void connectChat(int companyId, String token) {
     if (_chatChannel != null && _currentChatCompanyId == companyId) {
       return;
@@ -73,7 +75,6 @@ class WebSocketService {
     }
   }
 
-  // ✅ ИСПРАВЛЕНО: добавлен /ws/ в путь
   void connectTasks(int companyId, String token) {
     if (_tasksChannel != null && _currentTasksCompanyId == companyId) {
       return;
@@ -98,7 +99,6 @@ class WebSocketService {
     }
   }
 
-  // ✅ ИСПРАВЛЕНО: добавлен /ws/ в путь
   void connectUser(int userId, String token) {
     if (_userChannel != null && _currentUserId == userId) {
       return;
@@ -192,6 +192,23 @@ class WebSocketService {
     disconnectTasks();
     disconnectUser();
     if (kDebugMode) print('🔌 WS: All connections closed');
+  }
+  
+  Future<void> refreshAllConnections() async {
+    final token = await _storage.read(key: 'access_token');
+    if (token == null) return;
+    if (_currentChatCompanyId != null) {
+      disconnectChat();
+      connectChat(_currentChatCompanyId!, token);
+    }
+    if (_currentTasksCompanyId != null) {
+      disconnectTasks();
+      connectTasks(_currentTasksCompanyId!, token);
+    }
+    if (_currentUserId != null) {
+      disconnectUser();
+      connectUser(_currentUserId!, token);
+    }
   }
 
   void dispose() {

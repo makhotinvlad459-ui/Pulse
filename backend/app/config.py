@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "change_this_in_production_please"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 30
     # SMTP (почта)
     SMTP_HOST: str = ""
     SMTP_PORT: int = 587

@@ -1769,4 +1769,18 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get noMatches => 'No matches found';
+
+  @override
+  String get error_connection =>
+      'No connection to server. Check your internet.';
+
+  @override
+  String error_server(Object code) {
+    return 'Server error: $code';
+  }
+
+  @override
+  String error_unknown(Object message) {
+    return 'An error occurred: $message';
+  }
 }
