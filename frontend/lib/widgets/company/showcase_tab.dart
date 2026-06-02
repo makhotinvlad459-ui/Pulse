@@ -514,7 +514,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                         items.add({
                           'product_id': productId,
                           'quantity': totalQty,
-                          'price_per_unit': 0,
+                          'price_per_unit': item.price,
                         });
                       }
                     } catch (e) {
@@ -724,7 +724,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                           items.add({
                             'product_id': r['product_id'],
                             'quantity': r['quantity'] * qty,
-                            'price_per_unit': 0,
+                            'price_per_unit': si['price'],
                           });
                         }
                       } catch (e) {
