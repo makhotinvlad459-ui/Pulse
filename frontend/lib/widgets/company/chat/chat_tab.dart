@@ -84,53 +84,61 @@ class _ChatTabState extends ConsumerState<ChatTab>
     }
   }
 
-  Future<void> _reconnectWebSocket() async {
-    if (_chatChannel != null) {
-      await _chatChannel!.sink.close();
-      _chatChannel = null;
-    }
-    await _connectWebSocket();
-  }
-
   Future<void> _connectWebSocket() async {
-    final api = ApiClient();
-    final token = await api.getToken();
-    if (token == null) return;
+  // Если уже есть активное соединение, не создаём новое
+  if (_chatChannel != null) return;
 
-    final encodedToken = Uri.encodeComponent(token);
-    final chatUrl =
-        'wss://pulse-yourmoney.com/api/ws/chat/${widget.companyId}?token=$encodedToken';
-    print('🔌 Connecting to Chat WebSocket: $chatUrl');
+  final api = ApiClient();
+  final token = await api.getToken();
+  if (token == null) return;
 
-    try {
-      _chatChannel = WebSocketChannel.connect(Uri.parse(chatUrl));
-      await _chatChannel!.ready;
-      print('✅ WebSocket connected');
-      _chatChannel!.stream.listen(
-        (data) {
-          print('📨 WebSocket received: $data');
-          _handleChatEvent(data);
-        },
-        onError: (error) {
-          print('❌ Chat WS stream error: $error');
-          // Пробуем переподключиться через 3 секунды
-          Future.delayed(const Duration(seconds: 3), () {
-            if (mounted) _reconnectWebSocket();
-          });
-        },
-        onDone: () {
-          print('🔌 WebSocket closed, reconnecting...');
-          if (mounted) _reconnectWebSocket();
-        },
-      );
-    } catch (e) {
-      print('❌ Failed to connect chat WS: $e');
-      // Повторная попытка через 5 секунд
-      Future.delayed(const Duration(seconds: 5), () {
-        if (mounted) _reconnectWebSocket();
-      });
-    }
+  final encodedToken = Uri.encodeComponent(token);
+  final chatUrl = 'wss://pulse-yourmoney.com/api/ws/chat/${widget.companyId}?token=$encodedToken';
+  print('🔌 Connecting to Chat WebSocket: $chatUrl');
+
+  try {
+    final channel = WebSocketChannel.connect(Uri.parse(chatUrl));
+    await channel.ready;
+    print('✅ WebSocket connected');
+
+    // Сохраняем канал только после успешного подключения
+    _chatChannel = channel;
+
+    _chatChannel!.stream.listen(
+      (data) {
+        print('📨 WebSocket received: $data');
+        _handleChatEvent(data);
+      },
+      onError: (error) {
+        print('❌ Chat WS stream error: $error');
+        _reconnectWebSocket();
+      },
+      onDone: () {
+        print('🔌 WebSocket closed, reconnecting...');
+        // Сбрасываем канал, чтобы при следующем подключении он был null
+        _chatChannel = null;
+        _reconnectWebSocket();
+      },
+    );
+  } catch (e) {
+    print('❌ Failed to connect chat WS: $e');
+    _chatChannel = null;
+    // Повторная попытка через 5 секунд
+    Future.delayed(const Duration(seconds: 5), () {
+      if (mounted) _connectWebSocket();
+    });
   }
+}
+
+Future<void> _reconnectWebSocket() async {
+  // Если уже есть канал, закрываем его и ждём завершения
+  if (_chatChannel != null) {
+    await _chatChannel!.sink.close();
+    _chatChannel = null;
+  }
+  // После этого запускаем новое подключение
+  await _connectWebSocket();
+}
 
   void _handleChatEvent(dynamic rawData) {
     try {
