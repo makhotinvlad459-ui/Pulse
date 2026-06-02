@@ -42,6 +42,7 @@ class _ChatTabState extends ConsumerState<ChatTab>
     with AutomaticKeepAliveClientMixin, WidgetsBindingObserver {
   List<Map<String, dynamic>> _messages = [];
   bool _loadingMessages = true;
+  bool _connecting = false;
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   DateTime? _lastVisit;
@@ -69,6 +70,7 @@ class _ChatTabState extends ConsumerState<ChatTab>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _connecting = false; 
     _chatChannel?.sink.close();
     _scrollController.dispose();
     _messageController.dispose();
@@ -85,12 +87,15 @@ class _ChatTabState extends ConsumerState<ChatTab>
   }
 
   Future<void> _connectWebSocket() async {
-  // Если уже есть активное соединение, не создаём новое
-  if (_chatChannel != null) return;
+  if (_chatChannel != null || _connecting) return;
+  _connecting = true;
 
   final api = ApiClient();
   final token = await api.getToken();
-  if (token == null) return;
+  if (token == null) {
+    _connecting = false;
+    return;
+  }
 
   final encodedToken = Uri.encodeComponent(token);
   final chatUrl = 'wss://pulse-yourmoney.com/api/ws/chat/${widget.companyId}?token=$encodedToken';
@@ -101,8 +106,8 @@ class _ChatTabState extends ConsumerState<ChatTab>
     await channel.ready;
     print('✅ WebSocket connected');
 
-    // Сохраняем канал только после успешного подключения
     _chatChannel = channel;
+    _connecting = false;
 
     _chatChannel!.stream.listen(
       (data) {
@@ -115,7 +120,6 @@ class _ChatTabState extends ConsumerState<ChatTab>
       },
       onDone: () {
         print('🔌 WebSocket closed, reconnecting...');
-        // Сбрасываем канал, чтобы при следующем подключении он был null
         _chatChannel = null;
         _reconnectWebSocket();
       },
@@ -123,7 +127,7 @@ class _ChatTabState extends ConsumerState<ChatTab>
   } catch (e) {
     print('❌ Failed to connect chat WS: $e');
     _chatChannel = null;
-    // Повторная попытка через 5 секунд
+    _connecting = false;
     Future.delayed(const Duration(seconds: 5), () {
       if (mounted) _connectWebSocket();
     });
@@ -131,31 +135,28 @@ class _ChatTabState extends ConsumerState<ChatTab>
 }
 
 Future<void> _reconnectWebSocket() async {
-  // Если уже есть канал, закрываем его и ждём завершения
+  if (_connecting) return;
   if (_chatChannel != null) {
     await _chatChannel!.sink.close();
     _chatChannel = null;
   }
-  // После этого запускаем новое подключение
   await _connectWebSocket();
 }
 
   void _handleChatEvent(dynamic rawData) {
-    try {
-      final data = rawData is String ? jsonDecode(rawData) : rawData;
+  try {
+    final data = rawData is String ? jsonDecode(rawData) : rawData;
+    if (data is! Map) return;
+    final type = data['type'];
+    if (type == 'ping') return;
 
-      // Если пришел не словарь, игнорируем
-      if (data is! Map) return;
-
-      final type = data['type'];
-
-      // Игнорируем служебный ping, чтобы впустую не дергать setState и не нагружать UI
-      if (type == 'ping') return;
-
-      setState(() {
-        switch (type) {
-          case 'new_message':
-            _messages.add(data['message']);
+    setState(() {
+      switch (type) {
+        case 'new_message':
+          final newMsg = data['message'];
+          // Проверяем, нет ли уже сообщения с таким id
+          if (!_messages.any((m) => m['id'] == newMsg['id'])) {
+            _messages.add(newMsg);
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (_scrollController.hasClients) {
                 _scrollController.animateTo(
@@ -165,31 +166,32 @@ Future<void> _reconnectWebSocket() async {
                 );
               }
             });
-            break;
-          case 'edit_message':
-            final messageId = data['message_id'];
-            final newText = data['new_message'];
-            final index = _messages.indexWhere((m) => m['id'] == messageId);
-            if (index != -1) {
-              _messages[index]['message'] = newText;
-              _messages[index]['edited'] = true;
-              _messages[index]['updated_at'] = data['updated_at'];
-            }
-            break;
-          case 'delete_message':
-            final messageId = data['message_id'];
-            _messages.removeWhere((m) => m['id'] == messageId);
-            break;
-          case 'clear_chat':
-            _messages.clear();
-            break;
-        }
-        _updateUnreadCount();
-      });
-    } catch (e) {
-      print('Chat WS parse error: $e');
-    }
+          }
+          break;
+        case 'edit_message':
+          final messageId = data['message_id'];
+          final newText = data['new_message'];
+          final index = _messages.indexWhere((m) => m['id'] == messageId);
+          if (index != -1) {
+            _messages[index]['message'] = newText;
+            _messages[index]['edited'] = true;
+            _messages[index]['updated_at'] = data['updated_at'];
+          }
+          break;
+        case 'delete_message':
+          final messageId = data['message_id'];
+          _messages.removeWhere((m) => m['id'] == messageId);
+          break;
+        case 'clear_chat':
+          _messages.clear();
+          break;
+      }
+      _updateUnreadCount();
+    });
+  } catch (e) {
+    print('Chat WS parse error: $e');
   }
+}
 
   void _updateUnreadCount() {
     int unread = 0;
