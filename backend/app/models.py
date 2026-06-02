@@ -30,7 +30,7 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     fcm_token: Mapped[str | None] = mapped_column(String(500), nullable=True)
     language: Mapped[str] = mapped_column(String(2), default='ru')
-
+    refresh_token: Mapped[str | None] = mapped_column(String(500), nullable=True)
     
     last_login: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     subscription_plan: Mapped[str | None] = mapped_column(String(50), nullable=True)
