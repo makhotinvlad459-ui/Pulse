@@ -14,7 +14,7 @@ from app.models import User, UserRole, PasswordResetToken
 from app.config import settings
 from app.deps import get_current_user
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+router = APIRouter(tags=["auth"])
 
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
@@ -250,7 +250,6 @@ async def change_password(
     return {"detail": "Password changed successfully"}
 
 @router.post("/auth/update-language")
-@router.post("/api/auth/update-language")
 async def update_language(
     data: dict, 
     db: AsyncSession = Depends(get_db), 
