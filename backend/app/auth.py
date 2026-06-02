@@ -250,6 +250,7 @@ async def change_password(
     return {"detail": "Password changed successfully"}
 
 @router.post("/auth/update-language")
+@router.post("/api/auth/update-language")
 async def update_language(
     data: dict, 
     db: AsyncSession = Depends(get_db), 

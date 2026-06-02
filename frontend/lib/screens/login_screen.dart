@@ -3,8 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shimmer/shimmer.dart';
 import '../services/secure_storage.dart';
-import 'package:local_auth/local_auth.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import '../providers/auth_provider.dart';
 import '../providers/theme_provider.dart';
 import '../providers/locale_provider.dart';
@@ -12,22 +10,6 @@ import '../widgets/video_background.dart';
 import 'package:frontend/l10n/app_localizations.dart';
 import '../services/api_client.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-
-final localAuthProvider = Provider<LocalAuthentication>((ref) {
-  return LocalAuthentication();
-});
-
-final biometricProvider = FutureProvider<bool>((ref) async {
-  if (kIsWeb) return false;
-  final localAuth = ref.read(localAuthProvider);
-  try {
-    final canCheck = await localAuth.canCheckBiometrics;
-    final isDeviceSupported = await localAuth.isDeviceSupported();
-    return canCheck && isDeviceSupported;
-  } catch (e) {
-    return false;
-  }
-});
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -48,29 +30,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.initState();
     _loadSavedCredentials();
   }
-  // Метод внутри _LoginScreenState
-  Future<void> _handleLogin() async {
-  final username = _loginController.text.trim();
-  final password = _passwordController.text.trim();
-  
-  // Получаем текущую локаль из провайдера
-  final currentLocale = ref.read(localeProvider); 
-  
-  // Передаем её в метод login
-  final success = await ref.read(authProvider.notifier).login(username, password, currentLocale);
-
-  if (success && mounted) {
-    Navigator.pushReplacementNamed(context, '/home');
-  } else {
-    // Ошибка отобразится через стейт AuthProvider
-    final error = ref.read(authProvider).error;
-    if (error != null && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error)),
-      );
-    }
-  }
-}
 
   Future<void> _loadSavedCredentials() async {
     final savedLogin = await _storage.read(key: 'saved_login');
@@ -85,102 +44,54 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
-  // Безопасное получение локализации
-  String _localized(String? key, String defaultText) {
-    final t = AppLocalizations.of(context);
-    return t != null ? (t as dynamic)[key] ?? defaultText : defaultText;
-  }
-
-  Future<void> _authenticateWithBiometrics() async {
-    final biometricAvailable = await ref.read(biometricProvider.future);
-    if (!biometricAvailable) return;
-
-    final localAuth = ref.read(localAuthProvider);
-    try {
-      final authenticated = await localAuth.authenticate(
-        localizedReason: _localized('fingerprintLogin', 'Вход по отпечатку'),
-        options: const AuthenticationOptions(
-          stickyAuth: true,
-          biometricOnly: true,
-        ),
-      );
-      if (authenticated) {
-        final savedLogin = await _storage.read(key: 'saved_login');
-        final savedPassword = await _storage.read(key: 'saved_password');
-        if (savedLogin != null && savedPassword != null) {
-          await _performLogin(savedLogin, savedPassword);
-        } else {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                  content: Text(_localized(
-                      'noSavedCredentials', 'Сохранённые данные не найдены'))),
-            );
-          }
-        }
-      }
-    } catch (e) {
-      debugPrint('Biometric error: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(_localized('biometricError', 'Ошибка биометрии'))),
-        );
-      }
-    }
-  }
-
   Future<void> _performLogin(String login, String password) async {
-  final authNotifier = ref.read(authProvider.notifier);
-  
-  // 1. Получаем текущую локаль для синхронизации
-  final currentLocale = ref.read(localeProvider);
-  
-  // 2. Вызываем метод логина, передавая 3 аргумента (как требуется в auth_provider)
-  final success = await authNotifier.login(login, password, currentLocale);
-  
-  if (!mounted) return;
-  
-  if (success) {
-    // Сохранение учетных данных
-    if (_rememberMe) {
-      await _storage.write(key: 'saved_login', value: login);
-      await _storage.write(key: 'saved_password', value: password);
-      await _storage.write(key: 'remember_me', value: 'true');
-    } else {
-      await _storage.delete(key: 'saved_password');
-      await _storage.write(key: 'saved_login', value: login);
-      await _storage.write(key: 'remember_me', value: 'false');
-    }
+    final authNotifier = ref.read(authProvider.notifier);
+    final currentLocale = ref.read(localeProvider);
 
-    // 3. Отправка FCM-токена
-    try {
-      final fcmToken = await FirebaseMessaging.instance.getToken();
-      if (fcmToken != null) {
-        await ApiClient().post('/chat/fcm-token', data: {'fcm_token': fcmToken});
+    final success = await authNotifier.login(login, password, currentLocale);
+
+    if (!mounted) return;
+
+    if (success) {
+      // Сохранение учетных данных
+      if (_rememberMe) {
+        await _storage.write(key: 'saved_login', value: login);
+        await _storage.write(key: 'saved_password', value: password);
+        await _storage.write(key: 'remember_me', value: 'true');
+      } else {
+        await _storage.delete(key: 'saved_password');
+        await _storage.write(key: 'saved_login', value: login);
+        await _storage.write(key: 'remember_me', value: 'false');
       }
-    } catch (e) {
-      print('Error sending FCM token: $e');
-    }
 
-    // 4. Синхронизация языка (через метод AuthNotifier)
-    try {
-      await authNotifier.syncLanguage(currentLocale.languageCode);
-      print('Language synced: ${currentLocale.languageCode}');
-    } catch (e) {
-      print('Error syncing language: $e');
-    }
+      // Отправка FCM-токена
+      try {
+        final fcmToken = await FirebaseMessaging.instance.getToken();
+        if (fcmToken != null) {
+          await ApiClient().post('/chat/fcm-token', data: {'fcm_token': fcmToken});
+        }
+      } catch (e) {
+        print('Error sending FCM token: $e');
+      }
 
-    if (mounted) {
-      Navigator.pushReplacementNamed(context, '/home');
-    }
-  } else {
-    final error = ref.read(authProvider).error ?? 'Неизвестная ошибка';
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
+      // Синхронизация языка
+      try {
+        await authNotifier.syncLanguage(currentLocale.languageCode);
+        print('Language synced: ${currentLocale.languageCode}');
+      } catch (e) {
+        print('Error syncing language: $e');
+      }
+
+      if (mounted) {
+        Navigator.pushReplacementNamed(context, '/home');
+      }
+    } else {
+      final error = ref.read(authProvider).error ?? 'Неизвестная ошибка';
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
+      }
     }
   }
-}
 
   String _getVideoPath(AppTheme theme) {
     switch (theme) {
@@ -196,28 +107,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   void _setLanguage(Locale locale) async {
-  // 1. Сначала меняем язык в приложении (чтобы интерфейс сразу стал нужным)
-  final notifier = ref.read(localeProvider.notifier);
-  notifier.setLocale(locale);
-  
-  // 2. Если пользователь уже авторизован, синхронизируем с сервером
-  final authState = ref.read(authProvider);
-  if (authState.user != null) {
-    try {
-      await ref.read(authProvider.notifier).syncLanguage(locale.languageCode);
-      print('Language synced to server: ${locale.languageCode}');
-    } catch (e) {
-      print('Error syncing language: $e');
+    final notifier = ref.read(localeProvider.notifier);
+    notifier.setLocale(locale);
+
+    final authState = ref.read(authProvider);
+    if (authState.user != null) {
+      try {
+        await ref.read(authProvider.notifier).syncLanguage(locale.languageCode);
+        print('Language synced to server: ${locale.languageCode}');
+      } catch (e) {
+        print('Error syncing language: $e');
+      }
     }
   }
-}
 
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
     final currentTheme = ref.watch(themeProvider);
     final videoPath = _getVideoPath(currentTheme);
-    final biometricAsync = ref.watch(biometricProvider);
     final t = AppLocalizations.of(context);
 
     return VideoBackground(
@@ -382,12 +290,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ],
                         ),
                         const SizedBox(height: 16),
-                        if (authState.isLoading)
-                          const CircularProgressIndicator()
-                        else
-                          Column(
-                            children: [
-                              ElevatedButton(
+                        authState.isLoading
+                            ? const CircularProgressIndicator()
+                            : ElevatedButton(
                                 onPressed: () async {
                                   await _performLogin(
                                     _loginController.text.trim(),
@@ -405,27 +310,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 ),
                                 child: Text(t?.signIn ?? 'Войти'),
                               ),
-                              biometricAsync.maybeWhen(
-                                data: (isAvailable) => isAvailable
-                                    ? Padding(
-                                        padding: const EdgeInsets.only(top: 12),
-                                        child: OutlinedButton.icon(
-                                          onPressed:
-                                              _authenticateWithBiometrics,
-                                          icon: const Icon(Icons.fingerprint),
-                                          label: Text(t?.fingerprintLogin ??
-                                              'Вход по отпечатку'),
-                                          style: OutlinedButton.styleFrom(
-                                            foregroundColor:
-                                                Colors.grey.shade800,
-                                          ),
-                                        ),
-                                      )
-                                    : const SizedBox.shrink(),
-                                orElse: () => const SizedBox.shrink(),
-                              ),
-                            ],
-                          ),
                         const SizedBox(height: 16),
                         TextButton(
                           onPressed: () =>
