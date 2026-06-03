@@ -92,7 +92,7 @@ def main():
         SELECT cm.id, cm.user_id
         FROM company_members cm
         JOIN users u ON u.id = cm.user_id
-        WHERE u.role = 'founder'
+        WHERE u.role = 'FOUNDER'
     """)).fetchall()
 
     for perm_row in all_perms:
