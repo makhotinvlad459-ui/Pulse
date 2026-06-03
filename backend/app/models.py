@@ -460,3 +460,34 @@ class PaymentOrder(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     user: Mapped["User"] = relationship(back_populates="payment_orders")
+
+# Добавь этот enum в раздел с другими перечислениями (например, после OrderStatus)
+class JournalEntryStatus(str, PyEnum):
+    PLANNED = "planned"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+
+# Затем модель
+class JournalEntry(Base):
+    __tablename__ = "journal_entries"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    company_id: Mapped[int] = mapped_column(ForeignKey("companies.id", ondelete="CASCADE"))
+    datetime_start: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    datetime_end: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    description: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    counterparty: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    status: Mapped[JournalEntryStatus] = mapped_column(Enum(JournalEntryStatus), default=JournalEntryStatus.PLANNED)
+    transaction_id: Mapped[int | None] = mapped_column(ForeignKey("transactions.id"), nullable=True, unique=True)
+    showcase_item_id: Mapped[int | None] = mapped_column(ForeignKey("showcase_items.id"), nullable=True)
+    quantity: Mapped[int] = mapped_column(Integer, default=1)
+    total_amount: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False, default=0.0)
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # relationships
+    company: Mapped["Company"] = relationship(foreign_keys=[company_id])
+    transaction: Mapped["Transaction"] = relationship(foreign_keys=[transaction_id])
+    creator: Mapped["User"] = relationship(foreign_keys=[created_by])
+    showcase_item: Mapped["ShowcaseItem"] = relationship()    

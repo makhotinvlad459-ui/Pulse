@@ -254,3 +254,49 @@ class OrderResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+# --- JOURNAL ---
+class JournalEntryStatus(str, Enum):
+    PLANNED = "planned"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+
+class JournalEntryCreate(BaseModel):
+    datetime_start: datetime
+    datetime_end: datetime
+    description: Optional[str] = None
+    counterparty: Optional[str] = None
+    showcase_item_id: Optional[int] = None
+    quantity: int = 1
+    total_amount: float = 0.0  # если showcase_item_id не указан, можно указать сумму вручную
+
+class JournalEntryUpdate(BaseModel):
+    datetime_start: Optional[datetime] = None
+    datetime_end: Optional[datetime] = None
+    description: Optional[str] = None
+    counterparty: Optional[str] = None
+    showcase_item_id: Optional[int] = None
+    quantity: Optional[int] = None
+    total_amount: Optional[float] = None
+    status: Optional[JournalEntryStatus] = None
+
+class JournalEntryResponse(BaseModel):
+    id: int
+    company_id: int
+    datetime_start: datetime
+    datetime_end: datetime
+    description: Optional[str]
+    counterparty: Optional[str]
+    status: JournalEntryStatus
+    transaction_id: Optional[int]
+    showcase_item_id: Optional[int]
+    quantity: int
+    total_amount: float
+    created_by: int
+    created_at: datetime
+    updated_at: datetime
+    creator_name: Optional[str] = None
+    showcase_item_name: Optional[str] = None  # для отображения
+
+    class Config:
+        from_attributes = True        

@@ -54,6 +54,11 @@ def main():
         ('edit_material', 'Редактирование материалов'),
         ('view_orders', 'Просмотр заказов'),
         ('edit_orders', 'Редактирование заказов'),
+        ('view_journal', 'Просмотр журнала'),
+        ('create_journal', 'Создание записей в журнале'),
+        ('edit_journal', 'Редактирование записей'),
+        ('delete_journal', 'Удаление записей'),
+        ('complete_journal', 'Отметка записей выполненными (создание транзакций)'),
     ]
 
     for name, desc in permissions:

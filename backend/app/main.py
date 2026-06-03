@@ -10,7 +10,7 @@ import firebase_admin
 from firebase_admin import credentials
 
 from app.auth import router as auth_router
-from app.routers import subscription, counterparties, companies, accounts, categories, transactions, statistics, admin, showcase, chat, tasks, websocket, notifications, products, permissions, orders
+from app.routers import subscription, journal, counterparties, companies, accounts, categories, transactions, statistics, admin, showcase, chat, tasks, websocket, notifications, products, permissions, orders
 from app.websocket_manager import manager
 
 
@@ -57,7 +57,7 @@ app = FastAPI(
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
 
 routers = [
-    auth_router, companies.router, accounts.router, categories.router,
+    auth_router,journal.router, companies.router, accounts.router, categories.router,
     transactions.router, statistics.router, admin.router, chat.router,
     tasks.router, notifications.router, products.router,
     showcase.router, permissions.router, orders.router, counterparties.router,
