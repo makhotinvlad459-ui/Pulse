@@ -92,7 +92,7 @@ def main():
         SELECT cm.id, cm.user_id
         FROM company_members cm
         JOIN users u ON u.id = cm.user_id
-        WHERE u.role = 'FOUNDER'
+        WHERE u.role = 'founder'
     """)).fetchall()
 
     for perm_row in all_perms:
@@ -104,7 +104,10 @@ def main():
             ).fetchone()
             if not exists:
                 session.execute(
-                    text("INSERT INTO company_member_permissions (member_id, permission_id, granted_by) VALUES (:mid, :pid, :uid)"),
+                    text("""
+                        INSERT INTO company_member_permissions (member_id, permission_id, granted_by, granted_at)
+                        VALUES (:mid, :pid, :uid, NOW())
+                    """),
                     {"mid": member_id, "pid": perm_id, "uid": user_id}
                 )
     session.commit()
