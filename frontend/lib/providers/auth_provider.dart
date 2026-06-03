@@ -4,6 +4,7 @@ import '../services/api_client.dart';
 import '../services/secure_storage.dart';
 import '../services/websocket_service.dart';
 import '../models/user.dart';
+import 'package:dio/dio.dart';
 
 final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) => AuthNotifier());
 
@@ -66,44 +67,47 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<bool> login(String username, String password, Locale currentLocale) async {
-    state = AuthState(isLoading: true);
-    try {
-      final response = await _api.postForm('/auth/login', data: {
-        'username': username,
-        'password': password,
-      });
-      
-      if (response.statusCode != 200) throw Exception('Server error: ${response.statusCode}');
-
-      final data = response.data;
-      if (data is! Map<String, dynamic>) throw Exception('Invalid response format');
-      
-      final token = data['access_token'] as String?;
-      if (token == null) throw Exception('No token in response');
-      
-      // Сохраняем refresh token, если он есть
-      final refreshToken = data['refresh_token'] as String?;
-      if (refreshToken != null) {
-        await _storage.setRefreshToken(refreshToken);
-      }
-      
-      await _api.setToken(token);
-      
-      // Загружаем профиль
-      final loaded = await _loadUserProfile();
-      
-      // Синхронизируем язык после логина
-      if (loaded) {
-        await syncLanguage(currentLocale.languageCode);
-      }
-      
-      return loaded;
-    } catch (e, stack) {
-      print('login error: $e');
-      state = AuthState(error: e.toString());
-      return false;
+  state = AuthState(isLoading: true);
+  try {
+    final response = await _api.postForm('/auth/login', data: {
+      'username': username,
+      'password': password,
+    });
+    
+    // Если дошли сюда, значит ошибок нет (статус 200)
+    final data = response.data;
+    if (data is! Map<String, dynamic>) throw Exception('Invalid response format');
+    
+    final token = data['access_token'] as String?;
+    if (token == null) throw Exception('No token in response');
+    
+    final refreshToken = data['refresh_token'] as String?;
+    if (refreshToken != null) {
+      await _storage.setRefreshToken(refreshToken);
     }
+    
+    await _api.setToken(token);
+    
+    final loaded = await _loadUserProfile();
+    
+    if (loaded) {
+      await syncLanguage(currentLocale.languageCode);
+    }
+    
+    return loaded;
+  } catch (e, stack) {
+    print('login error: $e');
+    String errorMsg;
+    if (e is DioException) {
+      // Извлекаем наше локализованное сообщение из поля error
+      errorMsg = e.error?.toString() ?? 'Ошибка соединения';
+    } else {
+      errorMsg = e.toString();
+    }
+    state = AuthState(error: errorMsg);
+    return false;
   }
+}
 
   Future<bool> _loadUserProfile() async {
     try {
