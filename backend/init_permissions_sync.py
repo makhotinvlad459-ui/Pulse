@@ -20,7 +20,7 @@ def main():
     """))
     session.commit()
 
-    # --- ГАРАНТИРУЕМ АВТОИНКРЕМЕНТ (на случай, если таблица уже существовала без SERIAL) ---
+    # --- ГАРАНТИРУЕМ АВТОИНКРЕМЕНТ ---
     session.execute(text("""
         DO $$
         BEGIN
@@ -38,6 +38,7 @@ def main():
     """))
     session.commit()
 
+    # --- СПИСОК ВСЕХ ПРАВ (включая журнал) ---
     permissions = [
         ('view_operations', 'Просмотр операций'),
         ('create_transaction', 'Создание операций'),
@@ -78,12 +79,37 @@ def main():
         ('complete_journal', 'Отметка записей выполненными (создание транзакций)'),
     ]
 
+    # --- ДОБАВЛЯЕМ НЕДОСТАЮЩИЕ ПРАВА ---
     for name, desc in permissions:
         exists = session.execute(text("SELECT 1 FROM permissions WHERE name = :name"), {"name": name}).fetchone()
         if not exists:
             session.execute(text("INSERT INTO permissions (name, description) VALUES (:name, :desc)"), {"name": name, "desc": desc})
     session.commit()
-    print("✅ Права добавлены")
+
+    # --- ВЫДАЁМ ВСЕ ПРАВА ВСЕМ УЧРЕДИТЕЛЯМ (ЕСЛИ НЕТ) ---
+    all_perms = session.execute(text("SELECT id FROM permissions")).fetchall()
+    founders = session.execute(text("""
+        SELECT cm.id, cm.user_id
+        FROM company_members cm
+        JOIN users u ON u.id = cm.user_id
+        WHERE u.role = 'FOUNDER'
+    """)).fetchall()
+
+    for perm_row in all_perms:
+        perm_id = perm_row[0]
+        for member_id, user_id in founders:
+            exists = session.execute(
+                text("SELECT 1 FROM company_member_permissions WHERE member_id = :mid AND permission_id = :pid"),
+                {"mid": member_id, "pid": perm_id}
+            ).fetchone()
+            if not exists:
+                session.execute(
+                    text("INSERT INTO company_member_permissions (member_id, permission_id, granted_by) VALUES (:mid, :pid, :uid)"),
+                    {"mid": member_id, "pid": perm_id, "uid": user_id}
+                )
+    session.commit()
+
+    print("✅ Права добавлены и выданы учредителям")
 
 if __name__ == "__main__":
     main()

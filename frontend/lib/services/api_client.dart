@@ -10,6 +10,7 @@ import '../models/statistics.dart';
 import '../main.dart';
 import '../providers/auth_provider.dart';
 import '../l10n/app_localizations.dart';
+import '../models/journal_entry.dart';
 
 class ApiClient {
   static String get baseUrl {
@@ -381,6 +382,72 @@ _dio.interceptors.add(LogInterceptor(responseBody: true, requestBody: true));
       options: Options(responseType: ResponseType.bytes),
     );
     return response;
+  }
+
+    // ========== Журнал ==========
+  Future<List<JournalEntry>> getJournalEntries(int companyId, DateTime start, DateTime end) async {
+    final response = await get('/journal', queryParameters: {
+      'company_id': companyId,
+      'start_date': start.toUtc().toIso8601String(),
+      'end_date': end.toUtc().toIso8601String(),
+    });
+    final List<dynamic> data = response.data;
+    return data.map((json) => JournalEntry.fromJson(json)).toList();
+  }
+
+  Future<JournalEntry> createJournalEntry(int companyId, {
+    required DateTime start,
+    required DateTime end,
+    String? description,
+    String? counterparty,
+    int? showcaseItemId,
+    int quantity = 1,
+    double totalAmount = 0.0,
+  }) async {
+    final response = await post('/journal', queryParameters: {'company_id': companyId}, data: {
+      'datetime_start': start.toUtc().toIso8601String(),
+      'datetime_end': end.toUtc().toIso8601String(),
+      'description': description,
+      'counterparty': counterparty,
+      'showcase_item_id': showcaseItemId,
+      'quantity': quantity,
+      'total_amount': totalAmount,
+    });
+    return JournalEntry.fromJson(response.data);
+  }
+
+  Future<JournalEntry> updateJournalEntry(int companyId, int entryId, {
+    DateTime? start,
+    DateTime? end,
+    String? description,
+    String? counterparty,
+    int? showcaseItemId,
+    int? quantity,
+    double? totalAmount,
+    String? status,
+  }) async {
+    final data = <String, dynamic>{};
+    if (start != null) data['datetime_start'] = start.toUtc().toIso8601String();
+    if (end != null) data['datetime_end'] = end.toUtc().toIso8601String();
+    if (description != null) data['description'] = description;
+    if (counterparty != null) data['counterparty'] = counterparty;
+    if (showcaseItemId != null) data['showcase_item_id'] = showcaseItemId;
+    if (quantity != null) data['quantity'] = quantity;
+    if (totalAmount != null) data['total_amount'] = totalAmount;
+    if (status != null) data['status'] = status;
+    final response = await patch('/journal/$entryId', queryParameters: {'company_id': companyId}, data: data);
+    return JournalEntry.fromJson(response.data);
+  }
+
+  Future<void> deleteJournalEntry(int companyId, int entryId) async {
+    await delete('/journal/$entryId', queryParameters: {'company_id': companyId});
+  }
+
+  Future<void> completeJournalEntry(int companyId, int entryId, int accountId) async {
+    await post('/journal/$entryId/complete', queryParameters: {
+      'company_id': companyId,
+      'account_id': accountId,
+    });
   }
 
   Future<void> changePassword(String oldPassword, String newPassword) async {

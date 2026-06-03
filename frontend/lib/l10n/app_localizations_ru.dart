@@ -1784,4 +1784,70 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get error_invalid_credentials => 'Неверный email или пароль';
+
+  @override
+  String get tabJournal => 'Журнал';
+
+  @override
+  String get noEntriesForDay => 'Нет записей на этот день';
+
+  @override
+  String get newJournalEntry => 'Новая запись';
+
+  @override
+  String get editJournalEntry => 'Редактировать запись';
+
+  @override
+  String get startTime => 'Время начала';
+
+  @override
+  String get endTime => 'Время окончания';
+
+  @override
+  String get serviceFromShowcaseOptional => 'Услуга из витрины (необязательно)';
+
+  @override
+  String get selectAccountForIncome => 'Выберите счёт для дохода';
+
+  @override
+  String get entryCompleted => 'Запись выполнена, транзакция создана';
+
+  @override
+  String get deleteJournalEntryTitle => 'Удалить запись';
+
+  @override
+  String get deleteJournalEntryConfirm =>
+      'Вы уверены, что хотите удалить эту запись?';
+
+  @override
+  String get onlyPlannedCanBeCompleted =>
+      'Только запланированные записи можно отметить выполненными';
+
+  @override
+  String get serviceLabel => 'Услуга';
+
+  @override
+  String get sumLabel => 'Сумма';
+
+  @override
+  String get transactionLabel => 'Операция';
+
+  @override
+  String get endTimeAfterStart =>
+      'Время окончания должно быть позже времени начала';
+
+  @override
+  String get selectAccount => 'Пожалуйста, выберите счёт';
+
+  @override
+  String get balanceLabel => 'Баланс';
+
+  @override
+  String get description => 'Описание';
+
+  @override
+  String get journalEntry => 'запись';
+
+  @override
+  String get entry => 'запись';
 }

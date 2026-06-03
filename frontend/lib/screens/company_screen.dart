@@ -26,6 +26,7 @@ import '../widgets/company/orders_tab.dart';
 import '../widgets/company/counterparties_tab.dart';
 import '../services/websocket_service.dart';
 import 'package:frontend/l10n/app_localizations.dart';
+import '../widgets/company/journal/journal_tab.dart';
 
 class RainTheme {
   final Color color;
@@ -97,6 +98,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
     'reports',
     'orders',
     'counterparties',
+    'journal',
   ];
 
   List<String> _tabOrder = [];
@@ -113,6 +115,8 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
         return t.tabChatTasks;
       case 'stock':
         return t.tabStock;
+      case 'journal':
+        return t.tabJournal;  
       case 'reports':
         return t.tabReports;
       case 'orders':
@@ -219,7 +223,12 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
         'edit_orders',
         'view_accounts',
         'view_counterparties',
-        'edit_counterparties'
+        'edit_counterparties',
+        'view_journal',
+        'create_journal',
+        'edit_journal',
+        'delete_journal',
+        'complete_journal',
       };
     } else {
       effectivePermissions = _myPermissions;
@@ -255,6 +264,16 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
             ));
           }
           break;
+
+        case 'journal':
+        if (effectivePermissions.contains('view_journal')) {
+           newTabs.add(Tab(icon: const Icon(Icons.calendar_month), text: t.tabJournal));
+            newWidgets.add(JournalTab(
+              companyId: _company.id,
+              permissions: effectivePermissions,
+                ));
+                  }
+              break;  
         case 'chat_tasks':
           if (effectivePermissions.contains('view_chat') ||
               effectivePermissions.contains('view_tasks')) {

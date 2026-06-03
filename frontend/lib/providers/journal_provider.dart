@@ -1,0 +1,122 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../models/journal_entry.dart';
+import '../services/api_client.dart';
+
+final journalProvider = StateNotifierProvider<JournalNotifier, JournalState>((ref) {
+  return JournalNotifier();
+});
+
+class JournalState {
+  final List<JournalEntry> entries;
+  final bool isLoading;
+  final String? error;
+
+  JournalState({this.entries = const [], this.isLoading = false, this.error});
+}
+
+class JournalNotifier extends StateNotifier<JournalState> {
+  JournalNotifier() : super(JournalState());
+
+  final ApiClient _api = ApiClient();
+
+  Future<void> loadEntries(int companyId, DateTime start, DateTime end) async {
+    state = JournalState(isLoading: true);
+    try {
+      final entries = await _api.getJournalEntries(companyId, start, end);
+      state = JournalState(entries: entries);
+    } catch (e) {
+      state = JournalState(error: e.toString());
+    }
+  }
+
+  Future<JournalEntry?> createEntry(int companyId, {
+    required DateTime start,
+    required DateTime end,
+    String? description,
+    String? counterparty,
+    int? showcaseItemId,
+    int quantity = 1,
+    double totalAmount = 0.0,
+  }) async {
+    try {
+      final newEntry = await _api.createJournalEntry(companyId,
+          start: start, end: end, description: description, counterparty: counterparty,
+          showcaseItemId: showcaseItemId, quantity: quantity, totalAmount: totalAmount);
+      state = JournalState(entries: [...state.entries, newEntry]);
+      return newEntry;
+    } catch (e) {
+      state = JournalState(entries: state.entries, error: e.toString());
+      return null;
+    }
+  }
+
+  Future<bool> updateEntry(int companyId, int entryId, {
+    DateTime? start,
+    DateTime? end,
+    String? description,
+    String? counterparty,
+    int? showcaseItemId,
+    int? quantity,
+    double? totalAmount,
+    String? status,
+  }) async {
+    try {
+      final updated = await _api.updateJournalEntry(companyId, entryId,
+          start: start, end: end, description: description, counterparty: counterparty,
+          showcaseItemId: showcaseItemId, quantity: quantity, totalAmount: totalAmount, status: status);
+      final newEntries = state.entries.map((e) => e.id == entryId ? updated : e).toList();
+      state = JournalState(entries: newEntries);
+      return true;
+    } catch (e) {
+      state = JournalState(entries: state.entries, error: e.toString());
+      return false;
+    }
+  }
+
+  Future<bool> deleteEntry(int companyId, int entryId) async {
+    try {
+      await _api.deleteJournalEntry(companyId, entryId);
+      state = JournalState(entries: state.entries.where((e) => e.id != entryId).toList());
+      return true;
+    } catch (e) {
+      state = JournalState(entries: state.entries, error: e.toString());
+      return false;
+    }
+  }
+
+  Future<bool> completeEntry(int companyId, int entryId, int accountId) async {
+    try {
+      await _api.completeJournalEntry(companyId, entryId, accountId);
+      // После завершения нужно перезагрузить записи, чтобы обновить статус и transaction_id
+      // Проще перезагрузить текущий период, но для простоты пока just update status locally
+      final updatedEntries = state.entries.map((e) {
+        if (e.id == entryId) {
+          return JournalEntry(
+            id: e.id,
+            companyId: e.companyId,
+            datetimeStart: e.datetimeStart,
+            datetimeEnd: e.datetimeEnd,
+            description: e.description,
+            counterparty: e.counterparty,
+            status: 'completed',
+            transactionId: null, // будет позже, можно перезагрузить
+            showcaseItemId: e.showcaseItemId,
+            quantity: e.quantity,
+            totalAmount: e.totalAmount,
+            createdBy: e.createdBy,
+            createdAt: e.createdAt,
+            updatedAt: DateTime.now(),
+            creatorName: e.creatorName,
+            showcaseItemName: e.showcaseItemName,
+          );
+        }
+        return e;
+      }).toList();
+      state = JournalState(entries: updatedEntries);
+      return true;
+    } catch (e) {
+      state = JournalState(entries: state.entries, error: e.toString());
+      return false;
+    }
+  }
+}

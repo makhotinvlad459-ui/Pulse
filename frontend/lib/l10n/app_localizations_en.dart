@@ -204,7 +204,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get phone => 'Phone';
 
   @override
-  String get totalAmount => 'Amount';
+  String get totalAmount => 'Total amount';
 
   @override
   String get messages => 'Messages';
@@ -1786,4 +1786,69 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get error_invalid_credentials => 'Invalid email or password';
+
+  @override
+  String get tabJournal => 'Journal';
+
+  @override
+  String get noEntriesForDay => 'No entries for this day';
+
+  @override
+  String get newJournalEntry => 'New entry';
+
+  @override
+  String get editJournalEntry => 'Edit entry';
+
+  @override
+  String get startTime => 'Start time';
+
+  @override
+  String get endTime => 'End time';
+
+  @override
+  String get serviceFromShowcaseOptional => 'Service from showcase (optional)';
+
+  @override
+  String get selectAccountForIncome => 'Select account for income';
+
+  @override
+  String get entryCompleted => 'Entry completed and transaction created';
+
+  @override
+  String get deleteJournalEntryTitle => 'Delete entry';
+
+  @override
+  String get deleteJournalEntryConfirm =>
+      'Are you sure you want to delete this entry?';
+
+  @override
+  String get onlyPlannedCanBeCompleted =>
+      'Only planned entries can be completed';
+
+  @override
+  String get serviceLabel => 'Service';
+
+  @override
+  String get sumLabel => 'Sum';
+
+  @override
+  String get transactionLabel => 'Transaction';
+
+  @override
+  String get endTimeAfterStart => 'End time must be after start time';
+
+  @override
+  String get selectAccount => 'Please select an account';
+
+  @override
+  String get balanceLabel => 'Balance';
+
+  @override
+  String get description => 'Description';
+
+  @override
+  String get journalEntry => 'entry';
+
+  @override
+  String get entry => 'entry';
 }

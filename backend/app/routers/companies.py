@@ -155,21 +155,14 @@ async def create_company(
         )
         db.add(founder_member)
         await db.flush()
-        # Выдаём учредителю все права
+        # ВЫДАЁМ УЧРЕДИТЕЛЮ ВСЕ ПРАВА (БЕЗ ПРОВЕРКИ, ТАК КАК ОН НОВЫЙ)
         all_perms = await db.execute(select(Permission))
         for perm in all_perms.scalars().all():
-            existing = await db.execute(
-                select(CompanyMemberPermission).where(
-                    CompanyMemberPermission.member_id == founder_member.id,
-                    CompanyMemberPermission.permission_id == perm.id
-                ).limit(1)
-            )
-            if not existing.scalar_one_or_none():
-                db.add(CompanyMemberPermission(
-                    member_id=founder_member.id,
-                    permission_id=perm.id,
-                    granted_by=current_user.id
-                ))
+            db.add(CompanyMemberPermission(
+                member_id=founder_member.id,
+                permission_id=perm.id,
+                granted_by=current_user.id
+            ))
     
     employees_credentials = []
     

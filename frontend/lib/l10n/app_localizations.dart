@@ -485,7 +485,7 @@ abstract class AppLocalizations {
   /// No description provided for @totalAmount.
   ///
   /// In en, this message translates to:
-  /// **'Amount'**
+  /// **'Total amount'**
   String get totalAmount;
 
   /// No description provided for @messages.
@@ -3595,6 +3595,132 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Invalid email or password'**
   String get error_invalid_credentials;
+
+  /// No description provided for @tabJournal.
+  ///
+  /// In en, this message translates to:
+  /// **'Journal'**
+  String get tabJournal;
+
+  /// No description provided for @noEntriesForDay.
+  ///
+  /// In en, this message translates to:
+  /// **'No entries for this day'**
+  String get noEntriesForDay;
+
+  /// No description provided for @newJournalEntry.
+  ///
+  /// In en, this message translates to:
+  /// **'New entry'**
+  String get newJournalEntry;
+
+  /// No description provided for @editJournalEntry.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit entry'**
+  String get editJournalEntry;
+
+  /// No description provided for @startTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Start time'**
+  String get startTime;
+
+  /// No description provided for @endTime.
+  ///
+  /// In en, this message translates to:
+  /// **'End time'**
+  String get endTime;
+
+  /// No description provided for @serviceFromShowcaseOptional.
+  ///
+  /// In en, this message translates to:
+  /// **'Service from showcase (optional)'**
+  String get serviceFromShowcaseOptional;
+
+  /// No description provided for @selectAccountForIncome.
+  ///
+  /// In en, this message translates to:
+  /// **'Select account for income'**
+  String get selectAccountForIncome;
+
+  /// No description provided for @entryCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Entry completed and transaction created'**
+  String get entryCompleted;
+
+  /// No description provided for @deleteJournalEntryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete entry'**
+  String get deleteJournalEntryTitle;
+
+  /// No description provided for @deleteJournalEntryConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Are you sure you want to delete this entry?'**
+  String get deleteJournalEntryConfirm;
+
+  /// No description provided for @onlyPlannedCanBeCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Only planned entries can be completed'**
+  String get onlyPlannedCanBeCompleted;
+
+  /// No description provided for @serviceLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Service'**
+  String get serviceLabel;
+
+  /// No description provided for @sumLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Sum'**
+  String get sumLabel;
+
+  /// No description provided for @transactionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Transaction'**
+  String get transactionLabel;
+
+  /// No description provided for @endTimeAfterStart.
+  ///
+  /// In en, this message translates to:
+  /// **'End time must be after start time'**
+  String get endTimeAfterStart;
+
+  /// No description provided for @selectAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Please select an account'**
+  String get selectAccount;
+
+  /// No description provided for @balanceLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Balance'**
+  String get balanceLabel;
+
+  /// No description provided for @description.
+  ///
+  /// In en, this message translates to:
+  /// **'Description'**
+  String get description;
+
+  /// No description provided for @journalEntry.
+  ///
+  /// In en, this message translates to:
+  /// **'entry'**
+  String get journalEntry;
+
+  /// No description provided for @entry.
+  ///
+  /// In en, this message translates to:
+  /// **'entry'**
+  String get entry;
 }
 
 class _AppLocalizationsDelegate

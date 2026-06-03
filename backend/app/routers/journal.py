@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 from typing import List, Optional
 from datetime import datetime
 
@@ -12,6 +11,15 @@ from app.deps import get_current_user
 from app.routers.transactions import create_transaction
 
 router = APIRouter(prefix="/journal", tags=["journal"])
+
+
+def _to_naive(dt: datetime | None) -> datetime | None:
+    """Convert datetime with timezone to naive (without timezone)."""
+    if dt is None:
+        return None
+    if dt.tzinfo is not None:
+        return dt.replace(tzinfo=None)
+    return dt
 
 
 async def _check_company_access(company_id: int, user: User, db: AsyncSession) -> bool:
@@ -54,19 +62,17 @@ async def get_journal_entries(
     if not await _has_permission(company_id, current_user, "view_journal", db):
         raise HTTPException(status_code=403, detail="No permission to view journal")
 
+    start_date = _to_naive(start_date)
+    end_date = _to_naive(end_date)
+
     query = select(JournalEntry).where(JournalEntry.company_id == company_id)
     if start_date:
         query = query.where(JournalEntry.datetime_start >= start_date)
     if end_date:
         query = query.where(JournalEntry.datetime_start <= end_date)
     query = query.order_by(JournalEntry.datetime_start)
-    query = query.options(selectinload(JournalEntry.creator), selectinload(JournalEntry.showcase_item))
     result = await db.execute(query)
     entries = result.scalars().all()
-
-    for e in entries:
-        e.creator_name = e.creator.display_name if e.creator else None
-        e.showcase_item_name = e.showcase_item.name if e.showcase_item else None
     return entries
 
 
@@ -82,7 +88,9 @@ async def create_journal_entry(
     if not await _has_permission(company_id, current_user, "create_journal", db):
         raise HTTPException(status_code=403, detail="No permission to create journal entries")
 
-    if entry_data.datetime_end <= entry_data.datetime_start:
+    start = _to_naive(entry_data.datetime_start)
+    end = _to_naive(entry_data.datetime_end)
+    if end <= start:
         raise HTTPException(status_code=400, detail="End time must be after start time")
 
     if entry_data.showcase_item_id:
@@ -94,8 +102,8 @@ async def create_journal_entry(
 
     new_entry = JournalEntry(
         company_id=company_id,
-        datetime_start=entry_data.datetime_start,
-        datetime_end=entry_data.datetime_end,
+        datetime_start=start,
+        datetime_end=end,
         description=entry_data.description,
         counterparty=entry_data.counterparty,
         showcase_item_id=entry_data.showcase_item_id,
@@ -106,9 +114,7 @@ async def create_journal_entry(
     )
     db.add(new_entry)
     await db.commit()
-    await db.refresh(new_entry, attribute_names=['creator', 'showcase_item'])
-    new_entry.creator_name = new_entry.creator.display_name if new_entry.creator else None
-    new_entry.showcase_item_name = new_entry.showcase_item.name if new_entry.showcase_item else None
+    await db.refresh(new_entry)
     return new_entry
 
 
@@ -133,13 +139,15 @@ async def update_journal_entry(
         raise HTTPException(status_code=400, detail="Only planned entries can be edited")
 
     update_data = entry_data.dict(exclude_unset=True)
+    if 'datetime_start' in update_data:
+        update_data['datetime_start'] = _to_naive(update_data['datetime_start'])
+    if 'datetime_end' in update_data:
+        update_data['datetime_end'] = _to_naive(update_data['datetime_end'])
     for key, value in update_data.items():
         setattr(entry, key, value)
     entry.updated_at = datetime.utcnow()
     await db.commit()
-    await db.refresh(entry, attribute_names=['creator', 'showcase_item'])
-    entry.creator_name = entry.creator.display_name if entry.creator else None
-    entry.showcase_item_name = entry.showcase_item.name if entry.showcase_item else None
+    await db.refresh(entry)
     return entry
 
 
@@ -191,7 +199,7 @@ async def complete_journal_entry(
     if not acc.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Account not found")
 
-    # Определяем сумму
+    # Determine total amount
     if entry.showcase_item_id:
         item = await db.get(ShowcaseItem, entry.showcase_item_id)
         if not item:
@@ -200,9 +208,8 @@ async def complete_journal_entry(
     else:
         amount = entry.total_amount
 
-    description = f"Журнал: {entry.description or 'Запись'}"
+    description = f"Journal: {entry.description or 'Entry'}"
 
-    # Создаём транзакцию через существующую функцию
     trans_data = TransactionCreate(
         type=TransactionType.INCOME,
         amount=amount,
@@ -212,7 +219,7 @@ async def complete_journal_entry(
         counterparty=entry.counterparty,
         showcase_item_id=entry.showcase_item_id,
         quantity=entry.quantity,
-        items=[]  # пустой список – create_transaction сам развернёт рецепт
+        items=[]
     )
 
     created_trans = await create_transaction(
