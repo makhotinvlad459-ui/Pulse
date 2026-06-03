@@ -19,7 +19,24 @@ def main():
         )
     """))
     session.commit()
-    # ------------------------------------
+
+    # --- ГАРАНТИРУЕМ АВТОИНКРЕМЕНТ (на случай, если таблица уже существовала без SERIAL) ---
+    session.execute(text("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name='permissions' AND column_name='id'
+                AND column_default IS NOT NULL AND column_default LIKE 'nextval%'
+            ) THEN
+                CREATE SEQUENCE IF NOT EXISTS permissions_id_seq;
+                ALTER TABLE permissions ALTER COLUMN id SET DEFAULT nextval('permissions_id_seq');
+                PERFORM setval('permissions_id_seq', COALESCE((SELECT MAX(id) FROM permissions), 0) + 1, false);
+            END IF;
+        END
+        $$;
+    """))
+    session.commit()
 
     permissions = [
         ('view_operations', 'Просмотр операций'),
