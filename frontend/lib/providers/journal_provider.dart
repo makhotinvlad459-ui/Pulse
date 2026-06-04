@@ -85,38 +85,12 @@ class JournalNotifier extends StateNotifier<JournalState> {
   }
 
   Future<bool> completeEntry(int companyId, int entryId, int accountId) async {
-    try {
-      await _api.completeJournalEntry(companyId, entryId, accountId);
-      // После завершения нужно перезагрузить записи, чтобы обновить статус и transaction_id
-      // Проще перезагрузить текущий период, но для простоты пока just update status locally
-      final updatedEntries = state.entries.map((e) {
-        if (e.id == entryId) {
-          return JournalEntry(
-            id: e.id,
-            companyId: e.companyId,
-            datetimeStart: e.datetimeStart,
-            datetimeEnd: e.datetimeEnd,
-            description: e.description,
-            counterparty: e.counterparty,
-            status: 'completed',
-            transactionId: null, // будет позже, можно перезагрузить
-            showcaseItemId: e.showcaseItemId,
-            quantity: e.quantity,
-            totalAmount: e.totalAmount,
-            createdBy: e.createdBy,
-            createdAt: e.createdAt,
-            updatedAt: DateTime.now(),
-            creatorName: e.creatorName,
-            showcaseItemName: e.showcaseItemName,
-          );
-        }
-        return e;
-      }).toList();
-      state = JournalState(entries: updatedEntries);
-      return true;
-    } catch (e) {
-      state = JournalState(entries: state.entries, error: e.toString());
-      return false;
-    }
+  try {
+    await _api.completeJournalEntry(companyId, entryId, accountId);
+    return true;
+  } catch (e) {
+    state = JournalState(entries: state.entries, error: e.toString());
+    return false;
   }
+}
 }

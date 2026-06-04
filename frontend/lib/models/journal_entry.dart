@@ -16,7 +16,7 @@ class JournalEntry {
   final String? creatorName;
   final String? showcaseItemName;
 
-  JournalEntry({
+  const JournalEntry({
     required this.id,
     required this.companyId,
     required this.datetimeStart,
@@ -35,21 +35,12 @@ class JournalEntry {
     this.showcaseItemName,
   });
 
-  // Вспомогательный метод для парсинга UTC-строк в локальное время
-  static DateTime _parseUtc(String str) {
-    var normalized = str.trim();
-    if (!normalized.endsWith('Z') && !normalized.contains('+') && !normalized.contains('-')) {
-      normalized += 'Z';
-    }
-    return DateTime.parse(normalized).toLocal();
-  }
-
   factory JournalEntry.fromJson(Map<String, dynamic> json) {
     return JournalEntry(
       id: json['id'],
       companyId: json['company_id'],
-      datetimeStart: _parseUtc(json['datetime_start']),
-      datetimeEnd: _parseUtc(json['datetime_end']),
+      datetimeStart: DateTime.parse(json['datetime_start']),
+      datetimeEnd: DateTime.parse(json['datetime_end']),
       description: json['description'],
       counterparty: json['counterparty'],
       status: json['status'],
@@ -58,8 +49,8 @@ class JournalEntry {
       quantity: json['quantity'] ?? 1,
       totalAmount: (json['total_amount'] as num).toDouble(),
       createdBy: json['created_by'],
-      createdAt: _parseUtc(json['created_at']),
-      updatedAt: _parseUtc(json['updated_at']),
+      createdAt: DateTime.parse(json['created_at']),
+      updatedAt: DateTime.parse(json['updated_at']),
       creatorName: json['creator_name'],
       showcaseItemName: json['showcase_item_name'],
     );
@@ -69,8 +60,8 @@ class JournalEntry {
     return {
       'id': id,
       'company_id': companyId,
-      'datetime_start': datetimeStart.toUtc().toIso8601String(),
-      'datetime_end': datetimeEnd.toUtc().toIso8601String(),
+      'datetime_start': datetimeStart.toIso8601String(),
+      'datetime_end': datetimeEnd.toIso8601String(),
       'description': description,
       'counterparty': counterparty,
       'status': status,
@@ -79,8 +70,8 @@ class JournalEntry {
       'quantity': quantity,
       'total_amount': totalAmount,
       'created_by': createdBy,
-      'created_at': createdAt.toUtc().toIso8601String(),
-      'updated_at': updatedAt.toUtc().toIso8601String(),
+      'created_at': createdAt.toIso8601String(),
+      'updated_at': updatedAt.toIso8601String(),
     };
   }
 }

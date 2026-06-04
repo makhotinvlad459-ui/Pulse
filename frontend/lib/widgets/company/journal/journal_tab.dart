@@ -107,31 +107,44 @@ class _JournalTabState extends ConsumerState<JournalTab> {
   }
 
   Future<void> _editEntry(JournalEntry entry) async {
-    if (!widget.permissions.contains('edit_journal')) return;
-    final result = await showDialog<Map<String, dynamic>>(
-      context: context,
-      builder: (context) => JournalEntryDialog(
-        companyId: widget.companyId,
-        initialEntry: entry,
-        permissions: widget.permissions,
-      ),
+  if (!widget.permissions.contains('edit_journal')) return;
+  
+  // Преобразуем объект JournalEntry в Map (как при создании)
+  final entryMap = {
+    'datetime_start': entry.datetimeStart.toUtc().toIso8601String(),
+    'datetime_end': entry.datetimeEnd.toUtc().toIso8601String(),
+    'description': entry.description,
+    'counterparty': entry.counterparty,
+    'showcase_item_id': entry.showcaseItemId,
+    'quantity': entry.quantity,
+    'total_amount': entry.totalAmount,
+  };
+  
+  final result = await showDialog<Map<String, dynamic>>(
+    context: context,
+    builder: (context) => JournalEntryDialog(
+      companyId: widget.companyId,
+      initialEntry: entryMap,  // теперь передаём Map
+      permissions: widget.permissions,
+    ),
+  );
+  
+  if (result != null && mounted) {
+    final notifier = ref.read(journalProvider.notifier);
+    await notifier.updateEntry(
+      widget.companyId,
+      entry.id,
+      start: result['start'],
+      end: result['end'],
+      description: result['description'],
+      counterparty: result['counterparty'],
+      showcaseItemId: result['showcaseItemId'],
+      quantity: result['quantity'],
+      totalAmount: result['totalAmount'],
     );
-    if (result != null && mounted) {
-      final notifier = ref.read(journalProvider.notifier);
-      await notifier.updateEntry(
-        widget.companyId,
-        entry.id,
-        start: result['start'],
-        end: result['end'],
-        description: result['description'],
-        counterparty: result['counterparty'],
-        showcaseItemId: result['showcaseItemId'],
-        quantity: result['quantity'],
-        totalAmount: result['totalAmount'],
-      );
-      await _loadEntriesForMonth(_focusedDay);
-    }
+    await _loadEntriesForMonth(_focusedDay);
   }
+}
 
   Future<void> _deleteEntry(JournalEntry entry) async {
     if (!widget.permissions.contains('delete_journal')) return;
@@ -295,7 +308,7 @@ class _JournalTabState extends ConsumerState<JournalTab> {
           color: isCompleted ? Colors.green : colorScheme.primary,
         ),
         title: Text(
-          '${DateFormat.Hm().format(entry.datetimeStart)} - ${DateFormat.Hm().format(entry.datetimeEnd)}',
+          '${DateFormat.Hm().format(entry.datetimeStart.toLocal())} - ${DateFormat.Hm().format(entry.datetimeEnd.toLocal())}',
           style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
         ),
         subtitle: Column(

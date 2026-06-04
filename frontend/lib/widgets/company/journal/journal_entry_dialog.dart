@@ -238,16 +238,15 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
               ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.endTimeAfterStart)));
               return;
             }
-            // Возвращаем даты в UTC для отправки на сервер
             Navigator.pop(context, {
-              'start': _startDateTime.toUtc(),
-              'end': _endDateTime.toUtc(),
-              'description': _descriptionController.text.trim(),
-              'counterparty': _counterpartyController.text.trim(),
-              'showcaseItemId': _selectedShowcaseItemId,
-              'quantity': _quantity,
-              'totalAmount': _totalAmount,
-            });
+  'start': _startDateTime,
+  'end': _endDateTime,
+  'description': _descriptionController.text.trim(),
+  'counterparty': _counterpartyController.text.trim(),
+  'showcaseItemId': _selectedShowcaseItemId,
+  'quantity': _quantity,
+  'totalAmount': _totalAmount,
+});
           },
           child: Text(isEdit ? t.save : t.create),
         ),
