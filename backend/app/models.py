@@ -4,6 +4,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from enum import Enum as PyEnum
 from app.database import Base
 from sqlalchemy import UniqueConstraint
+from sqlalchemy.dialects.postgresql import JSONB
 
 class UserRole(PyEnum):
     FOUNDER = "founder"
@@ -485,6 +486,7 @@ class JournalEntry(Base):
     created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    items: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     # relationships
     company: Mapped["Company"] = relationship(foreign_keys=[company_id])
