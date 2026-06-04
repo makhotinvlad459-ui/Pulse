@@ -261,6 +261,12 @@ class JournalEntryStatus(str, Enum):
     COMPLETED = "completed"
     CANCELLED = "cancelled"
 
+# --- JOURNAL ITEMS ---
+class JournalEntryItemCreate(BaseModel):
+    showcase_item_id: int
+    quantity: int = 1
+    price_at_time: float    
+
 class JournalEntryCreate(BaseModel):
     datetime_start: datetime
     datetime_end: datetime
@@ -269,6 +275,7 @@ class JournalEntryCreate(BaseModel):
     showcase_item_id: Optional[int] = None
     quantity: int = 1
     total_amount: float = 0.0  # если showcase_item_id не указан, можно указать сумму вручную
+    items: Optional[List[JournalEntryItemCreate]] = []
 
 class JournalEntryUpdate(BaseModel):
     datetime_start: Optional[datetime] = None
@@ -279,6 +286,7 @@ class JournalEntryUpdate(BaseModel):
     quantity: Optional[int] = None
     total_amount: Optional[float] = None
     status: Optional[JournalEntryStatus] = None
+    items: Optional[List[JournalEntryItemCreate]] = None
 
 class JournalEntryResponse(BaseModel):
     id: int
@@ -297,6 +305,7 @@ class JournalEntryResponse(BaseModel):
     updated_at: datetime
     creator_name: Optional[str] = None
     showcase_item_name: Optional[str] = None  # для отображения
-
+    items: Optional[List[JournalEntryItemCreate]] = None
+    
     class Config:
         from_attributes = True        

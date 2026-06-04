@@ -3757,6 +3757,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Mark entries as completed (create transactions)'**
   String get permCompleteJournal;
+
+  /// No description provided for @selectService.
+  ///
+  /// In en, this message translates to:
+  /// **'Select service'**
+  String get selectService;
+
+  /// No description provided for @services.
+  ///
+  /// In en, this message translates to:
+  /// **'Services'**
+  String get services;
+
+  /// No description provided for @addService.
+  ///
+  /// In en, this message translates to:
+  /// **'Add service'**
+  String get addService;
+
+  /// No description provided for @noServicesAdded.
+  ///
+  /// In en, this message translates to:
+  /// **'No services added'**
+  String get noServicesAdded;
+
+  /// No description provided for @addAtLeastOneService.
+  ///
+  /// In en, this message translates to:
+  /// **'Please add at least one service'**
+  String get addAtLeastOneService;
+
+  /// No description provided for @loadingServices.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading services...'**
+  String get loadingServices;
+
+  /// No description provided for @noServicesAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'No services available'**
+  String get noServicesAvailable;
 }
 
 class _AppLocalizationsDelegate

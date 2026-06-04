@@ -3,10 +3,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List, Optional
 from datetime import datetime
+import json
 
 from app.database import get_db
 from app.models import User, Company, CompanyMember, JournalEntry, JournalEntryStatus, ShowcaseItem, Account, Permission, CompanyMemberPermission
-from app.schemas import JournalEntryCreate, JournalEntryUpdate, JournalEntryResponse, TransactionCreate, TransactionType
+from app.schemas import JournalEntryCreate, JournalEntryUpdate, JournalEntryResponse, TransactionCreate, TransactionType, JournalEntryItemCreate
 from app.deps import get_current_user
 from app.routers.transactions import create_transaction
 
@@ -14,7 +15,6 @@ router = APIRouter(prefix="/journal", tags=["journal"])
 
 
 def _to_naive(dt: datetime | None) -> datetime | None:
-    """Convert datetime with timezone to naive (without timezone)."""
     if dt is None:
         return None
     if dt.tzinfo is not None:
@@ -93,12 +93,7 @@ async def create_journal_entry(
     if end <= start:
         raise HTTPException(status_code=400, detail="End time must be after start time")
 
-    if entry_data.showcase_item_id:
-        item = await db.execute(
-            select(ShowcaseItem).where(ShowcaseItem.id == entry_data.showcase_item_id, ShowcaseItem.company_id == company_id)
-        )
-        if not item.scalar_one_or_none():
-            raise HTTPException(status_code=404, detail="Showcase item not found")
+    items_data = [item.dict() for item in entry_data.items] if entry_data.items else None
 
     new_entry = JournalEntry(
         company_id=company_id,
@@ -110,7 +105,8 @@ async def create_journal_entry(
         quantity=entry_data.quantity,
         total_amount=entry_data.total_amount,
         created_by=current_user.id,
-        status=JournalEntryStatus.PLANNED
+        status=JournalEntryStatus.PLANNED,
+        items=items_data
     )
     db.add(new_entry)
     await db.commit()
@@ -143,6 +139,9 @@ async def update_journal_entry(
         update_data['datetime_start'] = _to_naive(update_data['datetime_start'])
     if 'datetime_end' in update_data:
         update_data['datetime_end'] = _to_naive(update_data['datetime_end'])
+    if 'items' in update_data and update_data['items'] is not None:
+        update_data['items'] = [item.dict() for item in update_data['items']]
+
     for key, value in update_data.items():
         setattr(entry, key, value)
     entry.updated_at = datetime.utcnow()
@@ -199,27 +198,65 @@ async def complete_journal_entry(
     if not acc.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Account not found")
 
-    # Determine total amount
-    if entry.showcase_item_id:
-        item = await db.get(ShowcaseItem, entry.showcase_item_id)
-        if not item:
-            raise HTTPException(status_code=404, detail="Showcase item not found")
-        amount = item.price * entry.quantity
+    total_amount = 0.0
+    transaction_items = []
+
+    if entry.items:
+        for item in entry.items:
+            showcase_item = await db.get(ShowcaseItem, item['showcase_item_id'])
+            if not showcase_item:
+                raise HTTPException(status_code=404, detail=f"Showcase item {item['showcase_item_id']} not found")
+            price = item['price_at_time']
+            qty = item['quantity']
+            subtotal = price * qty
+            total_amount += subtotal
+
+            if showcase_item.recipe:
+                recipe = json.loads(showcase_item.recipe)
+                for recipe_item in recipe:
+                    transaction_items.append({
+                        'product_id': recipe_item['product_id'],
+                        'quantity': recipe_item['quantity'] * qty,
+                        'price_per_unit': price
+                    })
     else:
-        amount = entry.total_amount
+        if entry.showcase_item_id:
+            item = await db.get(ShowcaseItem, entry.showcase_item_id)
+            if not item:
+                raise HTTPException(status_code=404, detail="Showcase item not found")
+            total_amount = item.price * entry.quantity
+            if item.recipe:
+                recipe = json.loads(item.recipe)
+                for recipe_item in recipe:
+                    transaction_items.append({
+                        'product_id': recipe_item['product_id'],
+                        'quantity': recipe_item['quantity'] * entry.quantity,
+                        'price_per_unit': item.price
+                    })
+        else:
+            total_amount = entry.total_amount
 
     description = f"Journal: {entry.description or 'Entry'}"
 
+    from app.schemas import TransactionItemCreate
+    items_create = [
+        TransactionItemCreate(
+            product_id=ti['product_id'],
+            quantity=ti['quantity'],
+            price_per_unit=ti['price_per_unit']
+        ) for ti in transaction_items
+    ]
+
     trans_data = TransactionCreate(
         type=TransactionType.INCOME,
-        amount=amount,
+        amount=total_amount,
         date=datetime.utcnow(),
         account_id=account_id,
         description=description,
         counterparty=entry.counterparty,
-        showcase_item_id=entry.showcase_item_id,
-        quantity=entry.quantity,
-        items=[]
+        showcase_item_id=None,
+        quantity=1,
+        items=items_create
     )
 
     created_trans = await create_transaction(

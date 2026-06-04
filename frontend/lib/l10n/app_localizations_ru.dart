@@ -1868,4 +1868,25 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get permCompleteJournal => 'Отметка выполненных (создание транзакций)';
+
+  @override
+  String get selectService => 'Выберите услугу';
+
+  @override
+  String get services => 'Услуги';
+
+  @override
+  String get addService => 'Добавить услугу';
+
+  @override
+  String get noServicesAdded => 'Услуги не добавлены';
+
+  @override
+  String get addAtLeastOneService => 'Добавьте хотя бы одну услугу';
+
+  @override
+  String get loadingServices => 'Загрузка услуг...';
+
+  @override
+  String get noServicesAvailable => 'Нет доступных услуг';
 }

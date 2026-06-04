@@ -697,6 +697,14 @@
   "permDeleteJournal": "Удаление записей",
   "permCompleteJournal": "Отметка выполненных (создание транзакций)",
   "dateLabel": "Дата",
-  "endTimeAfterStart": "Время окончания должно быть позже времени начала"
+  "endTimeAfterStart": "Время окончания должно быть позже времени начала",
+  "selectService": "Выберите услугу",
+  "services": "Услуги",
+  "addService": "Добавить услугу",
+  "noServicesAdded": "Услуги не добавлены",
+  "priceLabel": "Цена",
+  "addAtLeastOneService": "Добавьте хотя бы одну услугу",
+  "loadingServices": "Загрузка услуг...",
+  "noServicesAvailable": "Нет доступных услуг"
 
 }

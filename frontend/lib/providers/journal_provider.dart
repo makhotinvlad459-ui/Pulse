@@ -20,12 +20,12 @@ class JournalNotifier extends StateNotifier<JournalState> {
   final ApiClient _api = ApiClient();
 
   Future<void> loadEntries(int companyId, DateTime start, DateTime end) async {
-    state = JournalState(isLoading: true);
+    state = JournalState(isLoading: true, entries: state.entries);
     try {
       final entries = await _api.getJournalEntries(companyId, start, end);
       state = JournalState(entries: entries);
     } catch (e) {
-      state = JournalState(error: e.toString());
+      state = JournalState(entries: state.entries, error: e.toString());
     }
   }
 
@@ -37,11 +37,20 @@ class JournalNotifier extends StateNotifier<JournalState> {
     int? showcaseItemId,
     int quantity = 1,
     double totalAmount = 0.0,
+    List<Map<String, dynamic>>? items,
   }) async {
     try {
-      final newEntry = await _api.createJournalEntry(companyId,
-          start: start, end: end, description: description, counterparty: counterparty,
-          showcaseItemId: showcaseItemId, quantity: quantity, totalAmount: totalAmount);
+      final newEntry = await _api.createJournalEntry(
+        companyId,
+        start: start,
+        end: end,
+        description: description,
+        counterparty: counterparty,
+        showcaseItemId: showcaseItemId,
+        quantity: quantity,
+        totalAmount: totalAmount,
+        items: items,
+      );
       state = JournalState(entries: [...state.entries, newEntry]);
       return newEntry;
     } catch (e) {
@@ -58,12 +67,23 @@ class JournalNotifier extends StateNotifier<JournalState> {
     int? showcaseItemId,
     int? quantity,
     double? totalAmount,
+    List<Map<String, dynamic>>? items,
     String? status,
   }) async {
     try {
-      final updated = await _api.updateJournalEntry(companyId, entryId,
-          start: start, end: end, description: description, counterparty: counterparty,
-          showcaseItemId: showcaseItemId, quantity: quantity, totalAmount: totalAmount, status: status);
+      final updated = await _api.updateJournalEntry(
+        companyId,
+        entryId,
+        start: start,
+        end: end,
+        description: description,
+        counterparty: counterparty,
+        showcaseItemId: showcaseItemId,
+        quantity: quantity,
+        totalAmount: totalAmount,
+        items: items,
+        status: status,
+      );
       final newEntries = state.entries.map((e) => e.id == entryId ? updated : e).toList();
       state = JournalState(entries: newEntries);
       return true;
@@ -85,12 +105,12 @@ class JournalNotifier extends StateNotifier<JournalState> {
   }
 
   Future<bool> completeEntry(int companyId, int entryId, int accountId) async {
-  try {
-    await _api.completeJournalEntry(companyId, entryId, accountId);
-    return true;
-  } catch (e) {
-    state = JournalState(entries: state.entries, error: e.toString());
-    return false;
+    try {
+      await _api.completeJournalEntry(companyId, entryId, accountId);
+      return true;
+    } catch (e) {
+      state = JournalState(entries: state.entries, error: e.toString());
+      return false;
+    }
   }
-}
 }

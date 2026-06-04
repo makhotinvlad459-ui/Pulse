@@ -26,33 +26,44 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
   late DateTime _endDateTime;
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _counterpartyController = TextEditingController();
-  int? _selectedShowcaseItemId;
-  String? _selectedShowcaseItemName;
-  int _quantity = 1;
-  double _totalAmount = 0.0;
+  List<Map<String, dynamic>> _items = [];
   bool _loadingShowcase = false;
   List<Map<String, dynamic>> _showcaseItems = [];
+  final TextEditingController _manualAmountController = TextEditingController();
+  bool _isManualAmountEnabled = true;
 
   @override
   void initState() {
     super.initState();
     if (widget.initialEntry != null) {
-      // Редактирование: парсим даты и приводим к локальному времени
       _startDateTime = DateTime.parse(widget.initialEntry['datetime_start']).toLocal();
       _endDateTime = DateTime.parse(widget.initialEntry['datetime_end']).toLocal();
       _descriptionController.text = widget.initialEntry['description'] ?? '';
       _counterpartyController.text = widget.initialEntry['counterparty'] ?? '';
-      _selectedShowcaseItemId = widget.initialEntry['showcase_item_id'];
-      _quantity = widget.initialEntry['quantity'] ?? 1;
-      _totalAmount = widget.initialEntry['total_amount'] ?? 0.0;
+      if (widget.initialEntry['items'] != null) {
+        _items = List<Map<String, dynamic>>.from(widget.initialEntry['items']);
+      }
+      final total = widget.initialEntry['total_amount'] ?? 0.0;
+      _manualAmountController.text = total.toStringAsFixed(2);
     } else {
-      // Новая запись: берём дату из выбранного дня в календаре
       final baseDate = widget.initialDate ?? DateTime.now();
-      // Устанавливаем начало на 10:00, конец на 11:00 (можно изменить)
       _startDateTime = DateTime(baseDate.year, baseDate.month, baseDate.day, 10, 0);
       _endDateTime = DateTime(baseDate.year, baseDate.month, baseDate.day, 11, 0);
+      _manualAmountController.text = '0.00';
     }
     _loadShowcaseItems();
+    _updateManualAmountState();
+  }
+
+  void _updateManualAmountState() {
+    final hasServices = _items.isNotEmpty;
+    setState(() {
+      _isManualAmountEnabled = !hasServices;
+      if (hasServices) {
+        final computed = _items.fold(0.0, (sum, item) => sum + (item['total'] as double));
+        _manualAmountController.text = computed.toStringAsFixed(2);
+      }
+    });
   }
 
   Future<void> _loadShowcaseItems() async {
@@ -62,13 +73,6 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
       final res = await api.get('/showcase', queryParameters: {'company_id': widget.companyId});
       setState(() {
         _showcaseItems = List<Map<String, dynamic>>.from(res.data);
-        if (_selectedShowcaseItemId != null) {
-          final found = _showcaseItems.firstWhere(
-            (i) => i['id'] == _selectedShowcaseItemId,
-            orElse: () => <String, dynamic>{},
-          );
-          if (found.isNotEmpty) _selectedShowcaseItemName = found['name'];
-        }
         _loadingShowcase = false;
       });
     } catch (e) {
@@ -77,37 +81,100 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
   }
 
   Future<void> _selectTime(bool isStart) async {
-  final initialTime = TimeOfDay.fromDateTime(isStart ? _startDateTime : _endDateTime);
-  final picked = await showTimePicker(
-    context: context,
-    initialTime: initialTime,
-    // builder убран
-  );
-  if (picked != null) {
-    setState(() {
-      if (isStart) {
-        _startDateTime = DateTime(
-          _startDateTime.year, _startDateTime.month, _startDateTime.day,
-          picked.hour, picked.minute,
-        );
-        if (_endDateTime.isBefore(_startDateTime)) {
-          _endDateTime = _startDateTime.add(const Duration(hours: 1));
-        }
-      } else {
-        _endDateTime = DateTime(
-          _endDateTime.year, _endDateTime.month, _endDateTime.day,
-          picked.hour, picked.minute,
-        );
-        if (_endDateTime.isBefore(_startDateTime)) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(AppLocalizations.of(context)!.endTimeAfterStart)),
+    final initialTime = TimeOfDay.fromDateTime(isStart ? _startDateTime : _endDateTime);
+    final picked = await showTimePicker(context: context, initialTime: initialTime);
+    if (picked != null) {
+      setState(() {
+        if (isStart) {
+          _startDateTime = DateTime(
+            _startDateTime.year, _startDateTime.month, _startDateTime.day,
+            picked.hour, picked.minute,
           );
-          _endDateTime = _startDateTime.add(const Duration(hours: 1));
+          if (_endDateTime.isBefore(_startDateTime)) {
+            _endDateTime = _startDateTime.add(const Duration(hours: 1));
+          }
+        } else {
+          _endDateTime = DateTime(
+            _endDateTime.year, _endDateTime.month, _endDateTime.day,
+            picked.hour, picked.minute,
+          );
+          if (_endDateTime.isBefore(_startDateTime)) {
+            _endDateTime = _startDateTime.add(const Duration(hours: 1));
+          }
         }
-      }
+      });
+    }
+  }
+
+  void _addService() async {
+    final t = AppLocalizations.of(context)!;
+    if (_loadingShowcase) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.loadingServices)));
+      return;
+    }
+    if (_showcaseItems.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.noServicesAvailable)));
+      return;
+    }
+    final selected = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(t.selectService),
+        content: SizedBox(
+          width: double.maxFinite,
+          height: 300,
+          child: ListView.builder(
+            itemCount: _showcaseItems.length,
+            itemBuilder: (context, index) {
+              final item = _showcaseItems[index];
+              return ListTile(
+                title: Text(item['name']),
+                subtitle: Text('${item['price']} ${t.currencySymbol}'),
+                onTap: () => Navigator.pop(context, item),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    if (selected != null) {
+      setState(() {
+        _items.add({
+          'showcase_item_id': selected['id'],
+          'name': selected['name'],
+          'quantity': 1,
+          'price_at_time': (selected['price'] as num).toDouble(),
+          'total': (selected['price'] as num).toDouble(),
+        });
+        _updateManualAmountState();
+      });
+    }
+  }
+
+  void _removeService(int index) {
+    setState(() {
+      _items.removeAt(index);
+      _updateManualAmountState();
     });
   }
-}
+
+  void _updateService(int index, {int? quantity, double? priceAtTime}) {
+    setState(() {
+      if (quantity != null) _items[index]['quantity'] = quantity;
+      if (priceAtTime != null) _items[index]['price_at_time'] = priceAtTime;
+      final qty = _items[index]['quantity'] as int;
+      final price = _items[index]['price_at_time'] as double;
+      _items[index]['total'] = qty * price;
+      _updateManualAmountState();
+    });
+  }
+
+  double get _finalAmount {
+    if (_items.isNotEmpty) {
+      return _items.fold(0.0, (sum, item) => sum + (item['total'] as double));
+    }
+    return double.tryParse(_manualAmountController.text) ?? 0.0;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -120,26 +187,22 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Отображаем дату (только для информации, нередактируемая)
             ListTile(
               title: Text(t.dateLabel),
               trailing: Text(DateFormat('dd.MM.yyyy').format(_startDateTime)),
             ),
-            const SizedBox(height: 8),
-            // Время начала
             ListTile(
               title: Text(t.startTime),
               trailing: Text(DateFormat('HH:mm').format(_startDateTime)),
               onTap: () => _selectTime(true),
             ),
-            // Время окончания
             ListTile(
               title: Text(t.endTime),
               trailing: Text(DateFormat('HH:mm').format(_endDateTime)),
               onTap: () => _selectTime(false),
             ),
-            const SizedBox(height: 8),
             TextField(
               controller: _descriptionController,
               decoration: InputDecoration(labelText: t.description),
@@ -148,85 +211,97 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
               controller: _counterpartyController,
               decoration: InputDecoration(labelText: t.counterpartyOptional),
             ),
-            if (widget.permissions.contains('sell_from_showcase') || widget.permissions.contains('view_showcase'))
-              Column(
-                children: [
-                  DropdownButtonFormField<int>(
-                    value: _selectedShowcaseItemId,
-                    decoration: InputDecoration(labelText: t.serviceFromShowcaseOptional),
-                    items: [
-                      const DropdownMenuItem(value: null, child: Text('—')),
-                      ..._showcaseItems.map((item) => DropdownMenuItem(
-                        value: item['id'],
-                        child: Text('${item['name']} (${item['price']} ${t.currencySymbol})'),
-                      )),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Text(t.services, style: const TextStyle(fontWeight: FontWeight.bold)),
+                const Spacer(),
+                ElevatedButton.icon(
+                  onPressed: _addService,
+                  icon: const Icon(Icons.add),
+                  label: Text(t.addService),
+                ),
+              ],
+            ),
+            // Список услуг без ListView.builder, используем Column
+            ..._items.asMap().entries.map((entry) {
+              final idx = entry.key;
+              final item = entry.value;
+              return Card(
+                margin: const EdgeInsets.symmetric(vertical: 4),
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(child: Text(item['name'], style: const TextStyle(fontWeight: FontWeight.w500))),
+                          IconButton(
+                            icon: const Icon(Icons.delete, size: 18),
+                            onPressed: () => _removeService(idx),
+                          ),
+                        ],
+                      ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextFormField(
+                              initialValue: item['quantity'].toString(),
+                              keyboardType: TextInputType.number,
+                              decoration: InputDecoration(labelText: t.quantityLabel, isDense: true),
+                              onChanged: (value) {
+                                final qty = int.tryParse(value) ?? 1;
+                                _updateService(idx, quantity: qty);
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextFormField(
+                              initialValue: item['price_at_time'].toStringAsFixed(2),
+                              keyboardType: TextInputType.number,
+                              decoration: InputDecoration(labelText: t.priceLabel, isDense: true),
+                              onChanged: (value) {
+                                final price = double.tryParse(value) ?? 0.0;
+                                _updateService(idx, priceAtTime: price);
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          SizedBox(
+                            width: 80,
+                            child: Text(
+                              '${item['total'].toStringAsFixed(2)} ${t.currencySymbol}',
+                              style: const TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
-                    onChanged: (value) {
-                      setState(() {
-                        _selectedShowcaseItemId = value;
-                        final found = _showcaseItems.firstWhere(
-                          (i) => i['id'] == value,
-                          orElse: () => <String, dynamic>{},
-                        );
-                        _selectedShowcaseItemName = found.isNotEmpty ? found['name'] : null;
-                        if (value != null && found.isNotEmpty) {
-                          _totalAmount = (found['price'] as num).toDouble() * _quantity;
-                        } else {
-                          _totalAmount = 0.0;
-                        }
-                      });
-                    },
                   ),
-                  if (_selectedShowcaseItemId != null)
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextFormField(
-                            initialValue: _quantity.toString(),
-                            keyboardType: TextInputType.number,
-                            decoration: InputDecoration(labelText: t.quantityLabel),
-                            onChanged: (value) {
-                              final qty = int.tryParse(value) ?? 1;
-                              setState(() {
-                                _quantity = qty;
-                                if (_selectedShowcaseItemId != null) {
-                                  final found = _showcaseItems.firstWhere(
-                                    (i) => i['id'] == _selectedShowcaseItemId,
-                                    orElse: () => <String, dynamic>{},
-                                  );
-                                  if (found.isNotEmpty) {
-                                    _totalAmount = (found['price'] as num).toDouble() * qty;
-                                  }
-                                }
-                              });
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: TextFormField(
-                            initialValue: _totalAmount.toStringAsFixed(2),
-                            keyboardType: TextInputType.number,
-                            decoration: InputDecoration(labelText: t.totalAmount),
-                            onChanged: (value) {
-                              final amount = double.tryParse(value) ?? 0.0;
-                              setState(() => _totalAmount = amount);
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                ],
+                ),
+              );
+            }).toList(),
+            if (_items.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(t.noServicesAdded, style: TextStyle(color: colorScheme.onSurfaceVariant)),
               ),
-            if (_selectedShowcaseItemId == null)
-              TextFormField(
-                initialValue: _totalAmount.toStringAsFixed(2),
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(labelText: t.totalAmount),
-                onChanged: (value) {
-                  _totalAmount = double.tryParse(value) ?? 0.0;
-                },
+            const SizedBox(height: 12),
+            TextField(
+              controller: _manualAmountController,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: t.totalAmount,
+                prefixIcon: const Icon(Icons.attach_money),
+                enabled: _isManualAmountEnabled,
               ),
+              onChanged: (value) {
+                if (_items.isEmpty) {
+                  setState(() {});
+                }
+              },
+            ),
           ],
         ),
       ),
@@ -239,14 +314,17 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
               return;
             }
             Navigator.pop(context, {
-  'start': _startDateTime,
-  'end': _endDateTime,
-  'description': _descriptionController.text.trim(),
-  'counterparty': _counterpartyController.text.trim(),
-  'showcaseItemId': _selectedShowcaseItemId,
-  'quantity': _quantity,
-  'totalAmount': _totalAmount,
-});
+              'start': _startDateTime,
+              'end': _endDateTime,
+              'description': _descriptionController.text.trim(),
+              'counterparty': _counterpartyController.text.trim(),
+              'items': _items.map((item) => {
+                'showcase_item_id': item['showcase_item_id'],
+                'quantity': item['quantity'],
+                'price_at_time': item['price_at_time'],
+              }).toList(),
+              'totalAmount': _finalAmount,
+            });
           },
           child: Text(isEdit ? t.save : t.create),
         ),

@@ -1870,4 +1870,25 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get permCompleteJournal =>
       'Mark entries as completed (create transactions)';
+
+  @override
+  String get selectService => 'Select service';
+
+  @override
+  String get services => 'Services';
+
+  @override
+  String get addService => 'Add service';
+
+  @override
+  String get noServicesAdded => 'No services added';
+
+  @override
+  String get addAtLeastOneService => 'Please add at least one service';
+
+  @override
+  String get loadingServices => 'Loading services...';
+
+  @override
+  String get noServicesAvailable => 'No services available';
 }

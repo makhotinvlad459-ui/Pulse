@@ -28,7 +28,6 @@ class _JournalTabState extends ConsumerState<JournalTab> {
   final Map<DateTime, List<JournalEntry>> _entriesMap = {};
   bool _loading = false;
 
-  // Вспомогательная функция для нормализации даты (без времени)
   DateTime _normalize(DateTime dt) => DateTime(dt.year, dt.month, dt.day);
 
   @override
@@ -56,7 +55,6 @@ class _JournalTabState extends ConsumerState<JournalTab> {
       final date = _normalize(e.datetimeStart);
       _entriesMap[date] = (_entriesMap[date] ?? [])..add(e);
     }
-    // Принудительно обновляем календарь для перерисовки маркеров
     if (mounted) setState(() {});
   }
 
@@ -82,53 +80,47 @@ class _JournalTabState extends ConsumerState<JournalTab> {
   }
 
   Future<void> _createEntry() async {
-    final result = await showDialog<Map<String, dynamic>>(
-      context: context,
-      builder: (context) => JournalEntryDialog(
-        companyId: widget.companyId,
-        initialDate: _selectedDay,
-        permissions: widget.permissions,
-      ),
-    );
-    if (result != null && mounted) {
-      final notifier = ref.read(journalProvider.notifier);
-      await notifier.createEntry(
-        widget.companyId,
-        start: result['start'],
-        end: result['end'],
-        description: result['description'],
-        counterparty: result['counterparty'],
-        showcaseItemId: result['showcaseItemId'],
-        quantity: result['quantity'],
-        totalAmount: result['totalAmount'],
-      );
-      await _loadEntriesForMonth(_focusedDay);
-    }
-  }
-
-  Future<void> _editEntry(JournalEntry entry) async {
-  if (!widget.permissions.contains('edit_journal')) return;
-  
-  // Преобразуем объект JournalEntry в Map (как при создании)
-  final entryMap = {
-    'datetime_start': entry.datetimeStart.toUtc().toIso8601String(),
-    'datetime_end': entry.datetimeEnd.toUtc().toIso8601String(),
-    'description': entry.description,
-    'counterparty': entry.counterparty,
-    'showcase_item_id': entry.showcaseItemId,
-    'quantity': entry.quantity,
-    'total_amount': entry.totalAmount,
-  };
-  
   final result = await showDialog<Map<String, dynamic>>(
     context: context,
     builder: (context) => JournalEntryDialog(
       companyId: widget.companyId,
-      initialEntry: entryMap,  // теперь передаём Map
+      initialDate: _selectedDay,
       permissions: widget.permissions,
     ),
   );
-  
+  if (result != null && mounted) {
+    final notifier = ref.read(journalProvider.notifier);
+    await notifier.createEntry(
+      widget.companyId,
+      start: result['start'],
+      end: result['end'],
+      description: result['description'],
+      counterparty: result['counterparty'],
+      items: result['items'],
+      totalAmount: result['totalAmount'],
+    );
+    await _loadEntriesForMonth(_focusedDay);
+  }
+}
+
+  Future<void> _editEntry(JournalEntry entry) async {
+  if (!widget.permissions.contains('edit_journal')) return;
+  final entryMap = {
+    'datetime_start': entry.datetimeStart.toIso8601String(),
+    'datetime_end': entry.datetimeEnd.toIso8601String(),
+    'description': entry.description ?? '',
+    'counterparty': entry.counterparty ?? '',
+    'items': entry.items,
+    'total_amount': entry.totalAmount,
+  };
+  final result = await showDialog<Map<String, dynamic>>(
+    context: context,
+    builder: (context) => JournalEntryDialog(
+      companyId: widget.companyId,
+      initialEntry: entryMap,
+      permissions: widget.permissions,
+    ),
+  );
   if (result != null && mounted) {
     final notifier = ref.read(journalProvider.notifier);
     await notifier.updateEntry(
@@ -138,8 +130,7 @@ class _JournalTabState extends ConsumerState<JournalTab> {
       end: result['end'],
       description: result['description'],
       counterparty: result['counterparty'],
-      showcaseItemId: result['showcaseItemId'],
-      quantity: result['quantity'],
+      items: result['items'],
       totalAmount: result['totalAmount'],
     );
     await _loadEntriesForMonth(_focusedDay);
@@ -201,7 +192,6 @@ class _JournalTabState extends ConsumerState<JournalTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Календарь
             TableCalendar(
               focusedDay: _focusedDay,
               firstDay: DateTime(2020),
@@ -252,7 +242,6 @@ class _JournalTabState extends ConsumerState<JournalTab> {
               locale: Localizations.localeOf(context).languageCode,
             ),
             const SizedBox(height: 12),
-            // Шапка с датой и кнопкой добавления
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Row(
@@ -271,7 +260,6 @@ class _JournalTabState extends ConsumerState<JournalTab> {
               ),
             ),
             const SizedBox(height: 12),
-            // Список записей
             if (_loading)
               const Padding(
                 padding: EdgeInsets.all(32),
@@ -318,7 +306,19 @@ class _JournalTabState extends ConsumerState<JournalTab> {
               Text(entry.description!, style: const TextStyle(fontSize: 12)),
             if (entry.counterparty != null && entry.counterparty!.isNotEmpty)
               Text('${t.counterpartyLabel}: ${entry.counterparty}', style: const TextStyle(fontSize: 11)),
-            if (entry.showcaseItemName != null)
+            if (entry.items != null && entry.items!.isNotEmpty)
+              Column(
+                children: entry.items!.map((item) {
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      '• ${item['name']} x${item['quantity']} (${item['price_at_time']} ${t.currencySymbol}) = ${(item['quantity'] * item['price_at_time']).toStringAsFixed(2)} ${t.currencySymbol}',
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                  );
+                }).toList(),
+              ),
+            if (entry.showcaseItemName != null && (entry.items == null || entry.items!.isEmpty))
               Text('${t.serviceLabel}: ${entry.showcaseItemName} x${entry.quantity}', style: const TextStyle(fontSize: 11)),
             if (entry.totalAmount > 0)
               Text('${t.sumLabel}: ${entry.totalAmount.toStringAsFixed(2)} ${t.currencySymbol}', style: const TextStyle(fontSize: 11)),

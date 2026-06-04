@@ -697,5 +697,13 @@
   "permDeleteJournal": "Delete journal entries",
   "permCompleteJournal": "Mark entries as completed (create transactions)",
   "dateLabel": "Date",
-  "endTimeAfterStart": "End time must be after start time"
+  "endTimeAfterStart": "End time must be after start time",
+  "selectService": "Select service",
+  "services": "Services",
+  "addService": "Add service",
+  "noServicesAdded": "No services added",
+  "priceLabel": "Price",
+  "addAtLeastOneService": "Please add at least one service",
+  "loadingServices": "Loading services...",
+  "noServicesAvailable": "No services available"
 }

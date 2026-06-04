@@ -15,6 +15,7 @@ class JournalEntry {
   final DateTime updatedAt;
   final String? creatorName;
   final String? showcaseItemName;
+  final List<Map<String, dynamic>>? items;
 
   const JournalEntry({
     required this.id,
@@ -33,6 +34,7 @@ class JournalEntry {
     required this.updatedAt,
     this.creatorName,
     this.showcaseItemName,
+    this.items,
   });
 
   factory JournalEntry.fromJson(Map<String, dynamic> json) {
@@ -53,6 +55,7 @@ class JournalEntry {
       updatedAt: DateTime.parse(json['updated_at']),
       creatorName: json['creator_name'],
       showcaseItemName: json['showcase_item_name'],
+      items: json['items'] != null ? List<Map<String, dynamic>>.from(json['items']) : null,
     );
   }
 
@@ -72,6 +75,7 @@ class JournalEntry {
       'created_by': createdBy,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
+      'items': items,
     };
   }
 }

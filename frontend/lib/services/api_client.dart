@@ -428,6 +428,7 @@ _dio.interceptors.add(LogInterceptor(responseBody: true, requestBody: true));
   int? showcaseItemId,
   int quantity = 1,
   double totalAmount = 0.0,
+  List<Map<String, dynamic>>? items,
 }) async {
   final response = await post('/journal/', queryParameters: {'company_id': companyId}, data: {
     'datetime_start': start.toIso8601String(),
@@ -437,11 +438,12 @@ _dio.interceptors.add(LogInterceptor(responseBody: true, requestBody: true));
     'showcase_item_id': showcaseItemId,
     'quantity': quantity,
     'total_amount': totalAmount,
+    'items': items, // отправляем список объектов
   });
   return JournalEntry.fromJson(response.data);
 }
 
-  Future<JournalEntry> updateJournalEntry(int companyId, int entryId, {
+Future<JournalEntry> updateJournalEntry(int companyId, int entryId, {
   DateTime? start,
   DateTime? end,
   String? description,
@@ -449,6 +451,7 @@ _dio.interceptors.add(LogInterceptor(responseBody: true, requestBody: true));
   int? showcaseItemId,
   int? quantity,
   double? totalAmount,
+  List<Map<String, dynamic>>? items,
   String? status,
 }) async {
   final data = <String, dynamic>{};
@@ -459,8 +462,9 @@ _dio.interceptors.add(LogInterceptor(responseBody: true, requestBody: true));
   if (showcaseItemId != null) data['showcase_item_id'] = showcaseItemId;
   if (quantity != null) data['quantity'] = quantity;
   if (totalAmount != null) data['total_amount'] = totalAmount;
+  if (items != null) data['items'] = items;
   if (status != null) data['status'] = status;
-  final response = await patch('/journal/$entryId', queryParameters: {'company_id': companyId}, data: data);
+  final response = await patch('/journal/$entryId/', queryParameters: {'company_id': companyId}, data: data);
   return JournalEntry.fromJson(response.data);
 }
 
