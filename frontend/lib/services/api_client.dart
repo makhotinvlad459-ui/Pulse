@@ -11,26 +11,51 @@ import '../main.dart';
 import '../providers/auth_provider.dart';
 import '../l10n/app_localizations.dart';
 import '../models/journal_entry.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
+
 
 class ApiClient {
   static String get baseUrl {
     const bool isProduction = bool.fromEnvironment('dart.vm.product');
-    if (isProduction) {
-      if (kIsWeb) {
-        return '/api';
-      }
-      return 'https://pulse-yourmoney.com/api';
-    } else {
-      if (kIsWeb) return 'http://localhost:8000/api';
-      if (Platform.isAndroid) return 'http://10.0.2.2:8000/api';
+    // Переопределение для отладки на реальном устройстве
+    const String? customDebugUrl = String.fromEnvironment('DEBUG_API_URL');
+    
+    // Web
+    if (kIsWeb) {
+      if (isProduction) return '/api';
       return 'http://localhost:8000/api';
     }
+    
+    // Релизные сборки (Android, iOS)
+    if (isProduction) {
+      return 'https://pulse-yourmoney.com/api';
+    }
+    
+    // Debug-режим на мобильных устройствах
+    if (kDebugMode) {
+      // Если передан кастомный URL через --dart-define, используем его
+      if (customDebugUrl != null && customDebugUrl.isNotEmpty) {
+        return customDebugUrl;
+      }
+      // Для Android-эмулятора
+      if (Platform.isAndroid) {
+        return 'http://10.0.2.2:8000/api';
+      }
+      // Для iOS-симулятора
+      if (Platform.isIOS) {
+        return 'http://localhost:8000/api';
+      }
+    }
+    
+    // Fallback
+    return 'http://localhost:8000/api';
   }
 
   final Dio _dio = Dio();
   final SecureStorage _storage = SecureStorage();
 
   Dio get dio => _dio;
+
 
   ApiClient() {
     _dio.options = BaseOptions(
@@ -386,7 +411,7 @@ _dio.interceptors.add(LogInterceptor(responseBody: true, requestBody: true));
 
     // ========== Журнал ==========
   Future<List<JournalEntry>> getJournalEntries(int companyId, DateTime start, DateTime end) async {
-    final response = await get('/journal', queryParameters: {
+    final response = await get('/journal/', queryParameters: {
     'company_id': companyId,
     'start_date': start.toIso8601String(),
     'end_date': end.toIso8601String(),
@@ -404,7 +429,7 @@ _dio.interceptors.add(LogInterceptor(responseBody: true, requestBody: true));
   int quantity = 1,
   double totalAmount = 0.0,
 }) async {
-  final response = await post('/journal', queryParameters: {'company_id': companyId}, data: {
+  final response = await post('/journal/', queryParameters: {'company_id': companyId}, data: {
     'datetime_start': start.toIso8601String(),
     'datetime_end': end.toIso8601String(),
     'description': description,
