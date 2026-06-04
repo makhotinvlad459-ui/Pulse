@@ -581,6 +581,16 @@ async def delete_transaction(
     if order_payment:
         order_id = order_payment.order_id
     
+    # ----- ДОБАВЛЯЕМ УДАЛЕНИЕ ЗАПИСИ ЖУРНАЛА -----
+    from app.models import JournalEntry
+    journal_entry = await db.execute(
+        select(JournalEntry).where(JournalEntry.transaction_id == transaction_id)
+    )
+    journal_entry = journal_entry.scalar_one_or_none()
+    if journal_entry:
+        await db.delete(journal_entry)
+    # ------------------------------------------
+    
     if current_user.role == UserRole.FOUNDER:
         if order_payment:
             await db.delete(order_payment)
@@ -593,7 +603,6 @@ async def delete_transaction(
             else:
                 product.current_quantity -= Decimal(str(item.quantity))
     
-        # Файлы теперь в Firebase Cloud, локально ничего удалять не нужно
         await db.delete(transaction)
         await recalc_account_balance(transaction.account_id, db)
         if transaction.transfer_to_account_id:

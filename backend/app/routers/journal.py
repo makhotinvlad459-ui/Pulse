@@ -167,11 +167,18 @@ async def delete_journal_entry(
     if not entry:
         raise HTTPException(status_code=404, detail="Entry not found")
     if entry.status != JournalEntryStatus.PLANNED:
-        raise HTTPException(status_code=400, detail="Only planned entries can be deleted")
-
-    await db.delete(entry)
-    await db.commit()
-    return {"detail": "Entry deleted"}
+        # Если запись завершена и есть транзакция, удаляем транзакцию (она удалит и запись)
+        if entry.transaction_id:
+            from app.routers.transactions import delete_transaction
+            await delete_transaction(entry.transaction_id, company_id, db, current_user)
+        else:
+            await db.delete(entry)
+        await db.commit()
+        return {"detail": "Entry deleted"}
+    else:
+        await db.delete(entry)
+        await db.commit()
+        return {"detail": "Entry deleted"}
 
 
 @router.post("/{entry_id}/complete")

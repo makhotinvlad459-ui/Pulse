@@ -341,12 +341,12 @@ class _JournalTabState extends ConsumerState<JournalTab> {
                 onPressed: () => _editEntry(entry),
                 tooltip: t.edit,
               ),
-            if (widget.permissions.contains('delete_journal') && !isCompleted)
-              IconButton(
-                icon: const Icon(Icons.delete, size: 20),
-                onPressed: () => _deleteEntry(entry),
-                tooltip: t.delete,
-              ),
+            if (widget.permissions.contains('delete_journal'))
+  IconButton(
+    icon: const Icon(Icons.delete, size: 20),
+    onPressed: () => _deleteEntry(entry),
+    tooltip: t.delete,
+  ),
           ],
         ),
       ),
