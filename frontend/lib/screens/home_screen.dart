@@ -638,7 +638,7 @@ class SettingsDrawer extends StatelessWidget {
             title: Text(t.support,
                 style: TextStyle(color: colorScheme.onSurfaceVariant)),
             children: [
-              ListTile(title: Text('${t.emailSupport}: support@pulse.ru'))
+              ListTile(title: Text('${t.emailSupport}: pulse.yourmoney@gmail.com'))
             ],
           ),
           const Divider(),

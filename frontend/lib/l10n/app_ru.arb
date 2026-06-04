@@ -689,6 +689,12 @@
   "balanceLabel": "Баланс",
   "description": "Описание",
   "journalEntry": "запись",
-  "entry": "запись"
+  "entry": "запись",
+  "groupJournal": "Журнал",
+  "permViewJournal": "Просмотр журнала",
+  "permCreateJournal": "Создание записей",
+  "permEditJournal": "Редактирование записей",
+  "permDeleteJournal": "Удаление записей",
+  "permCompleteJournal": "Отметка выполненных (создание транзакций)"
 
 }

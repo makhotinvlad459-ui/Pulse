@@ -689,5 +689,11 @@
   "balanceLabel": "Balance",
   "description": "Description",
   "journalEntry": "entry",
-  "entry": "entry"
+  "entry": "entry",
+  "groupJournal": "Journal",
+  "permViewJournal": "View journal",
+  "permCreateJournal": "Create journal entries",
+  "permEditJournal": "Edit journal entries",
+  "permDeleteJournal": "Delete journal entries",
+  "permCompleteJournal": "Mark entries as completed (create transactions)"
 }

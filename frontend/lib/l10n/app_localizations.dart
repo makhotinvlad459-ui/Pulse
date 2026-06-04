@@ -3721,6 +3721,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'entry'**
   String get entry;
+
+  /// No description provided for @groupJournal.
+  ///
+  /// In en, this message translates to:
+  /// **'Journal'**
+  String get groupJournal;
+
+  /// No description provided for @permViewJournal.
+  ///
+  /// In en, this message translates to:
+  /// **'View journal'**
+  String get permViewJournal;
+
+  /// No description provided for @permCreateJournal.
+  ///
+  /// In en, this message translates to:
+  /// **'Create journal entries'**
+  String get permCreateJournal;
+
+  /// No description provided for @permEditJournal.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit journal entries'**
+  String get permEditJournal;
+
+  /// No description provided for @permDeleteJournal.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete journal entries'**
+  String get permDeleteJournal;
+
+  /// No description provided for @permCompleteJournal.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark entries as completed (create transactions)'**
+  String get permCompleteJournal;
 }
 
 class _AppLocalizationsDelegate

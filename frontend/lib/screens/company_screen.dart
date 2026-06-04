@@ -92,13 +92,14 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
   // ------------------- Перетаскиваемые вкладки -------------------
   final List<String> _allTabKeys = [
     'operations',
+    'journal',
     'showcase',
     'chat_tasks',
     'stock',
     'reports',
     'orders',
     'counterparties',
-    'journal',
+    
   ];
 
   List<String> _tabOrder = [];

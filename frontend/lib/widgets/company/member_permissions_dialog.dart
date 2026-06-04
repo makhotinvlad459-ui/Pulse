@@ -43,6 +43,7 @@ class _MemberPermissionsDialogState extends ConsumerState<MemberPermissionsDialo
     'documents': ['view_documents', 'create_documents', 'edit_documents'],
     'counterparties': ['view_counterparties', 'edit_counterparties'],
     'orders': ['view_orders', 'edit_orders'],
+    'journal': ['view_journal', 'create_journal', 'edit_journal', 'delete_journal', 'complete_journal'],
   };
 
   @override
@@ -116,6 +117,12 @@ class _MemberPermissionsDialogState extends ConsumerState<MemberPermissionsDialo
       case 'edit_documents': return t.permEditDocuments;
       case 'view_orders': return t.permViewOrders;
       case 'edit_orders': return t.permEditOrders;
+      // Journal permissions
+      case 'view_journal': return t.permViewJournal;
+      case 'create_journal': return t.permCreateJournal;
+      case 'edit_journal': return t.permEditJournal;
+      case 'delete_journal': return t.permDeleteJournal;
+      case 'complete_journal': return t.permCompleteJournal;
       default: return name;
     }
   }
@@ -131,6 +138,7 @@ class _MemberPermissionsDialogState extends ConsumerState<MemberPermissionsDialo
       case 'documents': return t.groupDocuments;
       case 'counterparties': return t.groupCounterparties;
       case 'orders': return t.groupOrders;
+      case 'journal': return t.groupJournal;
       default: return groupKey;
     }
   }
@@ -172,7 +180,6 @@ class _MemberPermissionsDialogState extends ConsumerState<MemberPermissionsDialo
                         final enabled = true;
                         return CheckboxListTile(
                           title: Text(_translatePermissionName(name, t), style: TextStyle(color: colorScheme.onSurface)),
-                          // subtitle убран, чтобы избежать дублирования
                           value: _permissionsState[name],
                           onChanged: enabled ? (val) => setState(() => _permissionsState[name] = val ?? false) : null,
                           activeColor: colorScheme.primary,

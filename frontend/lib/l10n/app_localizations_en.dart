@@ -1851,4 +1851,23 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get entry => 'entry';
+
+  @override
+  String get groupJournal => 'Journal';
+
+  @override
+  String get permViewJournal => 'View journal';
+
+  @override
+  String get permCreateJournal => 'Create journal entries';
+
+  @override
+  String get permEditJournal => 'Edit journal entries';
+
+  @override
+  String get permDeleteJournal => 'Delete journal entries';
+
+  @override
+  String get permCompleteJournal =>
+      'Mark entries as completed (create transactions)';
 }

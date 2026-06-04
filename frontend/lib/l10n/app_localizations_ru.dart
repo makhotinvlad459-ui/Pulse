@@ -1850,4 +1850,22 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get entry => 'запись';
+
+  @override
+  String get groupJournal => 'Журнал';
+
+  @override
+  String get permViewJournal => 'Просмотр журнала';
+
+  @override
+  String get permCreateJournal => 'Создание записей';
+
+  @override
+  String get permEditJournal => 'Редактирование записей';
+
+  @override
+  String get permDeleteJournal => 'Удаление записей';
+
+  @override
+  String get permCompleteJournal => 'Отметка выполненных (создание транзакций)';
 }
