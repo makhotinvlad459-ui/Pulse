@@ -22,8 +22,8 @@ class JournalEntryDialog extends StatefulWidget {
 }
 
 class _JournalEntryDialogState extends State<JournalEntryDialog> {
-  late DateTime _startDate;
-  late DateTime _endDate;
+  late DateTime _startDateTime;
+  late DateTime _endDateTime;
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _counterpartyController = TextEditingController();
   int? _selectedShowcaseItemId;
@@ -37,16 +37,20 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
   void initState() {
     super.initState();
     if (widget.initialEntry != null) {
-      _startDate = DateTime.parse(widget.initialEntry['datetime_start']);
-      _endDate = DateTime.parse(widget.initialEntry['datetime_end']);
+      // Редактирование: парсим даты и приводим к локальному времени
+      _startDateTime = DateTime.parse(widget.initialEntry['datetime_start']).toLocal();
+      _endDateTime = DateTime.parse(widget.initialEntry['datetime_end']).toLocal();
       _descriptionController.text = widget.initialEntry['description'] ?? '';
       _counterpartyController.text = widget.initialEntry['counterparty'] ?? '';
       _selectedShowcaseItemId = widget.initialEntry['showcase_item_id'];
       _quantity = widget.initialEntry['quantity'] ?? 1;
       _totalAmount = widget.initialEntry['total_amount'] ?? 0.0;
     } else {
-      _startDate = widget.initialDate ?? DateTime.now();
-      _endDate = _startDate.add(const Duration(hours: 1));
+      // Новая запись: берём дату из выбранного дня в календаре
+      final baseDate = widget.initialDate ?? DateTime.now();
+      // Устанавливаем начало на 10:00, конец на 11:00 (можно изменить)
+      _startDateTime = DateTime(baseDate.year, baseDate.month, baseDate.day, 10, 0);
+      _endDateTime = DateTime(baseDate.year, baseDate.month, baseDate.day, 11, 0);
     }
     _loadShowcaseItems();
   }
@@ -72,39 +76,38 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
     }
   }
 
-  Future<void> _selectDateTime(bool isStart) async {
-    final initialDate = isStart ? _startDate : _endDate;
-    final pickedDate = await showDatePicker(
-      context: context,
-      initialDate: initialDate,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2030),
-    );
-    if (pickedDate != null) {
-      final pickedTime = await showTimePicker(
-        context: context,
-        initialTime: TimeOfDay.fromDateTime(initialDate),
-      );
-      if (pickedTime != null) {
-        final newDateTime = DateTime(
-          pickedDate.year, pickedDate.month, pickedDate.day,
-          pickedTime.hour, pickedTime.minute,
+  Future<void> _selectTime(bool isStart) async {
+  final initialTime = TimeOfDay.fromDateTime(isStart ? _startDateTime : _endDateTime);
+  final picked = await showTimePicker(
+    context: context,
+    initialTime: initialTime,
+    // builder убран
+  );
+  if (picked != null) {
+    setState(() {
+      if (isStart) {
+        _startDateTime = DateTime(
+          _startDateTime.year, _startDateTime.month, _startDateTime.day,
+          picked.hour, picked.minute,
         );
-        setState(() {
-          if (isStart) {
-            _startDate = newDateTime;
-            if (_endDate.isBefore(_startDate)) {
-              _endDate = _startDate.add(const Duration(hours: 1));
-            }
-          } else {
-            if (newDateTime.isAfter(_startDate)) {
-              _endDate = newDateTime;
-            }
-          }
-        });
+        if (_endDateTime.isBefore(_startDateTime)) {
+          _endDateTime = _startDateTime.add(const Duration(hours: 1));
+        }
+      } else {
+        _endDateTime = DateTime(
+          _endDateTime.year, _endDateTime.month, _endDateTime.day,
+          picked.hour, picked.minute,
+        );
+        if (_endDateTime.isBefore(_startDateTime)) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(AppLocalizations.of(context)!.endTimeAfterStart)),
+          );
+          _endDateTime = _startDateTime.add(const Duration(hours: 1));
+        }
       }
-    }
+    });
   }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -118,16 +121,25 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Отображаем дату (только для информации, нередактируемая)
+            ListTile(
+              title: Text(t.dateLabel),
+              trailing: Text(DateFormat('dd.MM.yyyy').format(_startDateTime)),
+            ),
+            const SizedBox(height: 8),
+            // Время начала
             ListTile(
               title: Text(t.startTime),
-              trailing: Text(DateFormat('dd.MM.yyyy HH:mm').format(_startDate)),
-              onTap: () => _selectDateTime(true),
+              trailing: Text(DateFormat('HH:mm').format(_startDateTime)),
+              onTap: () => _selectTime(true),
             ),
+            // Время окончания
             ListTile(
               title: Text(t.endTime),
-              trailing: Text(DateFormat('dd.MM.yyyy HH:mm').format(_endDate)),
-              onTap: () => _selectDateTime(false),
+              trailing: Text(DateFormat('HH:mm').format(_endDateTime)),
+              onTap: () => _selectTime(false),
             ),
+            const SizedBox(height: 8),
             TextField(
               controller: _descriptionController,
               decoration: InputDecoration(labelText: t.description),
@@ -222,13 +234,14 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
         TextButton(onPressed: () => Navigator.pop(context), child: Text(t.cancel)),
         ElevatedButton(
           onPressed: () {
-            if (_endDate.isBefore(_startDate)) {
+            if (_endDateTime.isBefore(_startDateTime)) {
               ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.endTimeAfterStart)));
               return;
             }
+            // Возвращаем даты в UTC для отправки на сервер
             Navigator.pop(context, {
-              'start': _startDate,
-              'end': _endDate,
+              'start': _startDateTime.toUtc(),
+              'end': _endDateTime.toUtc(),
               'description': _descriptionController.text.trim(),
               'counterparty': _counterpartyController.text.trim(),
               'showcaseItemId': _selectedShowcaseItemId,

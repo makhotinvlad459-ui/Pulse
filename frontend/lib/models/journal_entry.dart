@@ -5,7 +5,7 @@ class JournalEntry {
   final DateTime datetimeEnd;
   final String? description;
   final String? counterparty;
-  final String status; // 'planned', 'completed', 'cancelled'
+  final String status;
   final int? transactionId;
   final int? showcaseItemId;
   final int quantity;
@@ -35,12 +35,21 @@ class JournalEntry {
     this.showcaseItemName,
   });
 
+  // Вспомогательный метод для парсинга UTC-строк в локальное время
+  static DateTime _parseUtc(String str) {
+    var normalized = str.trim();
+    if (!normalized.endsWith('Z') && !normalized.contains('+') && !normalized.contains('-')) {
+      normalized += 'Z';
+    }
+    return DateTime.parse(normalized).toLocal();
+  }
+
   factory JournalEntry.fromJson(Map<String, dynamic> json) {
     return JournalEntry(
       id: json['id'],
       companyId: json['company_id'],
-      datetimeStart: DateTime.parse(json['datetime_start']).toLocal(),
-      datetimeEnd: DateTime.parse(json['datetime_end']).toLocal(),
+      datetimeStart: _parseUtc(json['datetime_start']),
+      datetimeEnd: _parseUtc(json['datetime_end']),
       description: json['description'],
       counterparty: json['counterparty'],
       status: json['status'],
@@ -49,8 +58,8 @@ class JournalEntry {
       quantity: json['quantity'] ?? 1,
       totalAmount: (json['total_amount'] as num).toDouble(),
       createdBy: json['created_by'],
-      createdAt: DateTime.parse(json['created_at']).toLocal(),
-      updatedAt: DateTime.parse(json['updated_at']).toLocal(),
+      createdAt: _parseUtc(json['created_at']),
+      updatedAt: _parseUtc(json['updated_at']),
       creatorName: json['creator_name'],
       showcaseItemName: json['showcase_item_name'],
     );

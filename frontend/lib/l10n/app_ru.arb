@@ -695,6 +695,8 @@
   "permCreateJournal": "Создание записей",
   "permEditJournal": "Редактирование записей",
   "permDeleteJournal": "Удаление записей",
-  "permCompleteJournal": "Отметка выполненных (создание транзакций)"
+  "permCompleteJournal": "Отметка выполненных (создание транзакций)",
+  "dateLabel": "Дата",
+  "endTimeAfterStart": "Время окончания должно быть позже времени начала"
 
 }

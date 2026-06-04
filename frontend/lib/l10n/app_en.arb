@@ -695,5 +695,7 @@
   "permCreateJournal": "Create journal entries",
   "permEditJournal": "Edit journal entries",
   "permDeleteJournal": "Delete journal entries",
-  "permCompleteJournal": "Mark entries as completed (create transactions)"
+  "permCompleteJournal": "Mark entries as completed (create transactions)",
+  "dateLabel": "Date",
+  "endTimeAfterStart": "End time must be after start time"
 }

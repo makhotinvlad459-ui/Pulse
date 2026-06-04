@@ -25,14 +25,15 @@ class JournalTab extends ConsumerStatefulWidget {
 class _JournalTabState extends ConsumerState<JournalTab> {
   DateTime _focusedDay = DateTime.now();
   DateTime _selectedDay = DateTime.now();
-  Map<DateTime, List<JournalEntry>> _entriesMap = {};
+  final Map<DateTime, List<JournalEntry>> _entriesMap = {};
   bool _loading = false;
-  List<JournalEntry> _selectedDayEntries = [];
+
+  // Вспомогательная функция для нормализации даты (без времени)
+  DateTime _normalize(DateTime dt) => DateTime(dt.year, dt.month, dt.day);
 
   @override
   void initState() {
     super.initState();
-    // Откладываем загрузку до окончания сборки
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadEntriesForMonth(_focusedDay);
     });
@@ -50,24 +51,24 @@ class _JournalTabState extends ConsumerState<JournalTab> {
   }
 
   void _buildEntriesMap(List<JournalEntry> entries) {
-    _entriesMap = {};
+    _entriesMap.clear();
     for (var e in entries) {
-      final date = DateTime(e.datetimeStart.year, e.datetimeStart.month, e.datetimeStart.day);
-      _entriesMap.putIfAbsent(date, () => []).add(e);
+      final date = _normalize(e.datetimeStart);
+      _entriesMap[date] = (_entriesMap[date] ?? [])..add(e);
     }
-    _updateSelectedDayEntries();
+    // Принудительно обновляем календарь для перерисовки маркеров
+    if (mounted) setState(() {});
   }
 
-  void _updateSelectedDayEntries() {
-    final date = DateTime(_selectedDay.year, _selectedDay.month, _selectedDay.day);
-    _selectedDayEntries = _entriesMap[date] ?? [];
+  List<JournalEntry> get _selectedDayEntries {
+    final key = _normalize(_selectedDay);
+    return _entriesMap[key] ?? [];
   }
 
   void _onDaySelected(DateTime selectedDay, DateTime focusedDay) {
     setState(() {
       _selectedDay = selectedDay;
       _focusedDay = focusedDay;
-      _updateSelectedDayEntries();
     });
   }
 
@@ -176,187 +177,166 @@ class _JournalTabState extends ConsumerState<JournalTab> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final t = AppLocalizations.of(context)!;
-    final state = ref.watch(journalProvider);
     final canCreate = widget.permissions.contains('create_journal');
-    final screenHeight = MediaQuery.of(context).size.height;
-    final isSmallScreen = screenHeight < 700;
+    final selectedEntries = _selectedDayEntries;
 
-    return Column(
-      children: [
-        // Календарь с ограничением максимальной высоты для компактности на телефонах
-        ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: isSmallScreen ? 320 : 380,
-          ),
-          child: TableCalendar(
-            focusedDay: _focusedDay,
-            firstDay: DateTime(2020),
-            lastDay: DateTime(2030),
-            selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
-            onDaySelected: _onDaySelected,
-            onPageChanged: _onPageChanged,
-            calendarStyle: CalendarStyle(
-              todayDecoration: BoxDecoration(
-                color: colorScheme.primaryContainer,
-                shape: BoxShape.circle,
-              ),
-              selectedDecoration: BoxDecoration(
-                color: colorScheme.primary,
-                shape: BoxShape.circle,
-              ),
-              markersMaxCount: 1,
-              markerDecoration: const BoxDecoration(
-                color: Colors.red,
-                shape: BoxShape.circle,
-              ),
-            ),
-            calendarBuilders: CalendarBuilders(
-              markerBuilder: (context, date, events) {
-                final entriesOnDay = _entriesMap[date];
-                if (entriesOnDay != null && entriesOnDay.isNotEmpty) {
-                  return Positioned(
-                    bottom: 2,
-                    right: 2,
-                    child: Container(
-                      padding: const EdgeInsets.all(2),
-                      decoration: const BoxDecoration(
-                        color: Colors.green,
-                        shape: BoxShape.circle,
-                      ),
-                      constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
-                      child: Text(
-                        '${entriesOnDay.length}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  );
-                }
-                return null;
-              },
-            ),
-            locale: Localizations.localeOf(context).languageCode,
-          ),
-        ),
-        const SizedBox(height: 8),
-        // Шапка с датой и кнопкой добавления
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                DateFormat('dd MMMM yyyy', Localizations.localeOf(context).languageCode).format(_selectedDay),
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              if (canCreate)
-                FloatingActionButton.small(
-                  onPressed: _createEntry,
-                  child: const Icon(Icons.add),
+    return RefreshIndicator(
+      onRefresh: _refresh,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.only(bottom: 20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Календарь
+            TableCalendar(
+              focusedDay: _focusedDay,
+              firstDay: DateTime(2020),
+              lastDay: DateTime(2030),
+              selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+              onDaySelected: _onDaySelected,
+              onPageChanged: _onPageChanged,
+              calendarStyle: CalendarStyle(
+                todayDecoration: BoxDecoration(
+                  color: colorScheme.primaryContainer,
+                  shape: BoxShape.circle,
                 ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 8),
-        // Список записей на выбранный день
-        Expanded(
-          child: _loading
-              ? const Center(child: CircularProgressIndicator())
-              : RefreshIndicator(
-                  onRefresh: _refresh,
-                  child: _selectedDayEntries.isEmpty
-                      ? Center(
-                          child: Text(
-                            t.noEntriesForDay,
-                            style: TextStyle(color: colorScheme.onSurfaceVariant),
+                selectedDecoration: BoxDecoration(
+                  color: colorScheme.primary,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              calendarBuilders: CalendarBuilders(
+                markerBuilder: (context, date, events) {
+                  final normalized = _normalize(date);
+                  final count = _entriesMap[normalized]?.length;
+                  if (count != null && count > 0) {
+                    return Positioned(
+                      bottom: 2,
+                      right: 2,
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: const BoxDecoration(
+                          color: Colors.green,
+                          shape: BoxShape.circle,
+                        ),
+                        constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                        child: Text(
+                          '$count',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
                           ),
-                        )
-                      : ListView.builder(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          itemCount: _selectedDayEntries.length,
-                          itemBuilder: (context, index) {
-                            final entry = _selectedDayEntries[index];
-                            final isCompleted = entry.status == 'completed';
-                            return Card(
-                              margin: const EdgeInsets.only(bottom: 8),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: ListTile(
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                leading: Icon(
-                                  isCompleted ? Icons.check_circle : Icons.event,
-                                  size: 24,
-                                  color: isCompleted ? Colors.green : colorScheme.primary,
-                                ),
-                                title: Text(
-                                  '${DateFormat.Hm().format(entry.datetimeStart)} - ${DateFormat.Hm().format(entry.datetimeEnd)}',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w500,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                                subtitle: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    if (entry.description != null && entry.description!.isNotEmpty)
-                                      Text(entry.description!, style: const TextStyle(fontSize: 12)),
-                                    if (entry.counterparty != null && entry.counterparty!.isNotEmpty)
-                                      Text(
-                                        '${t.counterpartyLabel}: ${entry.counterparty}',
-                                        style: const TextStyle(fontSize: 11),
-                                      ),
-                                    if (entry.showcaseItemName != null)
-                                      Text(
-                                        '${t.serviceLabel}: ${entry.showcaseItemName} x${entry.quantity}',
-                                        style: const TextStyle(fontSize: 11),
-                                      ),
-                                    if (entry.totalAmount > 0)
-                                      Text(
-                                        '${t.sumLabel}: ${entry.totalAmount.toStringAsFixed(2)} ${t.currencySymbol}',
-                                        style: const TextStyle(fontSize: 11),
-                                      ),
-                                    if (isCompleted && entry.transactionId != null)
-                                      Text(
-                                        '${t.transactionLabel}: #${entry.transactionId}',
-                                        style: const TextStyle(fontSize: 10, color: Colors.green),
-                                      ),
-                                  ],
-                                ),
-                                trailing: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    if (!isCompleted && widget.permissions.contains('complete_journal'))
-                                      IconButton(
-                                        icon: const Icon(Icons.done_all, size: 20),
-                                        onPressed: () => _completeEntry(entry),
-                                        tooltip: t.complete,
-                                      ),
-                                    if (widget.permissions.contains('edit_journal') && !isCompleted)
-                                      IconButton(
-                                        icon: const Icon(Icons.edit, size: 20),
-                                        onPressed: () => _editEntry(entry),
-                                        tooltip: t.edit,
-                                      ),
-                                    if (widget.permissions.contains('delete_journal') && !isCompleted)
-                                      IconButton(
-                                        icon: const Icon(Icons.delete, size: 20),
-                                        onPressed: () => _deleteEntry(entry),
-                                        tooltip: t.delete,
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
+                          textAlign: TextAlign.center,
                         ),
+                      ),
+                    );
+                  }
+                  return null;
+                },
+              ),
+              locale: Localizations.localeOf(context).languageCode,
+            ),
+            const SizedBox(height: 12),
+            // Шапка с датой и кнопкой добавления
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    DateFormat('dd MMMM yyyy', Localizations.localeOf(context).languageCode).format(_selectedDay),
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  if (canCreate)
+                    FloatingActionButton.small(
+                      onPressed: _createEntry,
+                      child: const Icon(Icons.add),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Список записей
+            if (_loading)
+              const Padding(
+                padding: EdgeInsets.all(32),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (selectedEntries.isEmpty)
+              Padding(
+                padding: const EdgeInsets.all(32),
+                child: Center(
+                  child: Text(
+                    t.noEntriesForDay,
+                    style: TextStyle(color: colorScheme.onSurfaceVariant),
+                  ),
                 ),
+              )
+            else
+              ...selectedEntries.map((entry) => _buildEntryCard(entry, colorScheme, t)),
+          ],
         ),
-      ],
+      ),
+    );
+  }
+
+  Widget _buildEntryCard(JournalEntry entry, ColorScheme colorScheme, AppLocalizations t) {
+    final isCompleted = entry.status == 'completed';
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        leading: Icon(
+          isCompleted ? Icons.check_circle : Icons.event,
+          size: 24,
+          color: isCompleted ? Colors.green : colorScheme.primary,
+        ),
+        title: Text(
+          '${DateFormat.Hm().format(entry.datetimeStart)} - ${DateFormat.Hm().format(entry.datetimeEnd)}',
+          style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (entry.description != null && entry.description!.isNotEmpty)
+              Text(entry.description!, style: const TextStyle(fontSize: 12)),
+            if (entry.counterparty != null && entry.counterparty!.isNotEmpty)
+              Text('${t.counterpartyLabel}: ${entry.counterparty}', style: const TextStyle(fontSize: 11)),
+            if (entry.showcaseItemName != null)
+              Text('${t.serviceLabel}: ${entry.showcaseItemName} x${entry.quantity}', style: const TextStyle(fontSize: 11)),
+            if (entry.totalAmount > 0)
+              Text('${t.sumLabel}: ${entry.totalAmount.toStringAsFixed(2)} ${t.currencySymbol}', style: const TextStyle(fontSize: 11)),
+            if (isCompleted && entry.transactionId != null)
+              Text('${t.transactionLabel}: #${entry.transactionId}', style: TextStyle(fontSize: 10, color: Colors.green)),
+          ],
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (!isCompleted && widget.permissions.contains('complete_journal'))
+              IconButton(
+                icon: const Icon(Icons.done_all, size: 20),
+                onPressed: () => _completeEntry(entry),
+                tooltip: t.complete,
+              ),
+            if (widget.permissions.contains('edit_journal') && !isCompleted)
+              IconButton(
+                icon: const Icon(Icons.edit, size: 20),
+                onPressed: () => _editEntry(entry),
+                tooltip: t.edit,
+              ),
+            if (widget.permissions.contains('delete_journal') && !isCompleted)
+              IconButton(
+                icon: const Icon(Icons.delete, size: 20),
+                onPressed: () => _deleteEntry(entry),
+                tooltip: t.delete,
+              ),
+          ],
+        ),
+      ),
     );
   }
 }
