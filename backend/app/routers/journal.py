@@ -4,7 +4,7 @@ from sqlalchemy import select
 from typing import List, Optional
 from datetime import datetime
 import json
-
+from sqlalchemy.orm.attributes import flag_modified
 from app.database import get_db
 from app.models import User, Company, CompanyMember, JournalEntry, JournalEntryStatus, ShowcaseItem, Account, Permission, CompanyMemberPermission
 from app.schemas import JournalEntryCreate, JournalEntryUpdate, JournalEntryResponse, TransactionCreate, TransactionType, JournalEntryItemCreate
@@ -139,11 +139,28 @@ async def update_journal_entry(
         update_data['datetime_start'] = _to_naive(update_data['datetime_start'])
     if 'datetime_end' in update_data:
         update_data['datetime_end'] = _to_naive(update_data['datetime_end'])
+    
+    # Обработка items: сохраняем названия как есть (фронтенд их присылает)
     if 'items' in update_data and update_data['items'] is not None:
-        update_data['items'] = [item.dict() for item in update_data['items']]
+        # Преобразуем объекты в словари
+        items_dicts = []
+        for item in entry_data.items:
+            item_dict = item.dict()
+            # Если имя не пришло, попробуем получить из БД
+            if not item_dict.get('name') and item_dict.get('showcase_item_id'):
+                showcase = await db.get(ShowcaseItem, item_dict['showcase_item_id'])
+                if showcase:
+                    item_dict['name'] = showcase.name
+            items_dicts.append(item_dict)
+        update_data['items'] = items_dicts
 
     for key, value in update_data.items():
         setattr(entry, key, value)
+    
+    # Явно помечаем поле items как изменённое, если оно было обновлено
+    if 'items' in update_data:
+        flag_modified(entry, 'items')
+    
     entry.updated_at = datetime.utcnow()
     await db.commit()
     await db.refresh(entry)

@@ -272,6 +272,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
             newWidgets.add(JournalTab(
               companyId: _company.id,
               permissions: effectivePermissions,
+              onRefresh: _refresh,
                 ));
                   }
               break;  

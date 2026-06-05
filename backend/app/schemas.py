@@ -1,5 +1,5 @@
 from pydantic import BaseModel, field_validator
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 from enum import Enum
 
@@ -265,7 +265,8 @@ class JournalEntryStatus(str, Enum):
 class JournalEntryItemCreate(BaseModel):
     showcase_item_id: int
     quantity: int = 1
-    price_at_time: float    
+    price_at_time: float
+    name: Optional[str] = None    
 
 class JournalEntryCreate(BaseModel):
     datetime_start: datetime
@@ -276,6 +277,7 @@ class JournalEntryCreate(BaseModel):
     quantity: int = 1
     total_amount: float = 0.0  # если showcase_item_id не указан, можно указать сумму вручную
     items: Optional[List[JournalEntryItemCreate]] = []
+    name: Optional[str] = None
 
 class JournalEntryUpdate(BaseModel):
     datetime_start: Optional[datetime] = None
@@ -306,6 +308,6 @@ class JournalEntryResponse(BaseModel):
     creator_name: Optional[str] = None
     showcase_item_name: Optional[str] = None  # для отображения
     items: Optional[List[JournalEntryItemCreate]] = None
-    
+
     class Config:
         from_attributes = True        

@@ -464,7 +464,7 @@ Future<JournalEntry> updateJournalEntry(int companyId, int entryId, {
   if (totalAmount != null) data['total_amount'] = totalAmount;
   if (items != null) data['items'] = items;
   if (status != null) data['status'] = status;
-  final response = await patch('/journal/$entryId/', queryParameters: {'company_id': companyId}, data: data);
+  final response = await patch('/journal/$entryId', queryParameters: {'company_id': companyId}, data: data);
   return JournalEntry.fromJson(response.data);
 }
 

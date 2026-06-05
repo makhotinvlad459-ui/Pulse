@@ -11,11 +11,13 @@ import 'journal_complete_dialog.dart';
 class JournalTab extends ConsumerStatefulWidget {
   final int companyId;
   final Set<String> permissions;
+  final VoidCallback? onRefresh;
 
   const JournalTab({
     super.key,
     required this.companyId,
     required this.permissions,
+    this.onRefresh,
   });
 
   @override
@@ -80,62 +82,67 @@ class _JournalTabState extends ConsumerState<JournalTab> {
   }
 
   Future<void> _createEntry() async {
-  final result = await showDialog<Map<String, dynamic>>(
-    context: context,
-    builder: (context) => JournalEntryDialog(
-      companyId: widget.companyId,
-      initialDate: _selectedDay,
-      permissions: widget.permissions,
-    ),
-  );
-  if (result != null && mounted) {
-    final notifier = ref.read(journalProvider.notifier);
-    await notifier.createEntry(
-      widget.companyId,
-      start: result['start'],
-      end: result['end'],
-      description: result['description'],
-      counterparty: result['counterparty'],
-      items: result['items'],
-      totalAmount: result['totalAmount'],
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => JournalEntryDialog(
+        companyId: widget.companyId,
+        initialDate: _selectedDay,
+        permissions: widget.permissions,
+      ),
     );
-    await _loadEntriesForMonth(_focusedDay);
+    if (result != null && mounted) {
+      final notifier = ref.read(journalProvider.notifier);
+      await notifier.createEntry(
+        widget.companyId,
+        start: result['start'],
+        end: result['end'],
+        description: result['description'],
+        counterparty: result['counterparty'],
+        items: result['items'],
+        totalAmount: result['totalAmount'],
+      );
+      await _loadEntriesForMonth(_focusedDay);
+    }
   }
-}
 
   Future<void> _editEntry(JournalEntry entry) async {
-  if (!widget.permissions.contains('edit_journal')) return;
-  final entryMap = {
-    'datetime_start': entry.datetimeStart.toIso8601String(),
-    'datetime_end': entry.datetimeEnd.toIso8601String(),
-    'description': entry.description ?? '',
-    'counterparty': entry.counterparty ?? '',
-    'items': entry.items,
-    'total_amount': entry.totalAmount,
-  };
-  final result = await showDialog<Map<String, dynamic>>(
-    context: context,
-    builder: (context) => JournalEntryDialog(
-      companyId: widget.companyId,
-      initialEntry: entryMap,
-      permissions: widget.permissions,
-    ),
-  );
-  if (result != null && mounted) {
-    final notifier = ref.read(journalProvider.notifier);
-    await notifier.updateEntry(
-      widget.companyId,
-      entry.id,
-      start: result['start'],
-      end: result['end'],
-      description: result['description'],
-      counterparty: result['counterparty'],
-      items: result['items'],
-      totalAmount: result['totalAmount'],
+    if (!widget.permissions.contains('edit_journal')) return;
+    final entryMap = {
+      'datetime_start': entry.datetimeStart.toIso8601String(),
+      'datetime_end': entry.datetimeEnd.toIso8601String(),
+      'description': entry.description ?? '',
+      'counterparty': entry.counterparty ?? '',
+      'items': entry.items?.map((item) => {
+  'showcase_item_id': item['showcase_item_id'],
+  'quantity': item['quantity'],
+  'price_at_time': item['price_at_time'],
+  'name': item['name'] ?? 'Без названия',
+}).toList(),
+      'total_amount': entry.totalAmount,
+    };
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => JournalEntryDialog(
+        companyId: widget.companyId,
+        initialEntry: entryMap,
+        permissions: widget.permissions,
+      ),
     );
-    await _loadEntriesForMonth(_focusedDay);
+    if (result != null && mounted) {
+      final notifier = ref.read(journalProvider.notifier);
+      await notifier.updateEntry(
+        widget.companyId,
+        entry.id,
+        start: result['start'],
+        end: result['end'],
+        description: result['description'],
+        counterparty: result['counterparty'],
+        items: result['items'],
+        totalAmount: result['totalAmount'],
+      );
+      await _loadEntriesForMonth(_focusedDay);
+    }
   }
-}
 
   Future<void> _deleteEntry(JournalEntry entry) async {
     if (!widget.permissions.contains('delete_journal')) return;
@@ -172,6 +179,7 @@ class _JournalTabState extends ConsumerState<JournalTab> {
     if (accountId != null && mounted) {
       final notifier = ref.read(journalProvider.notifier);
       await notifier.completeEntry(widget.companyId, entry.id, accountId);
+      widget.onRefresh?.call(); 
       await _loadEntriesForMonth(_focusedDay);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.entryCompleted)));
     }
@@ -309,10 +317,11 @@ class _JournalTabState extends ConsumerState<JournalTab> {
             if (entry.items != null && entry.items!.isNotEmpty)
               Column(
                 children: entry.items!.map((item) {
+                  final name = item['name'] ?? 'Без названия';
                   return Padding(
                     padding: const EdgeInsets.only(top: 4),
                     child: Text(
-                      '• ${item['name']} x${item['quantity']} (${item['price_at_time']} ${t.currencySymbol}) = ${(item['quantity'] * item['price_at_time']).toStringAsFixed(2)} ${t.currencySymbol}',
+                      '• $name x${item['quantity']} (${item['price_at_time']} ${t.currencySymbol}) = ${(item['quantity'] * item['price_at_time']).toStringAsFixed(2)} ${t.currencySymbol}',
                       style: const TextStyle(fontSize: 11),
                     ),
                   );
@@ -342,11 +351,11 @@ class _JournalTabState extends ConsumerState<JournalTab> {
                 tooltip: t.edit,
               ),
             if (widget.permissions.contains('delete_journal'))
-  IconButton(
-    icon: const Icon(Icons.delete, size: 20),
-    onPressed: () => _deleteEntry(entry),
-    tooltip: t.delete,
-  ),
+              IconButton(
+                icon: const Icon(Icons.delete, size: 20),
+                onPressed: () => _deleteEntry(entry),
+                tooltip: t.delete,
+              ),
           ],
         ),
       ),

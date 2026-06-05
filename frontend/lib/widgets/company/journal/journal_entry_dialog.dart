@@ -41,10 +41,19 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
       _descriptionController.text = widget.initialEntry['description'] ?? '';
       _counterpartyController.text = widget.initialEntry['counterparty'] ?? '';
       if (widget.initialEntry['items'] != null) {
-        _items = List<Map<String, dynamic>>.from(widget.initialEntry['items']);
+        _items = List<Map<String, dynamic>>.from(widget.initialEntry['items']).map((item) {
+          final total = item['total'] ?? item['quantity'] * item['price_at_time'];
+          return {
+            'showcase_item_id': item['showcase_item_id'],
+            'quantity': item['quantity'],
+            'price_at_time': item['price_at_time'],
+            'name': item['name'] ?? 'Без названия',
+            'total': total.toDouble(),
+          };
+        }).toList();
       }
-      final total = widget.initialEntry['total_amount'] ?? 0.0;
-      _manualAmountController.text = total.toStringAsFixed(2);
+      final total = widget.initialEntry['total_amount'];
+      _manualAmountController.text = (total != null ? (total as num).toDouble() : 0.0).toStringAsFixed(2);
     } else {
       final baseDate = widget.initialDate ?? DateTime.now();
       _startDateTime = DateTime(baseDate.year, baseDate.month, baseDate.day, 10, 0);
@@ -60,7 +69,7 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
     setState(() {
       _isManualAmountEnabled = !hasServices;
       if (hasServices) {
-        final computed = _items.fold(0.0, (sum, item) => sum + (item['total'] as double));
+        final computed = _items.fold(0.0, (sum, item) => sum + ((item['total'] ?? 0.0) as double));
         _manualAmountController.text = computed.toStringAsFixed(2);
       }
     });
@@ -171,7 +180,7 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
 
   double get _finalAmount {
     if (_items.isNotEmpty) {
-      return _items.fold(0.0, (sum, item) => sum + (item['total'] as double));
+      return _items.fold(0.0, (sum, item) => sum + ((item['total'] ?? 0.0) as double));
     }
     return double.tryParse(_manualAmountController.text) ?? 0.0;
   }
@@ -223,7 +232,6 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
                 ),
               ],
             ),
-            // Список услуг без ListView.builder, используем Column
             ..._items.asMap().entries.map((entry) {
               final idx = entry.key;
               final item = entry.value;
@@ -271,7 +279,7 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
                           SizedBox(
                             width: 80,
                             child: Text(
-                              '${item['total'].toStringAsFixed(2)} ${t.currencySymbol}',
+                              '${(item['total'] ?? 0.0).toStringAsFixed(2)} ${t.currencySymbol}',
                               style: const TextStyle(fontWeight: FontWeight.bold),
                             ),
                           ),
@@ -322,6 +330,7 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
                 'showcase_item_id': item['showcase_item_id'],
                 'quantity': item['quantity'],
                 'price_at_time': item['price_at_time'],
+                'name': item['name'],
               }).toList(),
               'totalAmount': _finalAmount,
             });
