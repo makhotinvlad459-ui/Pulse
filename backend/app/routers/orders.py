@@ -1,13 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, func, delete
+import uuid
+from firebase_admin import storage
 from sqlalchemy.orm import selectinload
 from typing import List, Optional
 from datetime import datetime
 from decimal import Decimal
 import json
 import os
-import shutil
 
 from app.database import get_db
 from app.models import (
@@ -22,6 +23,9 @@ from app.schemas import (
 from app.deps import get_current_user
 
 router = APIRouter(prefix="/orders", tags=["orders"], redirect_slashes=False)
+
+MAX_FILE_SIZE = 10 * 1024 * 1024
+ALLOWED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.pdf'}
 
 # ---------- Вспомогательные функции ----------
 
@@ -763,37 +767,46 @@ async def add_attachment(
         raise HTTPException(403, "Access denied")
     if not await _has_permission(company_id, current_user, db, "edit_orders"):
         raise HTTPException(403, "No permission")
-    upload_dir = f"uploads/orders/{order_id}"
-    os.makedirs(upload_dir, exist_ok=True)
-    timestamp = int(datetime.utcnow().timestamp())
-    safe_name = f"{timestamp}_{file.filename}"
-    file_path = os.path.join(upload_dir, safe_name)
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-    url = f"/uploads/orders/{order_id}/{safe_name}"
-    att = OrderAttachment(order_id=order_id, file_url=url, uploaded_by=current_user.id)
-    db.add(att)
-    await db.commit()
-    return {"detail": "Attachment added", "url": url}
-
-@router.delete("/{order_id}/attachments/{attachment_id}")
-async def delete_attachment(
-    order_id: int,
-    attachment_id: int,
-    company_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    if not await _check_company_access(company_id, current_user, db):
-        raise HTTPException(403, "Access denied")
-    att = await db.get(OrderAttachment, attachment_id)
-    if not att or att.order_id != order_id:
-        raise HTTPException(404, "Attachment not found")
-    if os.path.exists(att.file_url.lstrip('/')):
-        os.remove(att.file_url.lstrip('/'))
-    await db.delete(att)
-    await db.commit()
-    return {"detail": "Attachment deleted"}
+    
+    # Проверка размера и расширения
+    file.file.seek(0, 2)
+    size = file.file.tell()
+    if size > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail=f"File too large (max {MAX_FILE_SIZE // (1024*1024)} MB)")
+    await file.seek(0)
+    
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="Only JPG, JPEG, PNG, PDF files are allowed")
+    
+    try:
+        contents = await file.read()
+        bucket = storage.bucket()
+        blob_path = f"companies/{company_id}/orders/{order_id}/{uuid.uuid4()}{ext}"
+        blob = bucket.blob(blob_path)
+        
+        blob.upload_from_string(contents, content_type=file.content_type)
+        blob.make_public()
+        public_url = blob.public_url
+        
+        att = OrderAttachment(
+            order_id=order_id,
+            file_url=public_url,
+            uploaded_by=current_user.id
+        )
+        db.add(att)
+        await db.commit()
+        await db.refresh(att)
+        
+        return {
+            "id": att.id,
+            "file_url": att.file_url,
+            "uploaded_by": att.uploaded_by,
+            "uploaded_at": att.uploaded_at.isoformat() if att.uploaded_at else None
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки в Firebase Storage: {str(e)}")
 
 # ---------- Получение сотрудников ----------
 @router.get("/company/{company_id}/members")

@@ -412,16 +412,36 @@ async def update_transaction(
     if not transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
     
+    # ---- ИСПРАВЛЕНИЕ: сохраняем старый тип и старые товары до изменений ----
     old_account_id = transaction.account_id
     old_transfer_to = transaction.transfer_to_account_id
+    old_type = transaction.type
+
+    # Загружаем старые товары ДО изменения транзакции
+    old_items_result = await db.execute(
+        select(TransactionItem).where(TransactionItem.transaction_id == transaction_id)
+        .options(selectinload(TransactionItem.product))
+    )
+    old_items = old_items_result.scalars().all()
     
+    # 1. Откатываем влияние старых товаров, используя СТАРЫЙ тип
+    for old_item in old_items:
+        product = old_item.product
+        if old_type == 'income':
+            # раньше товар ушёл со склада → возвращаем на склад
+            product.current_quantity += Decimal(str(old_item.quantity))
+        elif old_type == 'expense':
+            # раньше товар пришёл на склад → списываем
+            product.current_quantity -= Decimal(str(old_item.quantity))
+        # для transfer товаров нет, игнорируем
+    # ----------------------------------------------------------------
+
     if trans_data.date.tzinfo is not None:
         trans_data.date = trans_data.date.replace(tzinfo=None)
     
     # НОРМАЛИЗАЦИЯ КОНТРАГЕНТА
     normalized_counterparty = await _normalize_counterparty(company_id, trans_data.counterparty, db)
     
-    from app.models import Counterparty
     if normalized_counterparty:
         existing_cp = await db.execute(
             select(Counterparty).where(
@@ -457,7 +477,7 @@ async def update_transaction(
     else:
         transaction.transfer_to_account_id = None
 
-    # ОБНОВЛЕНИЕ ССЫЛКИ ВЛОЖЕНИЯ (Firebase Cloud)
+    # Обработка вложения
     if trans_data.delete_attachment or trans_data.attachment_url is None:
         transaction.attachment_url = None
         transaction.attachment_uploaded_at = None
@@ -466,21 +486,10 @@ async def update_transaction(
     
     await db.flush()
     
-    # Обновление товаров: удаляем старые, добавляем новые
-    old_items_result = await db.execute(
-        select(TransactionItem).where(TransactionItem.transaction_id == transaction_id)
-        .options(selectinload(TransactionItem.product))
-    )
-    old_items = old_items_result.scalars().all()
-    for old_item in old_items:
-        product = old_item.product
-        if transaction.type == 'income':
-            product.current_quantity += Decimal(str(old_item.quantity))
-        else:
-            product.current_quantity -= Decimal(str(old_item.quantity))
-    
+    # 2. Удаляем старые записи товаров (после отката)
     await db.execute(delete(TransactionItem).where(TransactionItem.transaction_id == transaction_id))
     
+    # 3. Добавляем новые товары с НОВЫМ типом
     if not is_transfer and trans_data.items:
         for item in trans_data.items:
             prod_result = await db.execute(select(Product).where(Product.id == item.product_id, Product.company_id == company_id))
@@ -489,7 +498,7 @@ async def update_transaction(
                 raise HTTPException(status_code=404, detail=f"Product {item.product_id} not found")
             if trans_data.type.value == 'income':
                 product.current_quantity -= Decimal(str(item.quantity))
-            else:
+            else:  # expense
                 product.current_quantity += Decimal(str(item.quantity))
             trans_item = TransactionItem(
                 transaction_id=transaction_id,
@@ -499,6 +508,7 @@ async def update_transaction(
             )
             db.add(trans_item)
     
+    # Пересчёт балансов счетов
     await recalc_account_balance(old_account_id, db)
     if old_transfer_to:
         await recalc_account_balance(old_transfer_to, db)
@@ -646,6 +656,21 @@ async def restore_transaction(
     if not transaction.is_deleted:
         raise HTTPException(status_code=400, detail="Transaction is not deleted")
     
+    # ---- ИСПРАВЛЕНИЕ: при восстановлении применяем влияние товаров заново ----
+    items_result = await db.execute(
+        select(TransactionItem).where(TransactionItem.transaction_id == transaction_id)
+        .options(selectinload(TransactionItem.product))
+    )
+    items = items_result.scalars().all()
+    for item in items:
+        product = item.product
+        if transaction.type == 'income':
+            product.current_quantity -= Decimal(str(item.quantity))
+        elif transaction.type == 'expense':
+            product.current_quantity += Decimal(str(item.quantity))
+        # для transfer товаров нет
+    # -------------------------------------------------------------------------
+
     transaction.is_deleted = False
     transaction.deleted_by = None
     transaction.deleted_at = None

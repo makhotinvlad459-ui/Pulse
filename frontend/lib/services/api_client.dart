@@ -479,6 +479,28 @@ Future<JournalEntry> updateJournalEntry(int companyId, int entryId, {
     });
   }
 
+  Future<Map<String, dynamic>> uploadOrderAttachment({
+  required int orderId,
+  required int companyId,
+  required Uint8List bytes,
+  required String filename,
+}) async {
+  final token = await getToken();
+  if (token == null) throw Exception('No authentication token');
+  
+  final formData = FormData.fromMap({
+    'file': MultipartFile.fromBytes(bytes, filename: filename),
+  });
+  
+  final response = await _dio.post(
+    '/orders/$orderId/attachments',
+    data: formData,
+    queryParameters: {'company_id': companyId},
+    options: Options(headers: {'Authorization': 'Bearer $token'}),
+  );
+  return response.data;
+}
+
   Future<void> changePassword(String oldPassword, String newPassword) async {
     await post('/auth/change-password', data: {
       'old_password': oldPassword,

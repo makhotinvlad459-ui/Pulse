@@ -49,15 +49,15 @@ class _OrderDetailsDialogState extends ConsumerState<OrderDetailsDialog> {
     _loadProducts();
   }
 
-  // Исправленный метод: принимаем XFile, сжимаем внутри, отправляем байты
+  // Загрузка фото для заказа через Firebase
   Future<void> _uploadOrderFile(XFile picked) async {
     final t = AppLocalizations.of(context)!;
     try {
       final bytes = await picked.readAsBytes();
       final compressed = await ImageCompression.compressImage(bytes);
       
-      // Используем uploadTransactionFile для загрузки файла
-      await _apiClient.uploadTransactionFile(
+      await _apiClient.uploadOrderAttachment(
+        orderId: widget.order['id'],
         companyId: widget.companyId,
         bytes: compressed,
         filename: picked.name,
@@ -155,12 +155,9 @@ class _OrderDetailsDialogState extends ConsumerState<OrderDetailsDialog> {
     final XFile? pickedFile = await picker.pickImage(source: source);
     if (pickedFile == null) return;
     
-    // Вызываем исправленный метод с XFile
     await _uploadOrderFile(pickedFile);
-    
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.fileAttached)));
-    await _refreshOrder();
-    widget.onOrderUpdated();
+    // _refreshOrder и widget.onOrderUpdated уже вызываются внутри _uploadOrderFile
   }
 
   Future<void> _showAttachment(String url) async {
