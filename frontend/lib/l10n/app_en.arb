@@ -705,5 +705,9 @@
   "priceLabel": "Price",
   "addAtLeastOneService": "Please add at least one service",
   "loadingServices": "Loading services...",
-  "noServicesAvailable": "No services available"
+  "noServicesAvailable": "No services available",
+  "deleteAccount": "Delete Account",
+  "deleteAccountWarning": "Are you sure? This action is irreversible. Enter your password to confirm.",
+  "accountDeleted": "Account deleted. You will be redirected to login.",
+  "password": "Password"
 }

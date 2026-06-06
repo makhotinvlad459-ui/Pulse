@@ -300,6 +300,32 @@ async def logout(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    current_user.refresh_token = None# ---------- Удаление аккаунта ----------
+class DeleteAccountRequest(BaseModel):
+    password: str
+
+@router.delete("/me", status_code=200)
+async def delete_my_account(
+    data: DeleteAccountRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Проверка пароля
+    if not verify_password(data.password, current_user.password_hash):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid password")
+    
+    # Анонимизация персональных данных
+    current_user.email = f"deleted_{current_user.id}@anonymized.local"
+    current_user.phone = None
+    current_user.full_name = "Deleted User"
+    current_user.is_active = False
     current_user.refresh_token = None
+    current_user.deleted_at = datetime.utcnow()
+    
+    
+    await db.commit()
+    
+    return {"detail": "Account permanently deleted. Your personal data has been removed."}
     await db.commit()
     return {"detail": "Logged out"}    
+

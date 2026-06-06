@@ -705,6 +705,10 @@
   "priceLabel": "Цена",
   "addAtLeastOneService": "Добавьте хотя бы одну услугу",
   "loadingServices": "Загрузка услуг...",
-  "noServicesAvailable": "Нет доступных услуг"
-
+  "noServicesAvailable": "Нет доступных услуг",
+  "deleteAccount": "Удалить аккаунт",
+  "deleteAccountWarning": "Вы уверены? Это действие необратимо. Введите пароль для подтверждения.",
+  "accountDeleted": "Аккаунт удалён. Вы будете перенаправлены на вход.",
+  "password": "Пароль"
 }
+

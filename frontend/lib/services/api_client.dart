@@ -514,6 +514,10 @@ Future<Response> getOrderAttachmentFile(int attachmentId, int companyId) async {
   return response;
 }
 
+Future<void> deleteMyAccount(String password) async {
+  await delete('/auth/me', data: {'password': password});
+}
+
   Future<void> changePassword(String oldPassword, String newPassword) async {
     await post('/auth/change-password', data: {
       'old_password': oldPassword,

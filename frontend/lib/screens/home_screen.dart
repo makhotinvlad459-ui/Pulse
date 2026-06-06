@@ -16,7 +16,6 @@ import '../services/websocket_service.dart';
 import 'package:frontend/l10n/app_localizations.dart';
 import '../screens/subscription_screen.dart';
 import '../widgets/company/change_password_dialog.dart';
-import '../services/websocket_service.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -45,7 +44,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   void dispose() {
-    // Не закрываем здесь, потому что другие экраны могут использовать
     super.dispose();
   }
 
@@ -70,7 +68,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final colorScheme = Theme.of(context).colorScheme;
     final t = AppLocalizations.of(context)!;
 
-    // Подписываемся на userStream для обновления счетчиков
     ref.listen(StreamProvider((ref) => WebSocketService().userStream), (previous, next) {
       next.whenData((data) {
         if (data['type'] == 'update_counters') {
@@ -501,6 +498,59 @@ class SettingsDrawer extends StatelessWidget {
     ref.setLocale(locale);
   }
 
+  Future<void> _confirmDeleteAccount(BuildContext context) async {
+    final t = AppLocalizations.of(context)!;
+    final passwordController = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(t.deleteAccount),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(t.deleteAccountWarning),
+            const SizedBox(height: 16),
+            TextField(
+              controller: passwordController,
+              obscureText: true,
+              decoration: InputDecoration(labelText: t.password),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(t.cancel),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: Text(t.delete),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      final api = ApiClient();
+      await api.deleteMyAccount(passwordController.text);
+      // Выход из системы
+      final ref = ProviderScope.containerOf(context).read(authProvider.notifier);
+      await ref.logout();
+      WebSocketService().disconnectAll();
+      if (context.mounted) {
+        Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(t.accountDeleted)),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${AppLocalizations.of(context)!.error}: $e')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final ref = ProviderScope.containerOf(context).read(authProvider.notifier);
@@ -642,15 +692,19 @@ class SettingsDrawer extends StatelessWidget {
             ],
           ),
           const Divider(),
+          // 👇 НОВЫЙ ПУНКТ: УДАЛЕНИЕ АККАУНТА
+          ListTile(
+            leading: const Icon(Icons.delete_forever, color: Colors.red),
+            title: Text(t.deleteAccount, style: const TextStyle(color: Colors.red)),
+            onTap: () => _confirmDeleteAccount(context),
+          ),
+          const Divider(),
           ListTile(
             leading: const Icon(Icons.logout, color: Colors.red),
             title: Text(t.logout, style: const TextStyle(color: Colors.red)),
             onTap: () async {
               Navigator.pop(context);
-              
-              // 👇 ЗАКРЫВАЕМ ВСЕ WEBSOCKET СОЕДИНЕНИЯ
               WebSocketService().disconnectAll();
-              
               await ref.logout();
               if (context.mounted) {
                 Navigator.pushReplacementNamed(context, '/login');
