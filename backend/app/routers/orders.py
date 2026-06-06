@@ -843,6 +843,7 @@ async def get_attachment_file(
             content_type = resp.headers.get('content-type', 'application/octet-stream')
     
     return Response(content=content, media_type=content_type)
+
 # ---------- Получение сотрудников ----------
 @router.get("/company/{company_id}/members")
 async def get_company_members(
@@ -864,3 +865,47 @@ async def get_company_members(
             "role_in_company": member.role_in_company,
         })
     return members
+
+@router.delete("/{order_id}/attachments/{attachment_id}")
+async def delete_attachment(
+    order_id: int,
+    attachment_id: int,
+    company_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if not await _check_company_access(company_id, current_user, db):
+        raise HTTPException(403, "Access denied")
+    if not await _has_permission(company_id, current_user, db, "edit_orders"):
+        raise HTTPException(403, "No permission")
+    
+    # Получаем вложение с проверкой принадлежности заказу и компании
+    result = await db.execute(
+        select(OrderAttachment).where(
+            OrderAttachment.id == attachment_id,
+            OrderAttachment.order_id == order_id,
+            OrderAttachment.order.has(Order.company_id == company_id)
+        )
+    )
+    attachment = result.scalar_one_or_none()
+    if not attachment:
+        raise HTTPException(404, "Attachment not found")
+    
+    # (Опционально) удалить файл из Firebase Storage
+    # Если хотите удалять и сам файл, раскомментируйте блок ниже:
+    """
+    try:
+        from firebase_admin import storage
+        import urllib.parse
+        bucket = storage.bucket()
+        parsed = urllib.parse.urlparse(attachment.file_url)
+        path = parsed.path.lstrip('/')
+        blob = bucket.blob(path)
+        blob.delete()
+    except Exception as e:
+        print(f"Failed to delete file from Firebase: {e}")
+    """
+    
+    await db.delete(attachment)
+    await db.commit()
+    return {"detail": "Attachment deleted"}
