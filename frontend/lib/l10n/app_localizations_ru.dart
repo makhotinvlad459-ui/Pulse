@@ -1889,4 +1889,18 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get noServicesAvailable => 'Нет доступных услуг';
+
+  @override
+  String get deleteAccount => 'Удалить аккаунт';
+
+  @override
+  String get deleteAccountWarning =>
+      'Вы уверены? Это действие необратимо. Введите пароль для подтверждения.';
+
+  @override
+  String get accountDeleted =>
+      'Аккаунт удалён. Вы будете перенаправлены на вход.';
+
+  @override
+  String get password => 'Пароль';
 }

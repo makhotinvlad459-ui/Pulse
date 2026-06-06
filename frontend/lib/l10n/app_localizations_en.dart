@@ -1891,4 +1891,18 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get noServicesAvailable => 'No services available';
+
+  @override
+  String get deleteAccount => 'Delete Account';
+
+  @override
+  String get deleteAccountWarning =>
+      'Are you sure? This action is irreversible. Enter your password to confirm.';
+
+  @override
+  String get accountDeleted =>
+      'Account deleted. You will be redirected to login.';
+
+  @override
+  String get password => 'Password';
 }

@@ -192,8 +192,15 @@ _dio.interceptors.add(LogInterceptor(responseBody: true, requestBody: true));
   Future<Response> patch(String path, {dynamic data, Map<String, dynamic>? queryParameters}) =>
       _dio.patch(path, data: data, queryParameters: queryParameters);
 
-  Future<Response> delete(String path, {Map<String, dynamic>? queryParameters}) =>
-      _dio.delete(path, queryParameters: queryParameters);
+  Future<Response> delete(String path, {dynamic data, Map<String, dynamic>? queryParameters}) async {
+  final token = await getToken();
+  return _dio.delete(
+    path,
+    data: data,
+    queryParameters: queryParameters,
+    options: Options(headers: {'Authorization': 'Bearer $token'}),
+  );
+}
 
   Future<Response> postForm(String path, {required Map<String, String> data}) async {
     return await _dio.post(
