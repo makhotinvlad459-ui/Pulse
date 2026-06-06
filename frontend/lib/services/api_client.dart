@@ -501,6 +501,12 @@ Future<JournalEntry> updateJournalEntry(int companyId, int entryId, {
   return response.data;
 }
 
+Future<Response> getOrderAttachmentFile(int attachmentId, int companyId) async {
+  return await get('/orders/attachments/$attachmentId/file', queryParameters: {
+    'company_id': companyId,
+  });
+}
+
   Future<void> changePassword(String oldPassword, String newPassword) async {
     await post('/auth/change-password', data: {
       'old_password': oldPassword,

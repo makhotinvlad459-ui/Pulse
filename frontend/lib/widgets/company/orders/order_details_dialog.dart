@@ -49,7 +49,7 @@ class _OrderDetailsDialogState extends ConsumerState<OrderDetailsDialog> {
     _loadProducts();
   }
 
-  // Загрузка фото для заказа через Firebase
+  // Загрузка фото для заказа через Firebase (через бэкенд-прокси)
   Future<void> _uploadOrderFile(XFile picked) async {
     final t = AppLocalizations.of(context)!;
     try {
@@ -157,13 +157,13 @@ class _OrderDetailsDialogState extends ConsumerState<OrderDetailsDialog> {
     
     await _uploadOrderFile(pickedFile);
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.fileAttached)));
-    // _refreshOrder и widget.onOrderUpdated уже вызываются внутри _uploadOrderFile
   }
 
-  Future<void> _showAttachment(String url) async {
+  // Используем прокси-эндпоинт для просмотра вложения (без прямой ссылки на Firebase)
+  Future<void> _showAttachment(int attachmentId) async {
     final t = AppLocalizations.of(context)!;
     try {
-      final response = await _apiClient.getFile(url);
+      final response = await _apiClient.getOrderAttachmentFile(attachmentId, widget.companyId);
       final bytes = response.data as List<int>;
       final uint8list = Uint8List.fromList(bytes);
       if (mounted) {
@@ -194,7 +194,8 @@ class _OrderDetailsDialogState extends ConsumerState<OrderDetailsDialog> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('${t.error}: $e')));
+          SnackBar(content: Text('${t.error}: $e')),
+        );
       }
     }
   }
@@ -552,7 +553,7 @@ class _OrderDetailsDialogState extends ConsumerState<OrderDetailsDialog> {
                           children: [
                             IconButton(
                               icon: const Icon(Icons.visibility, size: 20),
-                              onPressed: () => _showAttachment(att['file_url']),
+                              onPressed: () => _showAttachment(att['id']),
                               tooltip: t.view,
                             ),
                             if (_canEdit)

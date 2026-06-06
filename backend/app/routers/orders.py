@@ -808,6 +808,41 @@ async def add_attachment(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка загрузки в Firebase Storage: {str(e)}")
 
+@router.get("/attachments/{attachment_id}/file")
+async def get_attachment_file(
+    attachment_id: int,
+    company_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Прокси-эндпоинт для скачивания вложения заказа из Firebase Storage"""
+    import aiohttp
+    from fastapi.responses import Response
+    
+    # Проверка доступа к компании
+    if not await _check_company_access(company_id, current_user, db):
+        raise HTTPException(403, "Access denied")
+    
+    # Получаем вложение
+    result = await db.execute(
+        select(OrderAttachment).where(
+            OrderAttachment.id == attachment_id,
+            OrderAttachment.order.has(Order.company_id == company_id)
+        )
+    )
+    attachment = result.scalar_one_or_none()
+    if not attachment or not attachment.file_url:
+        raise HTTPException(404, "Attachment not found")
+    
+    # Скачиваем файл из Firebase
+    async with aiohttp.ClientSession() as session:
+        async with session.get(attachment.file_url) as resp:
+            if resp.status != 200:
+                raise HTTPException(500, "Failed to fetch file from storage")
+            content = await resp.read()
+            content_type = resp.headers.get('content-type', 'application/octet-stream')
+    
+    return Response(content=content, media_type=content_type)
 # ---------- Получение сотрудников ----------
 @router.get("/company/{company_id}/members")
 async def get_company_members(
