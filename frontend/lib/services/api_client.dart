@@ -502,9 +502,16 @@ Future<JournalEntry> updateJournalEntry(int companyId, int entryId, {
 }
 
 Future<Response> getOrderAttachmentFile(int attachmentId, int companyId) async {
-  return await get('/orders/attachments/$attachmentId/file', queryParameters: {
-    'company_id': companyId,
-  });
+  final token = await getToken();
+  final response = await _dio.get(
+    '/orders/attachments/$attachmentId/file',
+    queryParameters: {'company_id': companyId},
+    options: Options(
+      responseType: ResponseType.bytes,
+      headers: {'Authorization': 'Bearer $token'},
+    ),
+  );
+  return response;
 }
 
   Future<void> changePassword(String oldPassword, String newPassword) async {
