@@ -125,8 +125,16 @@ async def create_journal_entry(
     db.add(new_entry)
     await db.commit()
     await db.refresh(new_entry)
-    return new_entry
 
+    # 🔧 Перезапрашиваем запись с подгрузкой attachments
+    result = await db.execute(
+        select(JournalEntry)
+        .where(JournalEntry.id == new_entry.id)
+        .options(selectinload(JournalEntry.attachments))
+    )
+    new_entry = result.scalar_one()
+
+    return new_entry
 
 @router.patch("/{entry_id}", response_model=JournalEntryResponse)
 async def update_journal_entry(
@@ -174,6 +182,15 @@ async def update_journal_entry(
     entry.updated_at = datetime.utcnow()
     await db.commit()
     await db.refresh(entry)
+
+    # 🔧 Перезапрашиваем запись с подгрузкой attachments
+    result = await db.execute(
+        select(JournalEntry)
+        .where(JournalEntry.id == entry.id)
+        .options(selectinload(JournalEntry.attachments))
+    )
+    entry = result.scalar_one()
+
     return entry
 
 
