@@ -715,6 +715,21 @@
   "addFiles": "Добавить файлы",
   "fileSaved": "Файл сохранён",
   "save": "Сохранить",
-  "shareFileText": "Сохраните файл: {filename}"
+  "shareFileText": "Сохраните файл: {filename}",
+  "documents": "Документы",
+  "visits": "Посещения",
+  "noDocuments": "Нет документов",
+  "noVisits": "Нет посещений",
+  "noTransactions": "Нет операций",
+  "addDocument": "Добавить документ",
+  "documentDescription": "Описание документа",
+  "upload": "Загрузить",
+  "deleteDocumentTitle": "Удалить документ",
+  "deleteDocumentContent": "Вы уверены, что хотите удалить этот документ?",
+  "fileReadError": "Не удалось прочитать файл",
+  "operationsTab": "Операции",
+  "visitsTab": "Посещения",
+  "documentsTab": "Документы",
+  "documentDescriptionHint": "Описание (необязательно)"
 }
 

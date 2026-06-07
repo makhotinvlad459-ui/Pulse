@@ -715,5 +715,20 @@
   "addFiles": "Add files",
   "fileSaved": "File saved successfully",
   "save": "Save",
-  "shareFileText": "Save file: {filename}"
+  "shareFileText": "Save file: {filename}",
+  "documents": "Documents",
+  "visits": "Visits",
+  "noDocuments": "No documents",
+  "noVisits": "No visits",
+  "noTransactions": "No transactions",
+  "addDocument": "Add document",
+  "documentDescription": "Document description",
+  "upload": "Upload",
+  "deleteDocumentTitle": "Delete document",
+  "deleteDocumentContent": "Are you sure you want to delete this document?",
+  "fileReadError": "Could not read file",
+  "operationsTab": "Operations",
+  "visitsTab": "Visits",
+  "documentsTab": "Documents",
+  "documentDescriptionHint": "Optional description"
 }

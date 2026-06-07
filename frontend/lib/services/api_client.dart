@@ -566,6 +566,53 @@ Future<Response> getJournalAttachmentFile(int attachmentId, int companyId) async
   );
 }
 
+Future<List<dynamic>> getCounterpartyDocuments(int counterpartyId, int companyId) async {
+  final response = await get('/counterparties/$counterpartyId/documents', queryParameters: {'company_id': companyId});
+  return response.data;
+}
+
+Future<Map<String, dynamic>> uploadCounterpartyDocument({
+  required int counterpartyId,
+  required int companyId,
+  required Uint8List bytes,
+  required String filename,
+  String? description,
+}) async {
+  final token = await getToken();
+  if (token == null) throw Exception('No token');
+  final formData = FormData.fromMap({
+    'file': MultipartFile.fromBytes(bytes, filename: filename),
+    'description': description,
+  });
+  final response = await _dio.post(
+    '/counterparties/$counterpartyId/documents',
+    data: formData,
+    queryParameters: {'company_id': companyId},
+    options: Options(headers: {'Authorization': 'Bearer $token'}),
+  );
+  return response.data;
+}
+
+Future<Response> getCounterpartyDocumentFile(int documentId, int companyId) async {
+  final token = await getToken();
+  return await _dio.get(
+    '/counterparties/documents/$documentId/file',
+    queryParameters: {'company_id': companyId},
+    options: Options(responseType: ResponseType.bytes, headers: {'Authorization': 'Bearer $token'}),
+  );
+}
+
+// Удалить документ
+Future<void> deleteCounterpartyDocument(int documentId, int companyId) async {
+  await delete('/counterparties/documents/$documentId', queryParameters: {'company_id': companyId});
+}
+
+// Получить записи журнала по контрагенту
+Future<List<dynamic>> getCounterpartyJournalEntries(int counterpartyId, int companyId) async {
+  final response = await get('/counterparties/$counterpartyId/journal', queryParameters: {'company_id': companyId});
+  return response.data;
+}
+
 Future<void> deleteJournalAttachment(int attachmentId, int companyId) async {
   await delete('/journal/attachments/$attachmentId', queryParameters: {'company_id': companyId});
 }

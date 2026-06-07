@@ -6,6 +6,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/locale_provider.dart';
 import '../../models/user.dart';
 import 'package:frontend/l10n/app_localizations.dart';
+import 'counterparties/counterparty_detail_screen.dart';
 
 class CounterpartiesTab extends ConsumerStatefulWidget {
   final int companyId;
@@ -301,7 +302,18 @@ class _CounterpartiesTabState extends ConsumerState<CounterpartiesTab> {
                         return Card(
                           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                           child: ListTile(
-                            onTap: () => _showStats(cp),
+                            onTap: () {
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => CounterpartyDetailScreen(
+        companyId: widget.companyId,
+        counterparty: cp,
+        permissions: widget.permissions,
+      ),
+    ),
+  );
+},
                             title: Text(cp['name'], style: TextStyle(color: colorScheme.onSurface)),
                             subtitle: Text('${t.innLabel}: ${cp['inn'] ?? '—'} | ${t.phoneLabel}: ${cp['phone'] ?? '—'} | ${t.directorLabel}: ${cp['director'] ?? '—'}'),
                             trailing: _canEdit
