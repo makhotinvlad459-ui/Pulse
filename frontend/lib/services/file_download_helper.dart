@@ -11,11 +11,17 @@ class FileDownloadHelper {
   static Future<void> downloadFile(
     Uint8List bytes,
     String filename, {
-    BuildContext? context, // передаём контекст для локализации
+    BuildContext? context,
   }) async {
-    final t = context != null ? AppLocalizations.of(context) : null;
-    final shareText = t?.shareFileText?.replaceAll('{filename}', filename) 
-        ?? 'Save file: $filename';
+    // fallback на случай отсутствия контекста или локализации
+    String shareText = 'Save file: $filename';
+    if (context != null) {
+      final t = AppLocalizations.of(context);
+      if (t != null) {
+        // shareFileText — это метод, принимающий {filename}
+        shareText = t.shareFileText(filename);
+      }
+    }
 
     if (kIsWeb) {
       final blob = html.Blob([bytes]);
