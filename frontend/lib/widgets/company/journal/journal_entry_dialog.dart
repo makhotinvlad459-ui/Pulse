@@ -74,19 +74,28 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
       _manualAmountController.text = '0.00';
     }
     _loadShowcaseItems();
-    _updateManualAmountState();
+  _updateManualAmountState(setStateFlag: false);
   }
 
-  void _updateManualAmountState() {
-    final hasServices = _items.isNotEmpty;
+  void _updateManualAmountState({bool setStateFlag = true}) {
+  final hasServices = _items.isNotEmpty;
+  final computed = _items.fold(0.0, (sum, item) => sum + ((item['total'] ?? 0.0) as double));
+  
+  if (setStateFlag) {
     setState(() {
       _isManualAmountEnabled = !hasServices;
       if (hasServices) {
-        final computed = _items.fold(0.0, (sum, item) => sum + ((item['total'] ?? 0.0) as double));
         _manualAmountController.text = computed.toStringAsFixed(2);
       }
     });
+  } else {
+    _isManualAmountEnabled = !hasServices;
+    if (hasServices) {
+      _manualAmountController.text = computed.toStringAsFixed(2);
+    }
   }
+}
+
 
   Future<void> _loadShowcaseItems() async {
     setState(() => _loadingShowcase = true);
@@ -301,15 +310,29 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
         entryId = res.data['id'];
       }
       // Загружаем новые файлы
-      for (final file in _newFiles) {
-        final compressed = await ImageCompression.compressImage(file.bytes);
-        await api.uploadJournalAttachment(
-          entryId: entryId!,
-          companyId: widget.companyId,
-          bytes: compressed,
-          filename: file.name,
-        );
-      }
+      // Загружаем новые файлы
+for (final file in _newFiles) {
+  Uint8List bytesToUpload = file.bytes;
+  
+  final ext = file.name.split('.').last.toLowerCase();
+  final isImage = ['jpg', 'jpeg', 'png', 'webp'].contains(ext);
+  
+  if (isImage && !kIsWeb) {
+    try {
+      bytesToUpload = await ImageCompression.compressImage(file.bytes);
+    } catch (e) {
+      debugPrint("Ошибка сжатия изображения: $e, отправляем оригинал");
+      bytesToUpload = file.bytes;
+    }
+  }
+  
+  await api.uploadJournalAttachment(
+    entryId: entryId!,
+    companyId: widget.companyId,
+    bytes: bytesToUpload,
+    filename: file.name,
+  );
+}
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       if (mounted) {

@@ -123,7 +123,7 @@ class _JournalTabState extends ConsumerState<JournalTab> {
         'name': item['name'] ?? 'Без названия',
       }).toList(),
       'total_amount': entry.totalAmount,
-      'attachments': entry.attachments,
+      
     };
     final result = await showDialog<Map<String, dynamic>>(
       context: context,

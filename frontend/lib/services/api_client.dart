@@ -532,20 +532,26 @@ Future<Map<String, dynamic>> uploadJournalAttachment({
   required Uint8List bytes,
   required String filename,
 }) async {
-  final token = await getToken();
-  if (token == null) throw Exception('No authentication token');
-  
-  final formData = FormData.fromMap({
-    'file': MultipartFile.fromBytes(bytes, filename: filename),
-  });
-  
-  final response = await _dio.post(
-    '/journal/$entryId/attachments',
-    data: formData,
-    queryParameters: {'company_id': companyId},
-    options: Options(headers: {'Authorization': 'Bearer $token'}),
-  );
-  return response.data;
+  try {
+    final token = await getToken();
+    if (token == null) throw Exception('No authentication token');
+    
+    final formData = FormData.fromMap({
+      'file': MultipartFile.fromBytes(bytes, filename: filename),
+    });
+    
+    final response = await _dio.post(
+      '/journal/$entryId/attachments',
+      data: formData,
+      queryParameters: {'company_id': companyId},
+      options: Options(headers: {'Authorization': 'Bearer $token'}),
+    );
+    return response.data as Map<String, dynamic>;
+  } on DioException catch (e) {
+    throw Exception(_getLocalizedErrorMessage(e));
+  } catch (e) {
+    throw Exception('Upload error: $e');
+  }
 }
 
 Future<Response> getJournalAttachmentFile(int attachmentId, int companyId) async {
