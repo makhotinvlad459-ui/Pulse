@@ -111,6 +111,7 @@ class _JournalTabState extends ConsumerState<JournalTab> {
   Future<void> _editEntry(JournalEntry entry) async {
     if (!widget.permissions.contains('edit_journal')) return;
     final entryMap = {
+      'id': entry.id,
       'datetime_start': entry.datetimeStart.toIso8601String(),
       'datetime_end': entry.datetimeEnd.toIso8601String(),
       'description': entry.description ?? '',
