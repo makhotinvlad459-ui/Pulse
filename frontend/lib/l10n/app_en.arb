@@ -712,5 +712,7 @@
   "password": "Password",
   "cannotPreview": "Preview not available",
   "attachmentsLabel": "Attachments",
-  "addFiles": "Add files"
+  "addFiles": "Add files",
+  "fileSaved": "File saved successfully",
+  "save": "Save"
 }

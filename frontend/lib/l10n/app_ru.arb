@@ -712,6 +712,8 @@
   "password": "Пароль",
   "cannotPreview": "Предпросмотр недоступен",
   "attachmentsLabel": "Вложения",
-  "addFiles": "Добавить файлы"
+  "addFiles": "Добавить файлы",
+  "fileSaved": "Файл сохранён",
+  "save": "Сохранить"
 }
 

@@ -168,13 +168,17 @@ class _JournalTabState extends ConsumerState<JournalTab> {
     }
   }
 
-  Future<void> _viewAttachment(int attachmentId, String fileName) async {
-    final t = AppLocalizations.of(context)!;
+  Future<void> _viewAttachment(int attachmentId, String fileUrl, String fileName) async {
+  final t = AppLocalizations.of(context)!;
+  final ext = _getFileExtension(fileName);
+  final isImage = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].contains(ext);
+  
+  if (isImage) {
+    // Для изображений – открываем через прокси с увеличенным просмотром
     try {
       final response = await _apiClient.getJournalAttachmentFile(attachmentId, widget.companyId);
       final bytes = response.data as List<int>;
       final uint8list = Uint8List.fromList(bytes);
-      final ext = _getFileExtension(fileName);
       if (mounted) {
         showDialog(
           context: context,
@@ -188,27 +192,24 @@ class _JournalTabState extends ConsumerState<JournalTab> {
                 ),
                 Expanded(
                   child: InteractiveViewer(
-                    child: (() {
-                      if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].contains(ext)) {
-                        return Image.memory(uint8list);
-                      } else {
-                        return Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.insert_drive_file, size: 64, color: Theme.of(context).colorScheme.primary),
-                              const SizedBox(height: 16),
-                              Text(t.cannotPreview, textAlign: TextAlign.center),
-                            ],
-                          ),
-                        );
-                      }
-                    })(),
+                    child: Image.memory(uint8list),
                   ),
                 ),
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: Text(t.close),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: Text(t.close),
+                    ),
+                    TextButton(
+                      onPressed: () async {
+                        await FileDownloadHelper.downloadFile(uint8list, fileName);
+                        if (mounted) Navigator.pop(context);
+                      },
+                      child: Text(t.save),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -222,7 +223,29 @@ class _JournalTabState extends ConsumerState<JournalTab> {
         );
       }
     }
+  } else {
+    // Для документов – скачиваем напрямую из Firebase (без прокси)
+    try {
+      // Получаем байты по прямой ссылке (можно и через прокси, но быстрее напрямую)
+      final response = await _apiClient.getFile(fileUrl);
+      final bytes = response.data is List<int>
+          ? Uint8List.fromList(response.data as List<int>)
+          : Uint8List.fromList((response.data as String).codeUnits);
+      await FileDownloadHelper.downloadFile(bytes, fileName);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(t.fileSaved)),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${t.error}: ${e.toString()}')),
+        );
+      }
+    }
   }
+}
 
   Future<void> _deleteAttachment(JournalEntry entry, int attachmentId) async {
     if (!widget.permissions.contains('edit_journal')) return;
@@ -251,10 +274,10 @@ class _JournalTabState extends ConsumerState<JournalTab> {
   }
 
   String _getFileExtension(String filename) {
-    final parts = filename.split('.');
-    return parts.length > 1 ? parts.last.toLowerCase() : '';
-  }
-
+  final parts = filename.split('.');
+  if (parts.length < 2) return '';
+  return parts.last.toLowerCase();
+}
   Icon _getFileIcon(String filename) {
     final ext = _getFileExtension(filename);
     if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].contains(ext)) {
