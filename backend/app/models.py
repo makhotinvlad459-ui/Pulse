@@ -427,6 +427,21 @@ class OrderAttachment(Base):
     order: Mapped["Order"] = relationship(back_populates="attachments")
     uploader: Mapped["User"] = relationship()    
 
+class CounterpartyDocument(Base):
+    __tablename__ = "counterparty_documents"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    counterparty_id: Mapped[int] = mapped_column(ForeignKey("counterparties.id", ondelete="CASCADE"), nullable=False)
+    file_url: Mapped[str] = mapped_column(String(500), nullable=False)
+    uploaded_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    file_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    # relationships
+    counterparty: Mapped["Counterparty"] = relationship(back_populates="documents")
+    uploader: Mapped["User"] = relationship()
+
 class Counterparty(Base):
     __tablename__ = "counterparties"
 
@@ -439,7 +454,8 @@ class Counterparty(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    company: Mapped["Company"] = relationship()    
+    company: Mapped["Company"] = relationship()
+    documents: Mapped[List["CounterpartyDocument"]] = relationship(back_populates="counterparty", cascade="all, delete-orphan")    
 
 class PasswordResetToken(Base):
     __tablename__ = "password_reset_tokens"
