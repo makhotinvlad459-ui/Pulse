@@ -37,9 +37,8 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
   final TextEditingController _manualAmountController = TextEditingController();
   bool _isManualAmountEnabled = true;
 
-  // Вложения
-  List<Map<String, dynamic>> _attachments = []; // существующие (при редактировании)
-  List<({Uint8List bytes, String name})> _newFiles = []; // новые файлы
+  List<Map<String, dynamic>> _attachments = [];
+  List<({Uint8List bytes, String name})> _newFiles = [];
   bool _uploading = false;
 
   @override
@@ -74,47 +73,44 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
       _manualAmountController.text = '0.00';
     }
     _loadShowcaseItems();
-  _updateManualAmountState(setStateFlag: false);
+    _updateManualAmountState(setStateFlag: false);
   }
 
   void _updateManualAmountState({bool setStateFlag = true}) {
-  final hasServices = _items.isNotEmpty;
-  final computed = _items.fold(0.0, (sum, item) => sum + ((item['total'] ?? 0.0) as double));
-  
-  if (setStateFlag) {
-    setState(() {
+    final hasServices = _items.isNotEmpty;
+    final computed = _items.fold(0.0, (sum, item) => sum + ((item['total'] ?? 0.0) as double));
+    if (setStateFlag) {
+      setState(() {
+        _isManualAmountEnabled = !hasServices;
+        if (hasServices) _manualAmountController.text = computed.toStringAsFixed(2);
+      });
+    } else {
       _isManualAmountEnabled = !hasServices;
-      if (hasServices) {
-        _manualAmountController.text = computed.toStringAsFixed(2);
-      }
-    });
-  } else {
-    _isManualAmountEnabled = !hasServices;
-    if (hasServices) {
-      _manualAmountController.text = computed.toStringAsFixed(2);
+      if (hasServices) _manualAmountController.text = computed.toStringAsFixed(2);
     }
   }
-}
-
 
   Future<void> _loadShowcaseItems() async {
+    if (!mounted) return;
     setState(() => _loadingShowcase = true);
     try {
       final api = ApiClient();
       final res = await api.get('/showcase', queryParameters: {'company_id': widget.companyId});
-      setState(() {
-        _showcaseItems = List<Map<String, dynamic>>.from(res.data);
-        _loadingShowcase = false;
-      });
+      if (mounted) {
+        setState(() {
+          _showcaseItems = List<Map<String, dynamic>>.from(res.data);
+          _loadingShowcase = false;
+        });
+      }
     } catch (e) {
-      setState(() => _loadingShowcase = false);
+      if (mounted) setState(() => _loadingShowcase = false);
     }
   }
 
   Future<void> _selectTime(bool isStart) async {
     final initialTime = TimeOfDay.fromDateTime(isStart ? _startDateTime : _endDateTime);
     final picked = await showTimePicker(context: context, initialTime: initialTime);
-    if (picked != null) {
+    if (picked != null && mounted) {
       setState(() {
         if (isStart) {
           _startDateTime = DateTime(
@@ -168,7 +164,7 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
         ),
       ),
     );
-    if (selected != null) {
+    if (selected != null && mounted) {
       setState(() {
         _items.add({
           'showcase_item_id': selected['id'],
@@ -183,6 +179,7 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
   }
 
   void _removeService(int index) {
+    if (!mounted) return;
     setState(() {
       _items.removeAt(index);
       _updateManualAmountState();
@@ -190,6 +187,7 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
   }
 
   void _updateService(int index, {int? quantity, double? priceAtTime}) {
+    if (!mounted) return;
     setState(() {
       if (quantity != null) _items[index]['quantity'] = quantity;
       if (priceAtTime != null) _items[index]['price_at_time'] = priceAtTime;
@@ -207,7 +205,6 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
     return double.tryParse(_manualAmountController.text) ?? 0.0;
   }
 
-  // Выбор файлов
   Future<void> _pickFiles() async {
     final t = AppLocalizations.of(context)!;
     final result = await FilePicker.platform.pickFiles(
@@ -215,7 +212,7 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
       allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt'],
       allowMultiple: true,
     );
-    if (result != null) {
+    if (result != null && mounted) {
       setState(() {
         for (final file in result.files) {
           if (file.bytes != null) {
@@ -223,19 +220,22 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
           }
         }
       });
-    } else if (!kIsWeb) {
+    } else if (!kIsWeb && mounted) {
       final picker = ImagePicker();
       final picked = await picker.pickImage(source: ImageSource.gallery);
       if (picked != null) {
         final bytes = await picked.readAsBytes();
-        setState(() {
-          _newFiles.add((bytes: bytes, name: picked.name));
-        });
+        if (mounted) {
+          setState(() {
+            _newFiles.add((bytes: bytes, name: picked.name));
+          });
+        }
       }
     }
   }
 
   void _removeNewFile(int index) {
+    if (!mounted) return;
     setState(() {
       _newFiles.removeAt(index);
     });
@@ -254,15 +254,19 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
         ],
       ),
     );
-    if (confirm == true) {
+    if (confirm == true && mounted) {
       final api = ApiClient();
       try {
         await api.deleteJournalAttachment(attachmentId, widget.companyId);
-        setState(() {
-          _attachments.removeWhere((att) => att['id'] == attachmentId);
-        });
+        if (mounted) {
+          setState(() {
+            _attachments.removeWhere((att) => att['id'] == attachmentId);
+          });
+        }
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+        }
       }
     }
   }
@@ -273,66 +277,65 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.endTimeAfterStart)));
       return;
     }
+    if (!mounted) return;
     setState(() => _uploading = true);
     final api = ApiClient();
     try {
       int? entryId;
+      final List<Map<String, dynamic>> itemsToSend = _items.map((item) => {
+        'showcase_item_id': item['showcase_item_id'],
+        'quantity': item['quantity'],
+        'price_at_time': item['price_at_time'],
+        'name': item['name'],
+      }).toList();
+
       if (widget.initialEntry != null) {
-        // Обновление существующей записи
-        await api.patch('/journal/${widget.initialEntry['id']}', queryParameters: {'company_id': widget.companyId}, data: {
-          'datetime_start': _startDateTime.toIso8601String(),
-          'datetime_end': _endDateTime.toIso8601String(),
-          'description': _descriptionController.text.trim(),
-          'counterparty': _counterpartyController.text.trim(),
-          'items': _items.map((item) => {
-            'showcase_item_id': item['showcase_item_id'],
-            'quantity': item['quantity'],
-            'price_at_time': item['price_at_time'],
-            'name': item['name'],
-          }).toList(),
-          'total_amount': _finalAmount,
-        });
+        await api.updateJournalEntry(
+          widget.companyId,
+          widget.initialEntry['id'],
+          start: _startDateTime,
+          end: _endDateTime,
+          description: _descriptionController.text.trim(),
+          counterparty: _counterpartyController.text.trim(),
+          items: itemsToSend.isNotEmpty ? itemsToSend : null,
+          totalAmount: _finalAmount,
+        );
         entryId = widget.initialEntry['id'];
       } else {
-        final res = await api.post('/journal/', queryParameters: {'company_id': widget.companyId}, data: {
-          'datetime_start': _startDateTime.toIso8601String(),
-          'datetime_end': _endDateTime.toIso8601String(),
-          'description': _descriptionController.text.trim(),
-          'counterparty': _counterpartyController.text.trim(),
-          'items': _items.map((item) => {
-            'showcase_item_id': item['showcase_item_id'],
-            'quantity': item['quantity'],
-            'price_at_time': item['price_at_time'],
-            'name': item['name'],
-          }).toList(),
-          'total_amount': _finalAmount,
-        });
-        entryId = res.data['id'];
+        final newEntry = await api.createJournalEntry(
+          widget.companyId,
+          start: _startDateTime,
+          end: _endDateTime,
+          description: _descriptionController.text.trim(),
+          counterparty: _counterpartyController.text.trim(),
+          items: itemsToSend.isNotEmpty ? itemsToSend : null,
+          totalAmount: _finalAmount,
+        );
+        entryId = newEntry.id;
       }
-      // Загружаем новые файлы
-      // Загружаем новые файлы
-for (final file in _newFiles) {
-  Uint8List bytesToUpload = file.bytes;
-  
-  final ext = file.name.split('.').last.toLowerCase();
-  final isImage = ['jpg', 'jpeg', 'png', 'webp'].contains(ext);
-  
-  if (isImage && !kIsWeb) {
-    try {
-      bytesToUpload = await ImageCompression.compressImage(file.bytes);
-    } catch (e) {
-      debugPrint("Ошибка сжатия изображения: $e, отправляем оригинал");
-      bytesToUpload = file.bytes;
-    }
-  }
-  
-  await api.uploadJournalAttachment(
-    entryId: entryId!,
-    companyId: widget.companyId,
-    bytes: bytesToUpload,
-    filename: file.name,
-  );
-}
+
+      if (entryId == null) {
+        throw Exception('Не удалось сохранить запись журнала');
+      }
+
+      for (final file in _newFiles) {
+        Uint8List bytesToUpload = file.bytes;
+        final ext = file.name.split('.').last.toLowerCase();
+        final isImage = ['jpg', 'jpeg', 'png', 'webp'].contains(ext);
+        if (isImage && !kIsWeb) {
+          try {
+            bytesToUpload = await ImageCompression.compressImage(file.bytes);
+          } catch (e) {
+            debugPrint("Ошибка сжатия изображения: $e, отправляем оригинал");
+          }
+        }
+        await api.uploadJournalAttachment(
+          entryId: entryId,
+          companyId: widget.companyId,
+          bytes: bytesToUpload,
+          filename: file.name,
+        );
+      }
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       if (mounted) {
@@ -465,9 +468,7 @@ for (final file in _newFiles) {
                       enabled: _isManualAmountEnabled,
                     ),
                     onChanged: (value) {
-                      if (_items.isEmpty) {
-                        setState(() {});
-                      }
+                      if (_items.isEmpty && mounted) setState(() {});
                     },
                   ),
                   const SizedBox(height: 16),
@@ -482,7 +483,6 @@ for (final file in _newFiles) {
                       ),
                     ],
                   ),
-                  // Новые файлы
                   if (_newFiles.isNotEmpty)
                     Column(
                       children: _newFiles.asMap().entries.map((entry) {
@@ -499,7 +499,6 @@ for (final file in _newFiles) {
                         );
                       }).toList(),
                     ),
-                  // Существующие вложения
                   if (_attachments.isNotEmpty)
                     Column(
                       children: _attachments.map((att) {
