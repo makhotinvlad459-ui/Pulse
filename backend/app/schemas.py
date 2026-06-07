@@ -290,6 +290,16 @@ class JournalEntryUpdate(BaseModel):
     status: Optional[JournalEntryStatus] = None
     items: Optional[List[JournalEntryItemCreate]] = None
 
+class JournalAttachmentResponse(BaseModel):
+    id: int
+    file_url: str
+    uploaded_by: int
+    uploaded_at: datetime
+    file_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True    
+
 class JournalEntryResponse(BaseModel):
     id: int
     company_id: int
@@ -308,6 +318,7 @@ class JournalEntryResponse(BaseModel):
     creator_name: Optional[str] = None
     showcase_item_name: Optional[str] = None  # для отображения
     items: Optional[List[JournalEntryItemCreate]] = None
+    attachments: List[JournalAttachmentResponse] = []
 
     class Config:
         from_attributes = True        

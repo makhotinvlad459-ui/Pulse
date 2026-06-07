@@ -85,7 +85,7 @@ class _JournalTabState extends ConsumerState<JournalTab> {
   }
 
   Future<void> _createEntry() async {
-    final result = await showDialog<Map<String, dynamic>>(
+    final result = await showDialog<bool>(
       context: context,
       builder: (context) => JournalEntryDialog(
         companyId: widget.companyId,
@@ -93,17 +93,7 @@ class _JournalTabState extends ConsumerState<JournalTab> {
         permissions: widget.permissions,
       ),
     );
-    if (result != null && mounted) {
-      final notifier = ref.read(journalProvider.notifier);
-      await notifier.createEntry(
-        widget.companyId,
-        start: result['start'],
-        end: result['end'],
-        description: result['description'],
-        counterparty: result['counterparty'],
-        items: result['items'],
-        totalAmount: result['totalAmount'],
-      );
+    if (result == true && mounted) {
       await _loadEntriesForMonth(_focusedDay);
     }
   }
@@ -123,9 +113,8 @@ class _JournalTabState extends ConsumerState<JournalTab> {
         'name': item['name'] ?? 'Без названия',
       }).toList(),
       'total_amount': entry.totalAmount,
-      
     };
-    final result = await showDialog<Map<String, dynamic>>(
+    final result = await showDialog<bool>(
       context: context,
       builder: (context) => JournalEntryDialog(
         companyId: widget.companyId,
@@ -133,18 +122,7 @@ class _JournalTabState extends ConsumerState<JournalTab> {
         permissions: widget.permissions,
       ),
     );
-    if (result != null && mounted) {
-      final notifier = ref.read(journalProvider.notifier);
-      await notifier.updateEntry(
-        widget.companyId,
-        entry.id,
-        start: result['start'],
-        end: result['end'],
-        description: result['description'],
-        counterparty: result['counterparty'],
-        items: result['items'],
-        totalAmount: result['totalAmount'],
-      );
+    if (result == true && mounted) {
       await _loadEntriesForMonth(_focusedDay);
     }
   }
@@ -190,12 +168,13 @@ class _JournalTabState extends ConsumerState<JournalTab> {
     }
   }
 
-  Future<void> _viewAttachment(int attachmentId) async {
+  Future<void> _viewAttachment(int attachmentId, String fileName) async {
     final t = AppLocalizations.of(context)!;
     try {
       final response = await _apiClient.getJournalAttachmentFile(attachmentId, widget.companyId);
       final bytes = response.data as List<int>;
       final uint8list = Uint8List.fromList(bytes);
+      final ext = _getFileExtension(fileName);
       if (mounted) {
         showDialog(
           context: context,
@@ -210,7 +189,6 @@ class _JournalTabState extends ConsumerState<JournalTab> {
                 Expanded(
                   child: InteractiveViewer(
                     child: (() {
-                      final ext = _getFileExtension(_getFileNameFromUrl(response.requestOptions.path));
                       if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].contains(ext)) {
                         return Image.memory(uint8list);
                       } else {
@@ -263,19 +241,13 @@ class _JournalTabState extends ConsumerState<JournalTab> {
     if (confirm == true) {
       try {
         await _apiClient.deleteJournalAttachment(attachmentId, widget.companyId);
-        // Обновляем локальную запись (удаляем вложение из списка)
-        final notifier = ref.read(journalProvider.notifier);
-        // Просто перезагружаем записи за месяц
         await _loadEntriesForMonth(_focusedDay);
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+        }
       }
     }
-  }
-
-  String _getFileNameFromUrl(String path) {
-    final segments = path.split('/');
-    return segments.last;
   }
 
   String _getFileExtension(String filename) {
@@ -448,7 +420,6 @@ class _JournalTabState extends ConsumerState<JournalTab> {
               Text('${t.sumLabel}: ${entry.totalAmount.toStringAsFixed(2)} ${t.currencySymbol}', style: const TextStyle(fontSize: 11)),
             if (isCompleted && entry.transactionId != null)
               Text('${t.transactionLabel}: #${entry.transactionId}', style: TextStyle(fontSize: 10, color: Colors.green)),
-            // Вложения
             if (attachments.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 6),
@@ -458,7 +429,7 @@ class _JournalTabState extends ConsumerState<JournalTab> {
                   children: attachments.map((att) {
                     final fileName = att['file_name'] ?? 'file';
                     return GestureDetector(
-                      onTap: () => _viewAttachment(att['id']),
+                      onTap: () => _viewAttachment(att['id'], fileName),
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(

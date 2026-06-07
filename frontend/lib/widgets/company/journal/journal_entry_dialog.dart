@@ -314,9 +314,7 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
         entryId = newEntry.id;
       }
 
-      if (entryId == null) {
-        throw Exception('Не удалось сохранить запись журнала');
-      }
+      if (entryId == null) throw Exception('Entry ID is null');
 
       for (final file in _newFiles) {
         Uint8List bytesToUpload = file.bytes;
@@ -326,7 +324,7 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
           try {
             bytesToUpload = await ImageCompression.compressImage(file.bytes);
           } catch (e) {
-            debugPrint("Ошибка сжатия изображения: $e, отправляем оригинал");
+            debugPrint("Ошибка сжатия: $e, отправляем оригинал");
           }
         }
         await api.uploadJournalAttachment(
@@ -336,13 +334,14 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
           filename: file.name,
         );
       }
+
       if (mounted) Navigator.pop(context, true);
-    } catch (e) {
+    } catch (e, stack) {
+      debugPrint("Ошибка сохранения: $e\n$stack");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+        setState(() => _uploading = false);
       }
-    } finally {
-      if (mounted) setState(() => _uploading = false);
     }
   }
 

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload   # <-- ДОБАВЛЕН ИМПОРТ
 from typing import List, Optional
 from datetime import datetime
 import json
@@ -81,7 +82,9 @@ async def get_journal_entries(
         query = query.where(JournalEntry.datetime_start >= start_date)
     if end_date:
         query = query.where(JournalEntry.datetime_start <= end_date)
-    query = query.order_by(JournalEntry.datetime_start)
+    query = query.order_by(JournalEntry.datetime_start).options(
+        selectinload(JournalEntry.attachments)   # <-- ПОДГРУЖАЕМ ВЛОЖЕНИЯ
+    )
     result = await db.execute(query)
     entries = result.scalars().all()
     return entries
@@ -318,7 +321,6 @@ async def upload_journal_attachment(
     if not await _has_permission(company_id, current_user, "edit_journal", db):
         raise HTTPException(403, "No permission to edit journal")
 
-    # Проверка существования записи журнала
     result = await db.execute(
         select(JournalEntry).where(
             JournalEntry.id == entry_id,
@@ -329,14 +331,12 @@ async def upload_journal_attachment(
     if not entry:
         raise HTTPException(404, "Journal entry not found")
 
-    # Валидация размера
     file.file.seek(0, 2)
     size = file.file.tell()
     if size > MAX_FILE_SIZE:
         raise HTTPException(400, detail=f"File too large (max {MAX_FILE_SIZE // (1024*1024)} MB)")
     await file.seek(0)
 
-    # Проверка расширения
     ext = os.path.splitext(file.filename)[1].lower()
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(400, detail="File type not allowed. Allowed: images, PDF, Word, Excel, TXT")
@@ -423,7 +423,7 @@ async def delete_journal_attachment(
     if not attachment:
         raise HTTPException(404, "Attachment not found")
 
-    # Опционально: удалить файл из Firebase Storage
+    # Опционально: удалить файл из Firebase Storage (раскомментируйте при необходимости)
     # try:
     #     bucket = storage.bucket()
     #     path = attachment.file_url.split('/o/')[-1].split('?')[0]
