@@ -5,6 +5,8 @@ from enum import Enum as PyEnum
 from app.database import Base
 from sqlalchemy import UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
+from typing import List, Optional
+
 
 class UserRole(PyEnum):
     FOUNDER = "founder"
@@ -468,6 +470,20 @@ class JournalEntryStatus(str, PyEnum):
     COMPLETED = "completed"
     CANCELLED = "cancelled"
 
+class JournalAttachment(Base):
+    __tablename__ = "journal_attachments"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    journal_entry_id: Mapped[int] = mapped_column(ForeignKey("journal_entries.id", ondelete="CASCADE"), nullable=False)
+    file_url: Mapped[str] = mapped_column(String(500), nullable=False)
+    uploaded_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    file_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # relationships
+    journal_entry: Mapped["JournalEntry"] = relationship(back_populates="attachments")
+    uploader: Mapped["User"] = relationship()    
+
 # Затем модель
 class JournalEntry(Base):
     __tablename__ = "journal_entries"
@@ -492,4 +508,6 @@ class JournalEntry(Base):
     company: Mapped["Company"] = relationship(foreign_keys=[company_id])
     transaction: Mapped["Transaction"] = relationship(foreign_keys=[transaction_id])
     creator: Mapped["User"] = relationship(foreign_keys=[created_by])
-    showcase_item: Mapped["ShowcaseItem"] = relationship()    
+    showcase_item: Mapped["ShowcaseItem"] = relationship()  
+    attachments: Mapped[List["JournalAttachment"]] = relationship(back_populates="journal_entry", cascade="all, delete-orphan")  
+
