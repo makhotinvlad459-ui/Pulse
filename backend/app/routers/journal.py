@@ -1,17 +1,28 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List, Optional
 from datetime import datetime
 import json
+import os
+import uuid
 from sqlalchemy.orm.attributes import flag_modified
 from app.database import get_db
-from app.models import User, Company, CompanyMember, JournalEntry, JournalEntryStatus, ShowcaseItem, Account, Permission, CompanyMemberPermission
+from app.models import User, Company, CompanyMember, JournalEntry, JournalEntryStatus, ShowcaseItem, Account, Permission, CompanyMemberPermission, JournalAttachment
 from app.schemas import JournalEntryCreate, JournalEntryUpdate, JournalEntryResponse, TransactionCreate, TransactionType, JournalEntryItemCreate
 from app.deps import get_current_user
 from app.routers.transactions import create_transaction
+from firebase_admin import storage
+import aiohttp
+from fastapi.responses import Response
 
 router = APIRouter(prefix="/journal", tags=["journal"])
+
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+ALLOWED_EXTENSIONS = {
+    '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp',
+    '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.txt', '.rtf'
+}
 
 
 def _to_naive(dt: datetime | None) -> datetime | None:
@@ -140,13 +151,10 @@ async def update_journal_entry(
     if 'datetime_end' in update_data:
         update_data['datetime_end'] = _to_naive(update_data['datetime_end'])
     
-    # Обработка items: сохраняем названия как есть (фронтенд их присылает)
     if 'items' in update_data and update_data['items'] is not None:
-        # Преобразуем объекты в словари
         items_dicts = []
         for item in entry_data.items:
             item_dict = item.dict()
-            # Если имя не пришло, попробуем получить из БД
             if not item_dict.get('name') and item_dict.get('showcase_item_id'):
                 showcase = await db.get(ShowcaseItem, item_dict['showcase_item_id'])
                 if showcase:
@@ -157,7 +165,6 @@ async def update_journal_entry(
     for key, value in update_data.items():
         setattr(entry, key, value)
     
-    # Явно помечаем поле items как изменённое, если оно было обновлено
     if 'items' in update_data:
         flag_modified(entry, 'items')
     
@@ -184,7 +191,6 @@ async def delete_journal_entry(
     if not entry:
         raise HTTPException(status_code=404, detail="Entry not found")
     if entry.status != JournalEntryStatus.PLANNED:
-        # Если запись завершена и есть транзакция, удаляем транзакцию (она удалит и запись)
         if entry.transaction_id:
             from app.routers.transactions import delete_transaction
             await delete_transaction(entry.transaction_id, company_id, db, current_user)
@@ -295,3 +301,137 @@ async def complete_journal_entry(
     await db.commit()
 
     return {"detail": "Entry completed and transaction created", "transaction_id": created_trans.id}
+
+
+# ========== ВЛОЖЕНИЯ ЖУРНАЛА ==========
+
+@router.post("/{entry_id}/attachments")
+async def upload_journal_attachment(
+    entry_id: int,
+    company_id: int,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if not await _check_company_access(company_id, current_user, db):
+        raise HTTPException(403, "Access denied")
+    if not await _has_permission(company_id, current_user, "edit_journal", db):
+        raise HTTPException(403, "No permission to edit journal")
+
+    # Проверка существования записи журнала
+    result = await db.execute(
+        select(JournalEntry).where(
+            JournalEntry.id == entry_id,
+            JournalEntry.company_id == company_id
+        )
+    )
+    entry = result.scalar_one_or_none()
+    if not entry:
+        raise HTTPException(404, "Journal entry not found")
+
+    # Валидация размера
+    file.file.seek(0, 2)
+    size = file.file.tell()
+    if size > MAX_FILE_SIZE:
+        raise HTTPException(400, detail=f"File too large (max {MAX_FILE_SIZE // (1024*1024)} MB)")
+    await file.seek(0)
+
+    # Проверка расширения
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(400, detail="File type not allowed. Allowed: images, PDF, Word, Excel, TXT")
+
+    try:
+        contents = await file.read()
+        bucket = storage.bucket()
+        blob_path = f"companies/{company_id}/journal/{entry_id}/{uuid.uuid4()}{ext}"
+        blob = bucket.blob(blob_path)
+
+        blob.upload_from_string(contents, content_type=file.content_type)
+        blob.make_public()
+        public_url = blob.public_url
+
+        attachment = JournalAttachment(
+            journal_entry_id=entry_id,
+            file_url=public_url,
+            uploaded_by=current_user.id,
+            file_name=file.filename
+        )
+        db.add(attachment)
+        await db.commit()
+        await db.refresh(attachment)
+
+        return {
+            "id": attachment.id,
+            "file_url": attachment.file_url,
+            "uploaded_by": attachment.uploaded_by,
+            "uploaded_at": attachment.uploaded_at.isoformat() if attachment.uploaded_at else None,
+            "file_name": attachment.file_name
+        }
+    except Exception as e:
+        raise HTTPException(500, detail=f"Upload failed: {str(e)}")
+
+
+@router.get("/attachments/{attachment_id}/file")
+async def get_journal_attachment_file(
+    attachment_id: int,
+    company_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if not await _check_company_access(company_id, current_user, db):
+        raise HTTPException(403, "Access denied")
+
+    result = await db.execute(
+        select(JournalAttachment).where(
+            JournalAttachment.id == attachment_id,
+            JournalAttachment.journal_entry.has(JournalEntry.company_id == company_id)
+        )
+    )
+    attachment = result.scalar_one_or_none()
+    if not attachment or not attachment.file_url:
+        raise HTTPException(404, "Attachment not found")
+
+    async with aiohttp.ClientSession() as session:
+        async with session.get(attachment.file_url) as resp:
+            if resp.status != 200:
+                raise HTTPException(500, "Failed to fetch file")
+            content = await resp.read()
+            content_type = resp.headers.get('content-type', 'application/octet-stream')
+    return Response(content=content, media_type=content_type)
+
+
+@router.delete("/attachments/{attachment_id}")
+async def delete_journal_attachment(
+    attachment_id: int,
+    company_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if not await _check_company_access(company_id, current_user, db):
+        raise HTTPException(403, "Access denied")
+    if not await _has_permission(company_id, current_user, "edit_journal", db):
+        raise HTTPException(403, "No permission to edit journal")
+
+    result = await db.execute(
+        select(JournalAttachment).where(
+            JournalAttachment.id == attachment_id,
+            JournalAttachment.journal_entry.has(JournalEntry.company_id == company_id)
+        )
+    )
+    attachment = result.scalar_one_or_none()
+    if not attachment:
+        raise HTTPException(404, "Attachment not found")
+
+    # Опционально: удалить файл из Firebase Storage
+    # try:
+    #     bucket = storage.bucket()
+    #     path = attachment.file_url.split('/o/')[-1].split('?')[0]
+    #     blob = bucket.blob(path)
+    #     blob.delete()
+    # except Exception as e:
+    #     print(f"Failed to delete from Firebase: {e}")
+
+    await db.delete(attachment)
+    await db.commit()
+    return {"detail": "Attachment deleted"}

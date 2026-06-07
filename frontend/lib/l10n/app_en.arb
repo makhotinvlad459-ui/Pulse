@@ -709,5 +709,8 @@
   "deleteAccount": "Delete Account",
   "deleteAccountWarning": "Are you sure? This action is irreversible. Enter your password to confirm.",
   "accountDeleted": "Account deleted. You will be redirected to login.",
-  "password": "Password"
+  "password": "Password",
+  "cannotPreview": "Preview not available",
+  "attachmentsLabel": "Attachments",
+  "addFiles": "Add files"
 }

@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -7,6 +8,7 @@ import '../../../providers/journal_provider.dart';
 import '../../../l10n/app_localizations.dart';
 import 'journal_entry_dialog.dart';
 import 'journal_complete_dialog.dart';
+import '../../../services/api_client.dart';
 
 class JournalTab extends ConsumerStatefulWidget {
   final int companyId;
@@ -29,6 +31,7 @@ class _JournalTabState extends ConsumerState<JournalTab> {
   DateTime _selectedDay = DateTime.now();
   final Map<DateTime, List<JournalEntry>> _entriesMap = {};
   bool _loading = false;
+  final ApiClient _apiClient = ApiClient();
 
   DateTime _normalize(DateTime dt) => DateTime(dt.year, dt.month, dt.day);
 
@@ -113,12 +116,13 @@ class _JournalTabState extends ConsumerState<JournalTab> {
       'description': entry.description ?? '',
       'counterparty': entry.counterparty ?? '',
       'items': entry.items?.map((item) => {
-  'showcase_item_id': item['showcase_item_id'],
-  'quantity': item['quantity'],
-  'price_at_time': item['price_at_time'],
-  'name': item['name'] ?? 'Без названия',
-}).toList(),
+        'showcase_item_id': item['showcase_item_id'],
+        'quantity': item['quantity'],
+        'price_at_time': item['price_at_time'],
+        'name': item['name'] ?? 'Без названия',
+      }).toList(),
       'total_amount': entry.totalAmount,
+      'attachments': entry.attachments,
     };
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
@@ -179,10 +183,119 @@ class _JournalTabState extends ConsumerState<JournalTab> {
     if (accountId != null && mounted) {
       final notifier = ref.read(journalProvider.notifier);
       await notifier.completeEntry(widget.companyId, entry.id, accountId);
-      widget.onRefresh?.call(); 
+      widget.onRefresh?.call();
       await _loadEntriesForMonth(_focusedDay);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.entryCompleted)));
     }
+  }
+
+  Future<void> _viewAttachment(int attachmentId) async {
+    final t = AppLocalizations.of(context)!;
+    try {
+      final response = await _apiClient.getJournalAttachmentFile(attachmentId, widget.companyId);
+      final bytes = response.data as List<int>;
+      final uint8list = Uint8List.fromList(bytes);
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => Dialog(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Text(t.filePreview, style: const TextStyle(fontWeight: FontWeight.bold)),
+                ),
+                Expanded(
+                  child: InteractiveViewer(
+                    child: (() {
+                      final ext = _getFileExtension(_getFileNameFromUrl(response.requestOptions.path));
+                      if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].contains(ext)) {
+                        return Image.memory(uint8list);
+                      } else {
+                        return Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.insert_drive_file, size: 64, color: Theme.of(context).colorScheme.primary),
+                              const SizedBox(height: 16),
+                              Text(t.cannotPreview, textAlign: TextAlign.center),
+                            ],
+                          ),
+                        );
+                      }
+                    })(),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text(t.close),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${t.error}: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteAttachment(JournalEntry entry, int attachmentId) async {
+    if (!widget.permissions.contains('edit_journal')) return;
+    final t = AppLocalizations.of(context)!;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(t.deleteFileTitle),
+        content: Text(t.deleteFileContent),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(t.cancel)),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: Text(t.delete, style: const TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      try {
+        await _apiClient.deleteJournalAttachment(attachmentId, widget.companyId);
+        // Обновляем локальную запись (удаляем вложение из списка)
+        final notifier = ref.read(journalProvider.notifier);
+        // Просто перезагружаем записи за месяц
+        await _loadEntriesForMonth(_focusedDay);
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+      }
+    }
+  }
+
+  String _getFileNameFromUrl(String path) {
+    final segments = path.split('/');
+    return segments.last;
+  }
+
+  String _getFileExtension(String filename) {
+    final parts = filename.split('.');
+    return parts.length > 1 ? parts.last.toLowerCase() : '';
+  }
+
+  Icon _getFileIcon(String filename) {
+    final ext = _getFileExtension(filename);
+    if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].contains(ext)) {
+      return const Icon(Icons.image, size: 16);
+    } else if (ext == 'pdf') {
+      return const Icon(Icons.picture_as_pdf, size: 16);
+    } else if (['doc', 'docx'].contains(ext)) {
+      return const Icon(Icons.description, size: 16);
+    } else if (['xls', 'xlsx'].contains(ext)) {
+      return const Icon(Icons.table_chart, size: 16);
+    } else if (ext == 'txt') {
+      return const Icon(Icons.text_fields, size: 16);
+    }
+    return const Icon(Icons.insert_drive_file, size: 16);
   }
 
   @override
@@ -293,6 +406,7 @@ class _JournalTabState extends ConsumerState<JournalTab> {
 
   Widget _buildEntryCard(JournalEntry entry, ColorScheme colorScheme, AppLocalizations t) {
     final isCompleted = entry.status == 'completed';
+    final attachments = entry.attachments ?? [];
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -333,6 +447,47 @@ class _JournalTabState extends ConsumerState<JournalTab> {
               Text('${t.sumLabel}: ${entry.totalAmount.toStringAsFixed(2)} ${t.currencySymbol}', style: const TextStyle(fontSize: 11)),
             if (isCompleted && entry.transactionId != null)
               Text('${t.transactionLabel}: #${entry.transactionId}', style: TextStyle(fontSize: 10, color: Colors.green)),
+            // Вложения
+            if (attachments.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: attachments.map((att) {
+                    final fileName = att['file_name'] ?? 'file';
+                    return GestureDetector(
+                      onTap: () => _viewAttachment(att['id']),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: colorScheme.primaryContainer.withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _getFileIcon(fileName),
+                            const SizedBox(width: 4),
+                            Text(
+                              fileName.length > 20 ? '${fileName.substring(0, 17)}...' : fileName,
+                              style: TextStyle(fontSize: 10, color: colorScheme.onSurface),
+                            ),
+                            if (widget.permissions.contains('edit_journal') && !isCompleted)
+                              GestureDetector(
+                                onTap: () => _deleteAttachment(entry, att['id']),
+                                child: const Padding(
+                                  padding: EdgeInsets.only(left: 4),
+                                  child: Icon(Icons.close, size: 12, color: Colors.red),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
           ],
         ),
         trailing: Row(

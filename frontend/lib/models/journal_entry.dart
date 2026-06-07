@@ -8,16 +8,16 @@ class JournalEntry {
   final String status;
   final int? transactionId;
   final int? showcaseItemId;
+  final String? showcaseItemName;   // <-- добавьте это поле
   final int quantity;
   final double totalAmount;
   final int createdBy;
   final DateTime createdAt;
   final DateTime updatedAt;
-  final String? creatorName;
-  final String? showcaseItemName;
-  final List<Map<String, dynamic>>? items;
+  final List<dynamic>? items;
+  final List<dynamic>? attachments;  // если ещё не добавили
 
-  const JournalEntry({
+  JournalEntry({
     required this.id,
     required this.companyId,
     required this.datetimeStart,
@@ -27,14 +27,14 @@ class JournalEntry {
     required this.status,
     this.transactionId,
     this.showcaseItemId,
-    this.quantity = 1,
-    this.totalAmount = 0.0,
+    this.showcaseItemName,           // <-- добавьте
+    required this.quantity,
+    required this.totalAmount,
     required this.createdBy,
     required this.createdAt,
     required this.updatedAt,
-    this.creatorName,
-    this.showcaseItemName,
     this.items,
+    this.attachments,
   });
 
   factory JournalEntry.fromJson(Map<String, dynamic> json) {
@@ -48,34 +48,14 @@ class JournalEntry {
       status: json['status'],
       transactionId: json['transaction_id'],
       showcaseItemId: json['showcase_item_id'],
+      showcaseItemName: json['showcase_item_name'], // <-- добавьте
       quantity: json['quantity'] ?? 1,
       totalAmount: (json['total_amount'] as num).toDouble(),
       createdBy: json['created_by'],
       createdAt: DateTime.parse(json['created_at']),
       updatedAt: DateTime.parse(json['updated_at']),
-      creatorName: json['creator_name'],
-      showcaseItemName: json['showcase_item_name'],
-      items: json['items'] != null ? List<Map<String, dynamic>>.from(json['items']) : null,
+      items: json['items'] as List?,
+      attachments: json['attachments'] as List?,
     );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'company_id': companyId,
-      'datetime_start': datetimeStart.toIso8601String(),
-      'datetime_end': datetimeEnd.toIso8601String(),
-      'description': description,
-      'counterparty': counterparty,
-      'status': status,
-      'transaction_id': transactionId,
-      'showcase_item_id': showcaseItemId,
-      'quantity': quantity,
-      'total_amount': totalAmount,
-      'created_by': createdBy,
-      'created_at': createdAt.toIso8601String(),
-      'updated_at': updatedAt.toIso8601String(),
-      'items': items,
-    };
   }
 }

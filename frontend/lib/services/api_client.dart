@@ -525,6 +525,45 @@ Future<void> deleteMyAccount(String password) async {
   await delete('/auth/me', data: {'password': password});
 }
 
+// ========== Журнал: вложения ==========
+Future<Map<String, dynamic>> uploadJournalAttachment({
+  required int entryId,
+  required int companyId,
+  required Uint8List bytes,
+  required String filename,
+}) async {
+  final token = await getToken();
+  if (token == null) throw Exception('No authentication token');
+  
+  final formData = FormData.fromMap({
+    'file': MultipartFile.fromBytes(bytes, filename: filename),
+  });
+  
+  final response = await _dio.post(
+    '/journal/$entryId/attachments',
+    data: formData,
+    queryParameters: {'company_id': companyId},
+    options: Options(headers: {'Authorization': 'Bearer $token'}),
+  );
+  return response.data;
+}
+
+Future<Response> getJournalAttachmentFile(int attachmentId, int companyId) async {
+  final token = await getToken();
+  return await _dio.get(
+    '/journal/attachments/$attachmentId/file',
+    queryParameters: {'company_id': companyId},
+    options: Options(
+      responseType: ResponseType.bytes,
+      headers: {'Authorization': 'Bearer $token'},
+    ),
+  );
+}
+
+Future<void> deleteJournalAttachment(int attachmentId, int companyId) async {
+  await delete('/journal/attachments/$attachmentId', queryParameters: {'company_id': companyId});
+}
+
   Future<void> changePassword(String oldPassword, String newPassword) async {
     await post('/auth/change-password', data: {
       'old_password': oldPassword,

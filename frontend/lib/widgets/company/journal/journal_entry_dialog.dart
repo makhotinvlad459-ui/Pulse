@@ -1,6 +1,11 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import '../../../services/api_client.dart';
+import '../../../services/image_compression.dart';
 import '../../../l10n/app_localizations.dart';
 
 class JournalEntryDialog extends StatefulWidget {
@@ -32,6 +37,11 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
   final TextEditingController _manualAmountController = TextEditingController();
   bool _isManualAmountEnabled = true;
 
+  // Вложения
+  List<Map<String, dynamic>> _attachments = []; // существующие (при редактировании)
+  List<({Uint8List bytes, String name})> _newFiles = []; // новые файлы
+  bool _uploading = false;
+
   @override
   void initState() {
     super.initState();
@@ -54,6 +64,9 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
       }
       final total = widget.initialEntry['total_amount'];
       _manualAmountController.text = (total != null ? (total as num).toDouble() : 0.0).toStringAsFixed(2);
+      if (widget.initialEntry['attachments'] != null) {
+        _attachments = List<Map<String, dynamic>>.from(widget.initialEntry['attachments']);
+      }
     } else {
       final baseDate = widget.initialDate ?? DateTime.now();
       _startDateTime = DateTime(baseDate.year, baseDate.month, baseDate.day, 10, 0);
@@ -185,6 +198,128 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
     return double.tryParse(_manualAmountController.text) ?? 0.0;
   }
 
+  // Выбор файлов
+  Future<void> _pickFiles() async {
+    final t = AppLocalizations.of(context)!;
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt'],
+      allowMultiple: true,
+    );
+    if (result != null) {
+      setState(() {
+        for (final file in result.files) {
+          if (file.bytes != null) {
+            _newFiles.add((bytes: file.bytes!, name: file.name));
+          }
+        }
+      });
+    } else if (!kIsWeb) {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(source: ImageSource.gallery);
+      if (picked != null) {
+        final bytes = await picked.readAsBytes();
+        setState(() {
+          _newFiles.add((bytes: bytes, name: picked.name));
+        });
+      }
+    }
+  }
+
+  void _removeNewFile(int index) {
+    setState(() {
+      _newFiles.removeAt(index);
+    });
+  }
+
+  Future<void> _removeExistingAttachment(int attachmentId) async {
+    final t = AppLocalizations.of(context)!;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(t.deleteFileTitle),
+        content: Text(t.deleteFileContent),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(t.cancel)),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: Text(t.delete, style: const TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      final api = ApiClient();
+      try {
+        await api.deleteJournalAttachment(attachmentId, widget.companyId);
+        setState(() {
+          _attachments.removeWhere((att) => att['id'] == attachmentId);
+        });
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+      }
+    }
+  }
+
+  Future<void> _save() async {
+    final t = AppLocalizations.of(context)!;
+    if (_endDateTime.isBefore(_startDateTime)) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.endTimeAfterStart)));
+      return;
+    }
+    setState(() => _uploading = true);
+    final api = ApiClient();
+    try {
+      int? entryId;
+      if (widget.initialEntry != null) {
+        // Обновление существующей записи
+        await api.patch('/journal/${widget.initialEntry['id']}', queryParameters: {'company_id': widget.companyId}, data: {
+          'datetime_start': _startDateTime.toIso8601String(),
+          'datetime_end': _endDateTime.toIso8601String(),
+          'description': _descriptionController.text.trim(),
+          'counterparty': _counterpartyController.text.trim(),
+          'items': _items.map((item) => {
+            'showcase_item_id': item['showcase_item_id'],
+            'quantity': item['quantity'],
+            'price_at_time': item['price_at_time'],
+            'name': item['name'],
+          }).toList(),
+          'total_amount': _finalAmount,
+        });
+        entryId = widget.initialEntry['id'];
+      } else {
+        final res = await api.post('/journal/', queryParameters: {'company_id': widget.companyId}, data: {
+          'datetime_start': _startDateTime.toIso8601String(),
+          'datetime_end': _endDateTime.toIso8601String(),
+          'description': _descriptionController.text.trim(),
+          'counterparty': _counterpartyController.text.trim(),
+          'items': _items.map((item) => {
+            'showcase_item_id': item['showcase_item_id'],
+            'quantity': item['quantity'],
+            'price_at_time': item['price_at_time'],
+            'name': item['name'],
+          }).toList(),
+          'total_amount': _finalAmount,
+        });
+        entryId = res.data['id'];
+      }
+      // Загружаем новые файлы
+      for (final file in _newFiles) {
+        final compressed = await ImageCompression.compressImage(file.bytes);
+        await api.uploadJournalAttachment(
+          entryId: entryId!,
+          companyId: widget.companyId,
+          bytes: compressed,
+          filename: file.name,
+        );
+      }
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
@@ -193,151 +328,199 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
 
     return AlertDialog(
       title: Text(isEdit ? t.editJournalEntry : t.newJournalEntry, style: TextStyle(color: colorScheme.onSurface)),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ListTile(
-              title: Text(t.dateLabel),
-              trailing: Text(DateFormat('dd.MM.yyyy').format(_startDateTime)),
-            ),
-            ListTile(
-              title: Text(t.startTime),
-              trailing: Text(DateFormat('HH:mm').format(_startDateTime)),
-              onTap: () => _selectTime(true),
-            ),
-            ListTile(
-              title: Text(t.endTime),
-              trailing: Text(DateFormat('HH:mm').format(_endDateTime)),
-              onTap: () => _selectTime(false),
-            ),
-            TextField(
-              controller: _descriptionController,
-              decoration: InputDecoration(labelText: t.description),
-            ),
-            TextField(
-              controller: _counterpartyController,
-              decoration: InputDecoration(labelText: t.counterpartyOptional),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Text(t.services, style: const TextStyle(fontWeight: FontWeight.bold)),
-                const Spacer(),
-                ElevatedButton.icon(
-                  onPressed: _addService,
-                  icon: const Icon(Icons.add),
-                  label: Text(t.addService),
-                ),
-              ],
-            ),
-            ..._items.asMap().entries.map((entry) {
-              final idx = entry.key;
-              final item = entry.value;
-              return Card(
-                margin: const EdgeInsets.symmetric(vertical: 4),
-                child: Padding(
-                  padding: const EdgeInsets.all(8),
-                  child: Column(
+      content: _uploading
+          ? const SizedBox(height: 200, child: Center(child: CircularProgressIndicator()))
+          : SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ListTile(
+                    title: Text(t.dateLabel),
+                    trailing: Text(DateFormat('dd.MM.yyyy').format(_startDateTime)),
+                  ),
+                  ListTile(
+                    title: Text(t.startTime),
+                    trailing: Text(DateFormat('HH:mm').format(_startDateTime)),
+                    onTap: () => _selectTime(true),
+                  ),
+                  ListTile(
+                    title: Text(t.endTime),
+                    trailing: Text(DateFormat('HH:mm').format(_endDateTime)),
+                    onTap: () => _selectTime(false),
+                  ),
+                  TextField(
+                    controller: _descriptionController,
+                    decoration: InputDecoration(labelText: t.description),
+                  ),
+                  TextField(
+                    controller: _counterpartyController,
+                    decoration: InputDecoration(labelText: t.counterpartyOptional),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
                     children: [
-                      Row(
-                        children: [
-                          Expanded(child: Text(item['name'], style: const TextStyle(fontWeight: FontWeight.w500))),
-                          IconButton(
-                            icon: const Icon(Icons.delete, size: 18),
-                            onPressed: () => _removeService(idx),
-                          ),
-                        ],
-                      ),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextFormField(
-                              initialValue: item['quantity'].toString(),
-                              keyboardType: TextInputType.number,
-                              decoration: InputDecoration(labelText: t.quantityLabel, isDense: true),
-                              onChanged: (value) {
-                                final qty = int.tryParse(value) ?? 1;
-                                _updateService(idx, quantity: qty);
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: TextFormField(
-                              initialValue: item['price_at_time'].toStringAsFixed(2),
-                              keyboardType: TextInputType.number,
-                              decoration: InputDecoration(labelText: t.priceLabel, isDense: true),
-                              onChanged: (value) {
-                                final price = double.tryParse(value) ?? 0.0;
-                                _updateService(idx, priceAtTime: price);
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          SizedBox(
-                            width: 80,
-                            child: Text(
-                              '${(item['total'] ?? 0.0).toStringAsFixed(2)} ${t.currencySymbol}',
-                              style: const TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        ],
+                      Text(t.services, style: const TextStyle(fontWeight: FontWeight.bold)),
+                      const Spacer(),
+                      ElevatedButton.icon(
+                        onPressed: _addService,
+                        icon: const Icon(Icons.add),
+                        label: Text(t.addService),
                       ),
                     ],
                   ),
-                ),
-              );
-            }).toList(),
-            if (_items.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Text(t.noServicesAdded, style: TextStyle(color: colorScheme.onSurfaceVariant)),
+                  ..._items.asMap().entries.map((entry) {
+                    final idx = entry.key;
+                    final item = entry.value;
+                    return Card(
+                      margin: const EdgeInsets.symmetric(vertical: 4),
+                      child: Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: Column(
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(child: Text(item['name'], style: const TextStyle(fontWeight: FontWeight.w500))),
+                                IconButton(
+                                  icon: const Icon(Icons.delete, size: 18),
+                                  onPressed: () => _removeService(idx),
+                                ),
+                              ],
+                            ),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextFormField(
+                                    initialValue: item['quantity'].toString(),
+                                    keyboardType: TextInputType.number,
+                                    decoration: InputDecoration(labelText: t.quantityLabel, isDense: true),
+                                    onChanged: (value) {
+                                      final qty = int.tryParse(value) ?? 1;
+                                      _updateService(idx, quantity: qty);
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: TextFormField(
+                                    initialValue: item['price_at_time'].toStringAsFixed(2),
+                                    keyboardType: TextInputType.number,
+                                    decoration: InputDecoration(labelText: t.priceLabel, isDense: true),
+                                    onChanged: (value) {
+                                      final price = double.tryParse(value) ?? 0.0;
+                                      _updateService(idx, priceAtTime: price);
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                SizedBox(
+                                  width: 80,
+                                  child: Text(
+                                    '${(item['total'] ?? 0.0).toStringAsFixed(2)} ${t.currencySymbol}',
+                                    style: const TextStyle(fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                  if (_items.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Text(t.noServicesAdded, style: TextStyle(color: colorScheme.onSurfaceVariant)),
+                    ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _manualAmountController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: t.totalAmount,
+                      prefixIcon: const Icon(Icons.attach_money),
+                      enabled: _isManualAmountEnabled,
+                    ),
+                    onChanged: (value) {
+                      if (_items.isEmpty) {
+                        setState(() {});
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Text(t.attachmentsLabel, style: const TextStyle(fontWeight: FontWeight.bold)),
+                      const Spacer(),
+                      ElevatedButton.icon(
+                        onPressed: _pickFiles,
+                        icon: const Icon(Icons.attach_file),
+                        label: Text(t.addFiles),
+                      ),
+                    ],
+                  ),
+                  // Новые файлы
+                  if (_newFiles.isNotEmpty)
+                    Column(
+                      children: _newFiles.asMap().entries.map((entry) {
+                        final idx = entry.key;
+                        final file = entry.value;
+                        return ListTile(
+                          dense: true,
+                          leading: _fileIcon(file.name),
+                          title: Text(file.name, overflow: TextOverflow.ellipsis),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.clear, size: 18),
+                            onPressed: () => _removeNewFile(idx),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  // Существующие вложения
+                  if (_attachments.isNotEmpty)
+                    Column(
+                      children: _attachments.map((att) {
+                        final fileName = att['file_name'] ?? 'file';
+                        return ListTile(
+                          dense: true,
+                          leading: _fileIcon(fileName),
+                          title: Text(fileName, overflow: TextOverflow.ellipsis),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.delete, color: Colors.red),
+                            onPressed: () => _removeExistingAttachment(att['id']),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                ],
               ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _manualAmountController,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: t.totalAmount,
-                prefixIcon: const Icon(Icons.attach_money),
-                enabled: _isManualAmountEnabled,
-              ),
-              onChanged: (value) {
-                if (_items.isEmpty) {
-                  setState(() {});
-                }
-              },
             ),
-          ],
-        ),
-      ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: Text(t.cancel)),
         ElevatedButton(
-          onPressed: () {
-            if (_endDateTime.isBefore(_startDateTime)) {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.endTimeAfterStart)));
-              return;
-            }
-            Navigator.pop(context, {
-              'start': _startDateTime,
-              'end': _endDateTime,
-              'description': _descriptionController.text.trim(),
-              'counterparty': _counterpartyController.text.trim(),
-              'items': _items.map((item) => {
-                'showcase_item_id': item['showcase_item_id'],
-                'quantity': item['quantity'],
-                'price_at_time': item['price_at_time'],
-                'name': item['name'],
-              }).toList(),
-              'totalAmount': _finalAmount,
-            });
-          },
+          onPressed: _uploading ? null : _save,
           child: Text(isEdit ? t.save : t.create),
         ),
       ],
     );
+  }
+
+  Widget _fileIcon(String filename) {
+    final ext = filename.split('.').last.toLowerCase();
+    IconData iconData;
+    if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].contains(ext)) {
+      iconData = Icons.image;
+    } else if (ext == 'pdf') {
+      iconData = Icons.picture_as_pdf;
+    } else if (['doc', 'docx'].contains(ext)) {
+      iconData = Icons.description;
+    } else if (['xls', 'xlsx'].contains(ext)) {
+      iconData = Icons.table_chart;
+    } else if (ext == 'txt') {
+      iconData = Icons.text_fields;
+    } else {
+      iconData = Icons.insert_drive_file;
+    }
+    return Icon(iconData, color: Colors.blue);
   }
 }
