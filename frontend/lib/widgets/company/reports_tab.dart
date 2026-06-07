@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -389,7 +390,7 @@ class ReportsTabState extends ConsumerState<ReportsTab> {
     await _loadData();
   }
 
-  // ========== ЭКСПОРТ ДОХОДОВ ПО КАТЕГОРИЯМ ==========
+  // Экспорт доходов по категориям
   Future<void> _exportIncomeCategories() async {
     final t = AppLocalizations.of(context)!;
     if (_incomeByCategory.isEmpty) {
@@ -416,7 +417,7 @@ class ReportsTabState extends ConsumerState<ReportsTab> {
     }
   }
 
-  // ========== ЭКСПОРТ РАСХОДОВ ПО КАТЕГОРИЯМ ==========
+  // Экспорт расходов по категориям
   Future<void> _exportExpenseCategories() async {
     final t = AppLocalizations.of(context)!;
     if (_expenseByCategory.isEmpty) {
@@ -485,6 +486,7 @@ class ReportsTabState extends ConsumerState<ReportsTab> {
           CashVsNoncashBar(cash: _cashVsNoncash['cash']!, noncash: _cashVsNoncash['noncash']!),
           const SizedBox(height: 24),
 
+          // Доходы по категориям
           if (_incomeByCategory.isNotEmpty)
             ExpansionTile(
               title: Row(
@@ -513,6 +515,7 @@ class ReportsTabState extends ConsumerState<ReportsTab> {
               ],
             ),
 
+          // Расходы по категориям
           if (_expenseByCategory.isNotEmpty)
             ExpansionTile(
               title: Row(
@@ -541,6 +544,7 @@ class ReportsTabState extends ConsumerState<ReportsTab> {
               ],
             ),
 
+          // Доходы и расходы по товарам
           ExpansionTile(
             title: Text(t.productIncomeExpense, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             initiallyExpanded: false,
@@ -549,6 +553,7 @@ class ReportsTabState extends ConsumerState<ReportsTab> {
             ],
           ),
 
+          // Продажи
           ExpansionTile(
             title: Text(t.sales, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             initiallyExpanded: false,
@@ -562,6 +567,7 @@ class ReportsTabState extends ConsumerState<ReportsTab> {
             ],
           ),
 
+          // Расход материалов в заказах
           ExpansionTile(
             title: Text(t.materialConsumptionInOrders, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             initiallyExpanded: false,
@@ -574,6 +580,7 @@ class ReportsTabState extends ConsumerState<ReportsTab> {
             ],
           ),
 
+          // Статистика по заказам
           ExpansionTile(
             title: Text(t.orderStatistics, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             initiallyExpanded: false,
@@ -586,6 +593,7 @@ class ReportsTabState extends ConsumerState<ReportsTab> {
             ],
           ),
 
+          // Контрагенты
           ExpansionTile(
             title: Text(t.counterparties, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             initiallyExpanded: false,
@@ -598,7 +606,7 @@ class ReportsTabState extends ConsumerState<ReportsTab> {
             ],
           ),
 
-          // ========== ДОПОЛНИТЕЛЬНЫЕ ОТЧЕТЫ (бывший экспорт) ==========
+          // ДОПОЛНИТЕЛЬНЫЕ ОТЧЕТЫ
           ExpansionTile(
             title: Text(t.additionalReports),
             leading: const Icon(Icons.more_horiz),
