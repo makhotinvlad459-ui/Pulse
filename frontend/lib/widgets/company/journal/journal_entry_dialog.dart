@@ -41,6 +41,10 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
   List<({Uint8List bytes, String name})> _newFiles = [];
   bool _uploading = false;
 
+  // Автоподбор контрагентов
+  List<String> _existingCounterparties = [];
+  bool _loadingCounterparties = false;
+
   @override
   void initState() {
     super.initState();
@@ -48,7 +52,8 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
       _startDateTime = DateTime.parse(widget.initialEntry['datetime_start']).toLocal();
       _endDateTime = DateTime.parse(widget.initialEntry['datetime_end']).toLocal();
       _descriptionController.text = widget.initialEntry['description'] ?? '';
-      _counterpartyController.text = widget.initialEntry['counterparty'] ?? '';
+      final cp = widget.initialEntry['counterparty'] ?? '';
+      _counterpartyController.text = cp;
       if (widget.initialEntry['items'] != null) {
         _items = List<Map<String, dynamic>>.from(widget.initialEntry['items']).map((item) {
           final total = item['total'] ?? item['quantity'] * item['price_at_time'];
@@ -73,6 +78,7 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
       _manualAmountController.text = '0.00';
     }
     _loadShowcaseItems();
+    _loadCounterparties();
     _updateManualAmountState(setStateFlag: false);
   }
 
@@ -104,6 +110,21 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
       }
     } catch (e) {
       if (mounted) setState(() => _loadingShowcase = false);
+    }
+  }
+
+  Future<void> _loadCounterparties() async {
+    setState(() => _loadingCounterparties = true);
+    final api = ApiClient();
+    try {
+      final res = await api.get('/statistics/counterparties', queryParameters: {'company_id': widget.companyId});
+      setState(() {
+        _existingCounterparties = List<String>.from(res.data);
+        _loadingCounterparties = false;
+      });
+    } catch (e) {
+      setState(() => _loadingCounterparties = false);
+      print('Error loading counterparties: $e');
     }
   }
 
@@ -378,9 +399,60 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
                     controller: _descriptionController,
                     decoration: InputDecoration(labelText: t.description),
                   ),
-                  TextField(
-                    controller: _counterpartyController,
-                    decoration: InputDecoration(labelText: t.counterpartyOptional),
+                  const SizedBox(height: 8),
+                  Autocomplete<String>(
+                    optionsBuilder: (TextEditingValue textEditingValue) {
+                      if (textEditingValue.text.isEmpty) {
+                        return const Iterable<String>.empty();
+                      }
+                      final lower = textEditingValue.text.toLowerCase();
+                      return _existingCounterparties.where((c) => c.toLowerCase().contains(lower));
+                    },
+                    onSelected: (String selection) {
+                      _counterpartyController.text = selection;
+                    },
+                    fieldViewBuilder: (context, textController, focusNode, onFieldSubmitted) {
+                      textController.addListener(() {
+                        // дополнительно можно обновить что-то, если нужно
+                      });
+                      return TextFormField(
+                        controller: textController,
+                        focusNode: focusNode,
+                        decoration: InputDecoration(
+                          labelText: t.counterpartyOptional,
+                          border: const OutlineInputBorder(),
+                          suffixIcon: _loadingCounterparties
+                              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                              : IconButton(
+                                  icon: const Icon(Icons.refresh),
+                                  onPressed: _loadCounterparties,
+                                  tooltip: t.refreshList,
+                                ),
+                        ),
+                      );
+                    },
+                    optionsViewBuilder: (context, onSelected, options) {
+                      return Align(
+                        alignment: Alignment.topLeft,
+                        child: Material(
+                          elevation: 4,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxHeight: 200),
+                            child: ListView.builder(
+                              shrinkWrap: true,
+                              itemCount: options.length,
+                              itemBuilder: (context, index) {
+                                final option = options.elementAt(index);
+                                return ListTile(
+                                  title: Text(option),
+                                  onTap: () => onSelected(option),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      );
+                    },
                   ),
                   const SizedBox(height: 12),
                   Row(

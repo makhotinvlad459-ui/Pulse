@@ -3,12 +3,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:excel/excel.dart' as excelLib;
+import 'package:excel/excel.dart' as excel;
 import '../../../services/api_client.dart';
 import '../../../services/image_compression.dart';
 import '../../../services/file_download_helper.dart';
 import '../../../providers/locale_provider.dart';
+import '../../../providers/auth_provider.dart';
+import '../../../models/user.dart';
 import '../../../l10n/app_localizations.dart';
 
 class CounterpartyDetailScreen extends ConsumerStatefulWidget {
@@ -54,6 +57,17 @@ class _CounterpartyDetailScreenState extends ConsumerState<CounterpartyDetailScr
     _tabController.dispose();
     super.dispose();
   }
+
+  double get _totalIncome {
+    return _transactions.fold(0.0, (sum, tx) => sum + (tx['type'] == 'income' ? (tx['amount'] as double) : 0.0));
+  }
+
+  double get _totalExpense {
+    return _transactions.fold(0.0, (sum, tx) => sum + (tx['type'] == 'expense' ? (tx['amount'] as double) : 0.0));
+  }
+
+  bool get _canManage => ref.read(authProvider).user?.role == UserRole.founder ||
+      widget.permissions.contains('manage_counterparties');
 
   Future<void> _loadTransactions() async {
     setState(() => _loadingTransactions = true);
@@ -129,7 +143,7 @@ class _CounterpartyDetailScreenState extends ConsumerState<CounterpartyDetailScr
           title: Text(t.documentDescription),
           content: TextField(
             controller: descController,
-            decoration: InputDecoration(hintText: t.documentDescriptionHint),
+            decoration: InputDecoration(hintText: t.optional),
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(context), child: Text(t.cancel)),
@@ -197,7 +211,7 @@ class _CounterpartyDetailScreenState extends ConsumerState<CounterpartyDetailScr
           );
         }
       } else {
-        await FileDownloadHelper.downloadFile(bytes, fileName);
+        await FileDownloadHelper.downloadFile(bytes, fileName, context: context);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.fileSaved)));
         }
@@ -231,37 +245,72 @@ class _CounterpartyDetailScreenState extends ConsumerState<CounterpartyDetailScr
     }
   }
 
-  Future<void> _exportTransactions() async {
-    if (_transactions.isEmpty) return;
+  Future<void> _exportCurrentTab() async {
     final t = AppLocalizations.of(context)!;
-    final excelFile = excelLib.Excel.createExcel();
+    final currentIndex = _tabController.index;
+    if (currentIndex == 0) {
+      if (_transactions.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.noTransactionsToExport)));
+        return;
+      }
+      await _exportTransactions();
+    } else if (currentIndex == 1) {
+      if (_journalEntries.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.noVisitsToExport)));
+        return;
+      }
+      await _exportJournal();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.exportNotAvailable)));
+    }
+  }
+
+  Future<void> _exportTransactions() async {
+    final t = AppLocalizations.of(context)!;
+    final excelFile = excel.Excel.createExcel();
     final sheet = excelFile.sheets.values.first;
-    sheet.appendRow([t.dateLabel, t.transactionNumber, t.typeLabel, t.amountLabel, t.categoryLabel, t.accountLabel, t.descriptionLabel, t.counterpartyLabel, t.createdByLabel]);
+    sheet.appendRow([
+      t.dateLabel,
+      t.transactionNumber,
+      t.typeLabel,
+      t.income,
+      t.expense,
+      t.descriptionLabel,
+    ]);
     for (var tx in _transactions) {
+      final amount = tx['amount'] as double;
+      final isIncome = tx['type'] == 'income';
       sheet.appendRow([
         DateFormat('dd.MM.yyyy').format(DateTime.parse(tx['date'])),
-        tx['number'],
-        tx['type'] == 'income' ? t.income : t.expense,
-        tx['amount'],
-        tx['category_name'] ?? '',
-        tx['account_name'] ?? '',
+        tx['number'] ?? '—',
+        isIncome ? t.incomeSale : t.expensePurchase,
+        isIncome ? amount : 0,
+        !isIncome ? amount : 0,
         tx['description'] ?? '',
-        tx['counterparty'] ?? '',
-        tx['creator_name'] ?? '',
       ]);
     }
     final bytes = excelFile.encode();
     if (bytes != null) {
-      await FileDownloadHelper.downloadFile(Uint8List.fromList(bytes), 'counterparty_transactions_${widget.counterparty['name']}_${DateTime.now().millisecondsSinceEpoch}.xlsx');
+      await FileDownloadHelper.downloadFile(
+        Uint8List.fromList(bytes),
+        'counterparty_transactions_${widget.counterparty['name']}_${DateTime.now().millisecondsSinceEpoch}.xlsx',
+        context: context,
+      );
     }
   }
 
   Future<void> _exportJournal() async {
-    if (_journalEntries.isEmpty) return;
     final t = AppLocalizations.of(context)!;
-    final excelFile = excelLib.Excel.createExcel();
+    final excelFile = excel.Excel.createExcel();
     final sheet = excelFile.sheets.values.first;
-    sheet.appendRow([t.dateLabel, t.startTime, t.endTime, t.description, t.counterpartyLabel, t.totalAmount]);
+    sheet.appendRow([
+      t.dateLabel,
+      t.startTime,
+      t.endTime,
+      t.description,
+      t.counterpartyLabel,
+      t.totalAmount,
+    ]);
     for (var entry in _journalEntries) {
       sheet.appendRow([
         DateFormat('dd.MM.yyyy').format(DateTime.parse(entry['datetime_start'])),
@@ -274,7 +323,59 @@ class _CounterpartyDetailScreenState extends ConsumerState<CounterpartyDetailScr
     }
     final bytes = excelFile.encode();
     if (bytes != null) {
-      await FileDownloadHelper.downloadFile(Uint8List.fromList(bytes), 'counterparty_visits_${widget.counterparty['name']}_${DateTime.now().millisecondsSinceEpoch}.xlsx');
+      await FileDownloadHelper.downloadFile(
+        Uint8List.fromList(bytes),
+        'counterparty_visits_${widget.counterparty['name']}_${DateTime.now().millisecondsSinceEpoch}.xlsx',
+        context: context,
+      );
+    }
+  }
+
+  Future<void> _viewJournalAttachment(int attachmentId, String fileName) async {
+    final t = AppLocalizations.of(context)!;
+    try {
+      final response = await _api.getJournalAttachmentFile(attachmentId, widget.companyId);
+      final bytes = response.data is List<int>
+          ? Uint8List.fromList(response.data as List<int>)
+          : Uint8List.fromList((response.data as String).codeUnits);
+      final ext = fileName.split('.').last.toLowerCase();
+      final isImage = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].contains(ext);
+      if (isImage) {
+        if (mounted) {
+          showDialog(
+            context: context,
+            builder: (context) => Dialog(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Text(fileName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                  Expanded(
+                    child: InteractiveViewer(
+                      child: Image.memory(bytes),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text(t.close),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+      } else {
+        await FileDownloadHelper.downloadFile(bytes, fileName, context: context);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.fileSaved)));
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+      }
     }
   }
 
@@ -290,55 +391,104 @@ class _CounterpartyDetailScreenState extends ConsumerState<CounterpartyDetailScr
         bottom: TabBar(
           controller: _tabController,
           tabs: [
-            Tab(text: t.operationsTab),
-            Tab(text: t.visitsTab),
-            Tab(text: t.documentsTab),
+            Tab(text: t.operations),
+            Tab(text: t.visits),
+            Tab(text: t.documents),
           ],
         ),
         actions: [
-          if (_tabController.index == 0 && _transactions.isNotEmpty)
-            IconButton(
-              icon: const Icon(Icons.download),
-              onPressed: _exportTransactions,
-              tooltip: t.exportToExcel,
-            ),
-          if (_tabController.index == 1 && _journalEntries.isNotEmpty)
-            IconButton(
-              icon: const Icon(Icons.download),
-              onPressed: _exportJournal,
-              tooltip: t.exportToExcel,
-            ),
-          if (_tabController.index == 2)
-            IconButton(
-              icon: const Icon(Icons.upload_file),
-              onPressed: _pickAndUploadDocument,
-              tooltip: t.addDocument,
-            ),
+          // Экспорт в Excel (всегда)
+          IconButton(
+            icon: const Icon(Icons.download),
+            onPressed: _exportCurrentTab,
+            tooltip: t.exportToExcel,
+          ),
+          // Кнопка добавления документа (всегда)
+          IconButton(
+            icon: const Icon(Icons.upload_file),
+            onPressed: _pickAndUploadDocument,
+            tooltip: t.addDocument,
+          ),
         ],
       ),
       body: TabBarView(
         controller: _tabController,
         children: [
-          // Операции
+          // ========== ОПЕРАЦИИ ==========
           _loadingTransactions
               ? const Center(child: CircularProgressIndicator())
               : _transactions.isEmpty
                   ? Center(child: Text(t.noTransactions))
-                  : ListView.builder(
-                      itemCount: _transactions.length,
-                      itemBuilder: (context, index) {
-                        final tx = _transactions[index];
-                        return Card(
-                          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                          child: ListTile(
-                            title: Text('${tx['type'] == 'income' ? t.income : t.expense} - ${tx['amount']} ${t.currencySymbol}'),
-                            subtitle: Text('${DateFormat('dd.MM.yyyy').format(DateTime.parse(tx['date']))} • ${tx['description'] ?? ''}'),
-                            trailing: Text(tx['category_name'] ?? ''),
+                  : SingleChildScrollView(
+                      scrollDirection: Axis.vertical,
+                      child: Column(
+                        children: [
+                          SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: DataTable(
+                              columnSpacing: 12,
+                              columns: [
+                                DataColumn(label: Text(t.dateLabel)),
+                                DataColumn(label: Text(t.transactionNumber)),
+                                DataColumn(label: Text(t.typeLabel)),
+                                DataColumn(label: Text(t.income)),
+                                DataColumn(label: Text(t.expense)),
+                                DataColumn(label: Text(t.descriptionLabel)),
+                              ],
+                              rows: _transactions.map((tx) {
+                                final amount = tx['amount'] as double;
+                                final isIncome = tx['type'] == 'income';
+                                return DataRow(cells: [
+                                  DataCell(Text(DateFormat('dd.MM.yyyy').format(DateTime.parse(tx['date'])))),
+                                  DataCell(Text(tx['number']?.toString() ?? '—')),
+                                  DataCell(Text(isIncome ? t.incomeSale : t.expensePurchase)),
+                                  DataCell(Text(isIncome ? '$amount ${t.currencySymbol}' : '—')),
+                                  DataCell(Text(!isIncome ? '$amount ${t.currencySymbol}' : '—')),
+                                  DataCell(Text(tx['description'] ?? '')),
+                                ]);
+                              }).toList(),
+                            ),
                           ),
-                        );
-                      },
+                          const Divider(),
+                          Padding(
+                            padding: const EdgeInsets.all(8.0),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(t.totalIncome, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                Text('${_totalIncome.toStringAsFixed(2)} ${t.currencySymbol}', style: const TextStyle(color: Colors.green)),
+                              ],
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.all(8.0),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(t.totalExpense, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                Text('${_totalExpense.toStringAsFixed(2)} ${t.currencySymbol}', style: const TextStyle(color: Colors.red)),
+                              ],
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.all(8.0),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(t.balance, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                Text('${(_totalIncome - _totalExpense).toStringAsFixed(2)} ${t.currencySymbol}',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: (_totalIncome - _totalExpense) >= 0 ? Colors.green : Colors.red,
+                                    )),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-          // Посещения (журнал)
+
+          // ========== ПОСЕЩЕНИЯ (ЖУРНАЛ) ==========
           _loadingJournal
               ? const Center(child: CircularProgressIndicator())
               : _journalEntries.isEmpty
@@ -347,21 +497,72 @@ class _CounterpartyDetailScreenState extends ConsumerState<CounterpartyDetailScr
                       itemCount: _journalEntries.length,
                       itemBuilder: (context, index) {
                         final entry = _journalEntries[index];
+                        final attachments = entry['attachments'] as List? ?? [];
                         return Card(
                           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                           child: ListTile(
                             title: Text(DateFormat('dd.MM.yyyy HH:mm').format(DateTime.parse(entry['datetime_start']))),
-                            subtitle: Text(entry['description'] ?? ''),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (entry['description'] != null && entry['description'].isNotEmpty)
+                                  Text(entry['description']),
+                                const SizedBox(height: 4),
+                                if (attachments.isNotEmpty)
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 4,
+                                    children: attachments.map((att) {
+                                      final fileName = att['file_name'] ?? 'file';
+                                      return GestureDetector(
+                                        onTap: () => _viewJournalAttachment(att['id'], fileName),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: colorScheme.primaryContainer.withOpacity(0.3),
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              const Icon(Icons.attachment, size: 12),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                fileName.length > 20 ? '${fileName.substring(0, 17)}...' : fileName,
+                                                style: const TextStyle(fontSize: 10),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                              ],
+                            ),
                             trailing: Text('${entry['total_amount']} ${t.currencySymbol}'),
                           ),
                         );
                       },
                     ),
-          // Документы
+
+          // ========== ДОКУМЕНТЫ ==========
           _loadingDocuments
               ? const Center(child: CircularProgressIndicator())
               : _documents.isEmpty
-                  ? Center(child: Text(t.noDocuments))
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(t.noDocuments, style: TextStyle(color: colorScheme.onSurfaceVariant)),
+                          const SizedBox(height: 16),
+                          ElevatedButton.icon(
+                            onPressed: _pickAndUploadDocument,
+                            icon: const Icon(Icons.upload_file),
+                            label: Text(t.addDocument),
+                          ),
+                        ],
+                      ),
+                    )
                   : ListView.builder(
                       itemCount: _documents.length,
                       itemBuilder: (context, index) {
@@ -379,10 +580,11 @@ class _CounterpartyDetailScreenState extends ConsumerState<CounterpartyDetailScr
                                   icon: const Icon(Icons.visibility),
                                   onPressed: () => _viewDocument(doc),
                                 ),
-                                IconButton(
-                                  icon: const Icon(Icons.delete, color: Colors.red),
-                                  onPressed: () => _deleteDocument(doc['id']),
-                                ),
+                                if (_canManage)
+                                  IconButton(
+                                    icon: const Icon(Icons.delete, color: Colors.red),
+                                    onPressed: () => _deleteDocument(doc['id']),
+                                  ),
                               ],
                             ),
                           ),
@@ -390,6 +592,12 @@ class _CounterpartyDetailScreenState extends ConsumerState<CounterpartyDetailScr
                       },
                     ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _uploading ? null : _pickAndUploadDocument,
+        child: _uploading
+            ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+            : const Icon(Icons.add),
       ),
     );
   }
