@@ -44,3 +44,7 @@ __pycache__/
 backend/alembic.ini
 docker-compose.yaml
 firebase-key.json
+
+app_localizations.dart
+app_localizations_en.dart
+app_localizations_ru.dart

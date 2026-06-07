@@ -9,6 +9,7 @@ import '../../../l10n/app_localizations.dart';
 import 'journal_entry_dialog.dart';
 import 'journal_complete_dialog.dart';
 import '../../../services/api_client.dart';
+import '../../../services/file_download_helper.dart';
 
 class JournalTab extends ConsumerStatefulWidget {
   final int companyId;
@@ -168,17 +169,19 @@ class _JournalTabState extends ConsumerState<JournalTab> {
     }
   }
 
-  Future<void> _viewAttachment(int attachmentId, String fileUrl, String fileName) async {
+  Future<void> _viewAttachment(int attachmentId, String fileName) async {
   final t = AppLocalizations.of(context)!;
   final ext = _getFileExtension(fileName);
   final isImage = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].contains(ext);
   
-  if (isImage) {
-    // Для изображений – открываем через прокси с увеличенным просмотром
-    try {
-      final response = await _apiClient.getJournalAttachmentFile(attachmentId, widget.companyId);
-      final bytes = response.data as List<int>;
-      final uint8list = Uint8List.fromList(bytes);
+  try {
+    final response = await _apiClient.getJournalAttachmentFile(attachmentId, widget.companyId);
+    final bytes = response.data is List<int>
+        ? Uint8List.fromList(response.data as List<int>)
+        : Uint8List.fromList((response.data as String).codeUnits);
+    
+    if (isImage) {
+      // Показываем диалог с изображением и кнопкой сохранения
       if (mounted) {
         showDialog(
           context: context,
@@ -192,7 +195,7 @@ class _JournalTabState extends ConsumerState<JournalTab> {
                 ),
                 Expanded(
                   child: InteractiveViewer(
-                    child: Image.memory(uint8list),
+                    child: Image.memory(bytes),
                   ),
                 ),
                 Row(
@@ -204,7 +207,7 @@ class _JournalTabState extends ConsumerState<JournalTab> {
                     ),
                     TextButton(
                       onPressed: () async {
-                        await FileDownloadHelper.downloadFile(uint8list, fileName);
+                        await FileDownloadHelper.downloadFile(bytes, fileName);
                         if (mounted) Navigator.pop(context);
                       },
                       child: Text(t.save),
@@ -216,33 +219,20 @@ class _JournalTabState extends ConsumerState<JournalTab> {
           ),
         );
       }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${t.error}: $e')),
-        );
-      }
-    }
-  } else {
-    // Для документов – скачиваем напрямую из Firebase (без прокси)
-    try {
-      // Получаем байты по прямой ссылке (можно и через прокси, но быстрее напрямую)
-      final response = await _apiClient.getFile(fileUrl);
-      final bytes = response.data is List<int>
-          ? Uint8List.fromList(response.data as List<int>)
-          : Uint8List.fromList((response.data as String).codeUnits);
+    } else {
+      // Для документов – сразу скачиваем
       await FileDownloadHelper.downloadFile(bytes, fileName);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(t.fileSaved)),
         );
       }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${t.error}: ${e.toString()}')),
-        );
-      }
+    }
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${t.error}: ${e.toString()}')),
+      );
     }
   }
 }
