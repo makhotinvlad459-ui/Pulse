@@ -757,5 +757,10 @@
   "fileSaved": "File saved successfully",
   "noTransactionsToExport": "No transactions to export",
   "noVisitsToExport": "No visits to export",
-  "exportNotAvailable": "Export not available for this tab"
+  "exportNotAvailable": "Export not available for this tab",
+  "additionalReports": "Additional Reports",
+  "noDataToExport": "No data to export",
+  "categoryLabel": "Category",
+  "amountLabel": "Amount",
+  "totalLabel": "Total"
 }

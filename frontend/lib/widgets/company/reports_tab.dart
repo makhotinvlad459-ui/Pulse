@@ -2,7 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:excel/excel.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:universal_html/html.dart' as html;
 import '../../../services/api_client.dart';
+import '../../../services/file_download_helper.dart';
 import '../../../providers/locale_provider.dart';
 import 'reports/period_selector.dart';
 import 'reports/summary_cards.dart';
@@ -20,7 +27,6 @@ import 'reports/operations_export_widget.dart';
 import 'reports/counterparty_movement_report.dart';
 import 'reports/cash_movement_report.dart';
 import 'reports/bank_movement_report.dart';
-
 
 class ReportsTab extends ConsumerStatefulWidget {
   final int companyId;
@@ -383,7 +389,61 @@ class ReportsTabState extends ConsumerState<ReportsTab> {
     await _loadData();
   }
 
-   @override
+  // ========== ЭКСПОРТ ДОХОДОВ ПО КАТЕГОРИЯМ ==========
+  Future<void> _exportIncomeCategories() async {
+    final t = AppLocalizations.of(context)!;
+    if (_incomeByCategory.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.noDataToExport)));
+      return;
+    }
+    final excelFile = Excel.createExcel();
+    final sheet = excelFile.sheets.values.first;
+    sheet.appendRow([t.categoryLabel, t.amountLabel]);
+    double total = 0;
+    for (var cat in _incomeByCategory) {
+      final amount = cat['total'] as double;
+      sheet.appendRow([cat['category_name'], amount]);
+      total += amount;
+    }
+    sheet.appendRow([t.totalLabel, total]);
+    final bytes = excelFile.encode();
+    if (bytes != null) {
+      await FileDownloadHelper.downloadFile(
+        Uint8List.fromList(bytes),
+        'income_by_category_${DateFormat('yyyyMMdd').format(_startDate)}-${DateFormat('yyyyMMdd').format(_endDate)}.xlsx',
+        context: context,
+      );
+    }
+  }
+
+  // ========== ЭКСПОРТ РАСХОДОВ ПО КАТЕГОРИЯМ ==========
+  Future<void> _exportExpenseCategories() async {
+    final t = AppLocalizations.of(context)!;
+    if (_expenseByCategory.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.noDataToExport)));
+      return;
+    }
+    final excelFile = Excel.createExcel();
+    final sheet = excelFile.sheets.values.first;
+    sheet.appendRow([t.categoryLabel, t.amountLabel]);
+    double total = 0;
+    for (var cat in _expenseByCategory) {
+      final amount = cat['total'] as double;
+      sheet.appendRow([cat['category_name'], amount]);
+      total += amount;
+    }
+    sheet.appendRow([t.totalLabel, total]);
+    final bytes = excelFile.encode();
+    if (bytes != null) {
+      await FileDownloadHelper.downloadFile(
+        Uint8List.fromList(bytes),
+        'expense_by_category_${DateFormat('yyyyMMdd').format(_startDate)}-${DateFormat('yyyyMMdd').format(_endDate)}.xlsx',
+        context: context,
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     ref.watch(localeProvider);
     final t = AppLocalizations.of(context)!;
@@ -427,7 +487,17 @@ class ReportsTabState extends ConsumerState<ReportsTab> {
 
           if (_incomeByCategory.isNotEmpty)
             ExpansionTile(
-              title: Text(t.incomeByCategory, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              title: Row(
+                children: [
+                  Text(t.incomeByCategory, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.download),
+                    onPressed: _exportIncomeCategories,
+                    tooltip: t.exportToExcel,
+                  ),
+                ],
+              ),
               initiallyExpanded: false,
               children: [
                 CategoriesColumn(
@@ -445,7 +515,17 @@ class ReportsTabState extends ConsumerState<ReportsTab> {
 
           if (_expenseByCategory.isNotEmpty)
             ExpansionTile(
-              title: Text(t.expenseByCategory, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              title: Row(
+                children: [
+                  Text(t.expenseByCategory, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.download),
+                    onPressed: _exportExpenseCategories,
+                    tooltip: t.exportToExcel,
+                  ),
+                ],
+              ),
               initiallyExpanded: false,
               children: [
                 CategoriesColumn(
@@ -466,14 +546,6 @@ class ReportsTabState extends ConsumerState<ReportsTab> {
             initiallyExpanded: false,
             children: [
               ProductTables(productIncome: _productIncome, productConsumption: _productConsumption),
-            ],
-          ),
-
-          ExpansionTile(
-            title: Text(t.productMovementTitle, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            initiallyExpanded: false,
-            children: [
-              ProductMovementReport(companyId: widget.companyId),
             ],
           ),
 
@@ -525,40 +597,40 @@ class ReportsTabState extends ConsumerState<ReportsTab> {
               ),
             ],
           ),
-          ExpansionTile(
-  title: Text(t.exportToExcel),
-  leading: const Icon(Icons.download),
-  initiallyExpanded: false,
-  children: [
-    ExpansionTile(
-      leading: const Icon(Icons.receipt),
-      title: Text(t.operationsExportTitle),
-      children: [OperationsExportWidget(companyId: widget.companyId)],
-    ),
-    ExpansionTile(
-      leading: const Icon(Icons.inventory),
-      title: Text(t.productMovementTitle),
-      children: [ProductMovementReport(companyId: widget.companyId)],
-    ),
-    ExpansionTile(
-      leading: const Icon(Icons.people),
-      title: Text(t.counterpartyMovementTitle),
-      children: [CounterpartyMovementReport(companyId: widget.companyId)],
-    ),
-    ExpansionTile(
-      leading: const Icon(Icons.money),
-      title: Text(t.cashMovementTitle),
-      children: [CashAccountMovementReport(companyId: widget.companyId)],
-    ),
-    ExpansionTile(
-      leading: const Icon(Icons.account_balance),
-      title: Text(t.bankMovementTitle),
-      children: [BankAccountMovementReport(companyId: widget.companyId)],
-    ),
-  ],
-),
 
-          
+          // ========== ДОПОЛНИТЕЛЬНЫЕ ОТЧЕТЫ (бывший экспорт) ==========
+          ExpansionTile(
+            title: Text(t.additionalReports),
+            leading: const Icon(Icons.more_horiz),
+            initiallyExpanded: false,
+            children: [
+              ExpansionTile(
+                leading: const Icon(Icons.receipt),
+                title: Text(t.operationsExportTitle),
+                children: [OperationsExportWidget(companyId: widget.companyId)],
+              ),
+              ExpansionTile(
+                leading: const Icon(Icons.inventory),
+                title: Text(t.productMovementTitle),
+                children: [ProductMovementReport(companyId: widget.companyId)],
+              ),
+              ExpansionTile(
+                leading: const Icon(Icons.people),
+                title: Text(t.counterpartyMovementTitle),
+                children: [CounterpartyMovementReport(companyId: widget.companyId)],
+              ),
+              ExpansionTile(
+                leading: const Icon(Icons.money),
+                title: Text(t.cashMovementTitle),
+                children: [CashAccountMovementReport(companyId: widget.companyId)],
+              ),
+              ExpansionTile(
+                leading: const Icon(Icons.account_balance),
+                title: Text(t.bankMovementTitle),
+                children: [BankAccountMovementReport(companyId: widget.companyId)],
+              ),
+            ],
+          ),
         ],
       ),
     );

@@ -757,7 +757,12 @@
   "fileSaved": "Файл сохранён",
   "noTransactionsToExport": "Нет операций для экспорта",
   "noVisitsToExport": "Нет посещений для экспорта",
-  "exportNotAvailable": "Экспорт недоступен для этой вкладки"
+  "exportNotAvailable": "Экспорт недоступен для этой вкладки",
+  "additionalReports": "Дополнительные отчеты",
+  "noDataToExport": "Нет данных для экспорта",
+  "categoryLabel": "Категория",
+  "amountLabel": "Сумма",
+  "totalLabel": "Итого"
 }
   
 
