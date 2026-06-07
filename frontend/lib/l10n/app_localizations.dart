@@ -3563,7 +3563,7 @@ abstract class AppLocalizations {
   /// No description provided for @fileSaved.
   ///
   /// In en, this message translates to:
-  /// **'saved'**
+  /// **'File saved successfully'**
   String get fileSaved;
 
   /// No description provided for @noMatches.
@@ -3841,6 +3841,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Add files'**
   String get addFiles;
+
+  /// No description provided for @shareFileText.
+  ///
+  /// In en, this message translates to:
+  /// **'Save file: {filename}'**
+  String shareFileText(Object filename);
 }
 
 class _AppLocalizationsDelegate

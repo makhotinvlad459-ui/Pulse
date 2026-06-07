@@ -1765,7 +1765,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deadlineField => 'Deadline';
 
   @override
-  String get fileSaved => 'saved';
+  String get fileSaved => 'File saved successfully';
 
   @override
   String get noMatches => 'No matches found';
@@ -1914,4 +1914,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get addFiles => 'Add files';
+
+  @override
+  String shareFileText(Object filename) {
+    return 'Save file: $filename';
+  }
 }

@@ -1763,7 +1763,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get deadlineField => 'Дедлайн';
 
   @override
-  String get fileSaved => 'Сохранено';
+  String get fileSaved => 'Файл сохранён';
 
   @override
   String get noMatches => 'Совпадений не найдено';
@@ -1912,4 +1912,9 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get addFiles => 'Добавить файлы';
+
+  @override
+  String shareFileText(Object filename) {
+    return 'Сохраните файл: $filename';
+  }
 }

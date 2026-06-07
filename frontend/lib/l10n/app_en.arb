@@ -714,5 +714,6 @@
   "attachmentsLabel": "Attachments",
   "addFiles": "Add files",
   "fileSaved": "File saved successfully",
-  "save": "Save"
+  "save": "Save",
+  "shareFileText": "Save file: {filename}"
 }

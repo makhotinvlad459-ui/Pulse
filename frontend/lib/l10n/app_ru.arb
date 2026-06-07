@@ -714,6 +714,7 @@
   "attachmentsLabel": "Вложения",
   "addFiles": "Добавить файлы",
   "fileSaved": "Файл сохранён",
-  "save": "Сохранить"
+  "save": "Сохранить",
+  "shareFileText": "Сохраните файл: {filename}"
 }
 
