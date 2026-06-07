@@ -20,7 +20,7 @@ async def get_db() -> AsyncSession:
     async with get_async_session()() as session:
         yield session
 
-async def init_db():
+#async def init_db():
     """Создаёт все таблицы, если их нет."""
     engine = get_engine()
     async with engine.begin() as conn:
