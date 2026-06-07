@@ -479,6 +479,7 @@ class JournalAttachment(Base):
     uploaded_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     uploaded_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     file_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    test_column: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     # relationships
     journal_entry: Mapped["JournalEntry"] = relationship(back_populates="attachments")
