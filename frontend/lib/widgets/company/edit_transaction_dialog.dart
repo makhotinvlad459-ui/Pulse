@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -45,8 +47,7 @@ class _EditTransactionDialogState extends ConsumerState<EditTransactionDialog> {
   bool _loadingCounterparties = false;
   List<Map<String, dynamic>> _selectedProducts = [];
   bool _loading = false;
-  XFile? _photo;
-  PlatformFile? _webFile;
+  XFile? _attachmentFile;
   bool _hasExistingAttachment = false;
 
   @override
@@ -112,25 +113,28 @@ class _EditTransactionDialogState extends ConsumerState<EditTransactionDialog> {
   }
 
   Future<void> _pickFile() async {
-    if (kIsWeb) {
-      final result = await FilePicker.platform.pickFiles(type: FileType.image);
-      if (result != null) {
-        setState(() {
-          _webFile = result.files.first;
-          _photo = null;
-          _hasExistingAttachment = false;
-        });
+    final t = AppLocalizations.of(context)!;
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt'],
+    );
+    if (result != null) {
+      final file = result.files.first;
+      Uint8List? fileBytes;
+      if (file.bytes != null) {
+        fileBytes = file.bytes;
+      } else if (!kIsWeb && file.path != null) {
+        fileBytes = await File(file.path!).readAsBytes();
       }
-    } else {
-      final picker = ImagePicker();
-      final picked = await picker.pickImage(source: ImageSource.gallery);
-      if (picked != null) {
-        setState(() {
-          _photo = picked;
-          _webFile = null;
-          _hasExistingAttachment = false;
-        });
+      if (fileBytes == null) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.fileReadError)));
+        return;
       }
+      final xfile = XFile.fromData(fileBytes, name: file.name);
+      setState(() {
+        _attachmentFile = xfile;
+        _hasExistingAttachment = false;
+      });
     }
   }
 
@@ -142,8 +146,7 @@ class _EditTransactionDialogState extends ConsumerState<EditTransactionDialog> {
       final picked = await picker.pickImage(source: ImageSource.camera);
       if (picked != null) {
         setState(() {
-          _photo = picked;
-          _webFile = null;
+          _attachmentFile = picked;
           _hasExistingAttachment = false;
         });
       }
@@ -153,8 +156,7 @@ class _EditTransactionDialogState extends ConsumerState<EditTransactionDialog> {
   Future<void> _deleteAttachment() async {
     setState(() {
       _hasExistingAttachment = false;
-      _photo = null;
-      _webFile = null;
+      _attachmentFile = null;
     });
   }
 
@@ -242,20 +244,18 @@ class _EditTransactionDialogState extends ConsumerState<EditTransactionDialog> {
               TextButton(onPressed: () => Navigator.pop(context), child: Text(t.cancel)),
               ElevatedButton(
                 onPressed: () {
-                  final q = quantity;
-                  final tot = total;
-                  if (selectedProductId == null || q <= 0 || tot <= 0) {
+                  if (selectedProductId == null || quantity <= 0 || total <= 0) {
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.fillAllFields)));
                     return;
                   }
-                  final pricePerUnit = tot / q;
+                  final pricePerUnit = total / quantity;
                   setState(() {
                     _selectedProducts.add({
                       'product_id': selectedProductId,
                       'product_name': selectedProduct?['name'] ?? '',
-                      'quantity': q,
+                      'quantity': quantity,
                       'price_per_unit': pricePerUnit,
-                      'total': tot,
+                      'total': total,
                     });
                   });
                   Navigator.pop(context);
@@ -337,14 +337,16 @@ class _EditTransactionDialogState extends ConsumerState<EditTransactionDialog> {
     try {
       String? attachmentUrl = widget.transaction['attachment_url'];
       
-      if (!_hasExistingAttachment && _photo == null && _webFile == null) {
+      if (!_hasExistingAttachment && _attachmentFile == null) {
         attachmentUrl = null;
       }
       
-      if (_photo != null || _webFile != null) {
-        final bytes = _webFile != null ? _webFile!.bytes! : await _photo!.readAsBytes();
-        final fileName = _webFile != null ? _webFile!.name : _photo!.name;
-        final compressedBytes = await ImageCompression.compressImage(bytes);
+      if (_attachmentFile != null) {
+        final bytes = await _attachmentFile!.readAsBytes();
+        final fileName = _attachmentFile!.name;
+        final ext = fileName.toLowerCase();
+        final isImage = ext.endsWith('.jpg') || ext.endsWith('.jpeg') || ext.endsWith('.png') || ext.endsWith('.webp');
+        final compressedBytes = isImage ? await ImageCompression.compressImage(bytes) : bytes;
         final result = await api.uploadTransactionFile(
           companyId: widget.companyId,
           bytes: compressedBytes,
@@ -373,7 +375,7 @@ class _EditTransactionDialogState extends ConsumerState<EditTransactionDialog> {
             : null,
       };
       
-      if (!_hasExistingAttachment && _photo == null && _webFile == null && widget.transaction['attachment_url'] != null) {
+      if (!_hasExistingAttachment && _attachmentFile == null && widget.transaction['attachment_url'] != null) {
         data['delete_attachment'] = true;
       }
       
@@ -747,7 +749,6 @@ class _EditTransactionDialogState extends ConsumerState<EditTransactionDialog> {
                   ],
                 ],
                 const SizedBox(height: 12),
-                // 🔒 Блокируем всё, что связано с вложениями, для витринных транзакций
                 if (widget.transaction['showcase_item_id'] == null) ...[
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -772,7 +773,7 @@ class _EditTransactionDialogState extends ConsumerState<EditTransactionDialog> {
                       ),
                     ],
                   ),
-                  if (_hasExistingAttachment && _photo == null && _webFile == null)
+                  if (_hasExistingAttachment && _attachmentFile == null)
                     Padding(
                       padding: const EdgeInsets.only(top: 8),
                       child: Row(
@@ -784,19 +785,19 @@ class _EditTransactionDialogState extends ConsumerState<EditTransactionDialog> {
                         ],
                       ),
                     ),
-                  if (_photo != null || _webFile != null)
+                  if (_attachmentFile != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 8),
                       child: Row(
                         children: [
                           const Icon(Icons.check_circle, color: Colors.green),
                           const SizedBox(width: 8),
-                          Text(_photo != null ? _photo!.name : _webFile!.name, style: TextStyle(color: colorScheme.onSurface)),
+                          Expanded(child: Text(_attachmentFile!.name, style: TextStyle(color: colorScheme.onSurface))),
                           IconButton(
                             icon: const Icon(Icons.clear, size: 16),
                             onPressed: () => setState(() {
-                              _photo = null;
-                              _webFile = null;
+                              _attachmentFile = null;
+                              _hasExistingAttachment = false;
                             }),
                           ),
                         ],

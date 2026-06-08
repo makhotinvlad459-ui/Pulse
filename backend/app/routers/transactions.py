@@ -19,7 +19,7 @@ from app.deps import get_current_user
 router = APIRouter(prefix="/transactions", tags=["transactions"], redirect_slashes=False)
 
 MAX_FILE_SIZE = 10 * 1024 * 1024
-ALLOWED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.pdf'}
+ALLOWED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.txt'}
 
 async def _normalize_counterparty(company_id: int, name: str | None, db: AsyncSession) -> str | None:
     """Приводит имя контрагента к существующему в БД написанию (без учёта регистра).

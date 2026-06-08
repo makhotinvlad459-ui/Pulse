@@ -171,48 +171,46 @@ class _JournalTabState extends ConsumerState<JournalTab> {
 
   Future<void> _viewAttachment(int attachmentId, String fileName) async {
   final t = AppLocalizations.of(context)!;
-  final ext = _getFileExtension(fileName);
+  final ext = fileName.split('.').last.toLowerCase();
   final isImage = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].contains(ext);
-  
   try {
     final response = await _apiClient.getJournalAttachmentFile(attachmentId, widget.companyId);
     final bytes = response.data is List<int>
         ? Uint8List.fromList(response.data as List<int>)
         : Uint8List.fromList((response.data as String).codeUnits);
-    
     if (isImage) {
-      // Показываем диалог с изображением и кнопкой сохранения
       if (mounted) {
         showDialog(
           context: context,
+          barrierDismissible: true,
           builder: (context) => Dialog(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+            backgroundColor: Colors.transparent,
+            insetPadding: EdgeInsets.zero,
+            elevation: 0,
+            child: Stack(
               children: [
-                Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Text(t.filePreview, style: const TextStyle(fontWeight: FontWeight.bold)),
-                ),
-                Expanded(
+                Center(
                   child: InteractiveViewer(
                     child: Image.memory(bytes),
                   ),
                 ),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: Text(t.close),
-                    ),
-                    TextButton(
-                      onPressed: () async {
-                        await FileDownloadHelper.downloadFile(bytes, fileName);
-                        if (mounted) Navigator.pop(context);
-                      },
-                      child: Text(t.save),
-                    ),
-                  ],
+                Positioned(
+                  top: 40,
+                  right: 20,
+                  child: IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ),
+                Positioned(
+                  bottom: 40,
+                  right: 20,
+                  child: IconButton(
+                    icon: const Icon(Icons.download, color: Colors.white, size: 30),
+                    onPressed: () async {
+                      await FileDownloadHelper.downloadFile(bytes, fileName, context: context);
+                    },
+                  ),
                 ),
               ],
             ),
@@ -220,19 +218,14 @@ class _JournalTabState extends ConsumerState<JournalTab> {
         );
       }
     } else {
-      // Для документов – сразу скачиваем
-      await FileDownloadHelper.downloadFile(bytes, fileName);
+      await FileDownloadHelper.downloadFile(bytes, fileName, context: context);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(t.fileSaved)),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.fileSaved)));
       }
     }
   } catch (e) {
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${t.error}: ${e.toString()}')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
     }
   }
 }

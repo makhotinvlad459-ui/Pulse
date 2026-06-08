@@ -1,4 +1,6 @@
 import 'dart:typed_data';
+import 'dart:io' show File;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -124,104 +126,125 @@ class _CounterpartyDetailScreenState extends ConsumerState<CounterpartyDetailScr
   }
 
   Future<void> _pickAndUploadDocument() async {
-    final t = AppLocalizations.of(context)!;
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt'],
-    );
-    if (result != null && mounted) {
-      final file = result.files.first;
-      if (file.bytes == null) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.fileReadError)));
-        return;
-      }
-      String? description;
-      final descController = TextEditingController();
-      await showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text(t.documentDescription),
-          content: TextField(
-            controller: descController,
-            decoration: InputDecoration(hintText: t.optional),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: Text(t.cancel)),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: Text(t.upload),
-            ),
-          ],
+  final t = AppLocalizations.of(context)!;
+  final result = await FilePicker.platform.pickFiles(
+    type: FileType.custom,
+    allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt'],
+  );
+  if (result != null && mounted) {
+    final file = result.files.first;
+    Uint8List? fileBytes;
+    if (file.bytes != null) {
+      fileBytes = file.bytes;
+    } else if (!kIsWeb && file.path != null) {
+      fileBytes = await File(file.path!).readAsBytes();
+    }
+    if (fileBytes == null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.fileReadError)));
+      return;
+    }
+    String? description;
+    final descController = TextEditingController();
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(t.documentDescription),
+        content: TextField(
+          controller: descController,
+          decoration: InputDecoration(hintText: t.optional),
         ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: Text(t.cancel)),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(t.upload),
+          ),
+        ],
+      ),
+    );
+    description = descController.text.trim().isEmpty ? null : descController.text;
+    setState(() => _uploading = true);
+    try {
+      final ext = file.name.split('.').last.toLowerCase();
+      final isImage = ['jpg', 'jpeg', 'png', 'webp'].contains(ext);
+      final bytesToUpload = isImage ? await ImageCompression.compressImage(fileBytes) : fileBytes;
+      await _api.uploadCounterpartyDocument(
+        counterpartyId: widget.counterparty['id'],
+        companyId: widget.companyId,
+        bytes: bytesToUpload,
+        filename: file.name,
+        description: description,
       );
-      description = descController.text.trim().isEmpty ? null : descController.text;
-      setState(() => _uploading = true);
-      try {
-        final compressed = await ImageCompression.compressImage(file.bytes!);
-        await _api.uploadCounterpartyDocument(
-          counterpartyId: widget.counterparty['id'],
-          companyId: widget.companyId,
-          bytes: compressed,
-          filename: file.name,
-          description: description,
-        );
-        await _loadDocuments();
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
-      } finally {
-        if (mounted) setState(() => _uploading = false);
-      }
+      await _loadDocuments();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+    } finally {
+      if (mounted) setState(() => _uploading = false);
     }
   }
+}
 
   Future<void> _viewDocument(Map<String, dynamic> doc) async {
-    final t = AppLocalizations.of(context)!;
-    final fileName = doc['file_name'];
-    final ext = fileName.split('.').last.toLowerCase();
-    final isImage = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].contains(ext);
-    try {
-      final response = await _api.getCounterpartyDocumentFile(doc['id'], widget.companyId);
-      final bytes = response.data is List<int>
-          ? Uint8List.fromList(response.data as List<int>)
-          : Uint8List.fromList((response.data as String).codeUnits);
-      if (isImage) {
-        if (mounted) {
-          showDialog(
-            context: context,
-            builder: (context) => Dialog(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Text(fileName, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  ),
-                  Expanded(
-                    child: InteractiveViewer(
-                      child: Image.memory(bytes),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: Text(t.close),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }
-      } else {
-        await FileDownloadHelper.downloadFile(bytes, fileName, context: context);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.fileSaved)));
-        }
-      }
-    } catch (e) {
+  final t = AppLocalizations.of(context)!;
+  final fileName = doc['file_name'];
+  final ext = fileName.split('.').last.toLowerCase();
+  final isImage = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].contains(ext);
+  try {
+    final response = await _api.getCounterpartyDocumentFile(doc['id'], widget.companyId);
+    final bytes = response.data is List<int>
+        ? Uint8List.fromList(response.data as List<int>)
+        : Uint8List.fromList((response.data as String).codeUnits);
+    if (isImage) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+        showDialog(
+          context: context,
+          barrierDismissible: true,
+          builder: (context) => Dialog(
+            backgroundColor: Colors.transparent,
+            insetPadding: EdgeInsets.zero,
+            elevation: 0,
+            child: Stack(
+              children: [
+                Center(
+                  child: InteractiveViewer(
+                    child: Image.memory(bytes),
+                  ),
+                ),
+                Positioned(
+                  top: 40,
+                  right: 20,
+                  child: IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ),
+                Positioned(
+                  bottom: 40,
+                  right: 20,
+                  child: IconButton(
+                    icon: const Icon(Icons.download, color: Colors.white, size: 30),
+                    onPressed: () async {
+                      await FileDownloadHelper.downloadFile(bytes, fileName, context: context);
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+    } else {
+      await FileDownloadHelper.downloadFile(bytes, fileName, context: context);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.fileSaved)));
       }
     }
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+    }
   }
+}
 
   Future<void> _deleteDocument(int docId) async {
     final t = AppLocalizations.of(context)!;
@@ -332,52 +355,65 @@ class _CounterpartyDetailScreenState extends ConsumerState<CounterpartyDetailScr
   }
 
   Future<void> _viewJournalAttachment(int attachmentId, String fileName) async {
-    final t = AppLocalizations.of(context)!;
-    try {
-      final response = await _api.getJournalAttachmentFile(attachmentId, widget.companyId);
-      final bytes = response.data is List<int>
-          ? Uint8List.fromList(response.data as List<int>)
-          : Uint8List.fromList((response.data as String).codeUnits);
-      final ext = fileName.split('.').last.toLowerCase();
-      final isImage = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].contains(ext);
-      if (isImage) {
-        if (mounted) {
-          showDialog(
-            context: context,
-            builder: (context) => Dialog(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Text(fileName, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  ),
-                  Expanded(
-                    child: InteractiveViewer(
-                      child: Image.memory(bytes),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: Text(t.close),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }
-      } else {
-        await FileDownloadHelper.downloadFile(bytes, fileName, context: context);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.fileSaved)));
-        }
-      }
-    } catch (e) {
+  final t = AppLocalizations.of(context)!;
+  try {
+    final response = await _api.getJournalAttachmentFile(attachmentId, widget.companyId);
+    final bytes = response.data is List<int>
+        ? Uint8List.fromList(response.data as List<int>)
+        : Uint8List.fromList((response.data as String).codeUnits);
+    final ext = fileName.split('.').last.toLowerCase();
+    final isImage = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].contains(ext);
+    if (isImage) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+        showDialog(
+          context: context,
+          barrierDismissible: true,
+          builder: (context) => Dialog(
+            backgroundColor: Colors.transparent,
+            insetPadding: EdgeInsets.zero,
+            elevation: 0,
+            child: Stack(
+              children: [
+                Center(
+                  child: InteractiveViewer(
+                    child: Image.memory(bytes),
+                  ),
+                ),
+                Positioned(
+                  top: 40,
+                  right: 20,
+                  child: IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ),
+                Positioned(
+                  bottom: 40,
+                  right: 20,
+                  child: IconButton(
+                    icon: const Icon(Icons.download, color: Colors.white, size: 30),
+                    onPressed: () async {
+                      await FileDownloadHelper.downloadFile(bytes, fileName, context: context);
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+    } else {
+      await FileDownloadHelper.downloadFile(bytes, fileName, context: context);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.fileSaved)));
       }
     }
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+    }
   }
+}
 
   @override
   Widget build(BuildContext context) {

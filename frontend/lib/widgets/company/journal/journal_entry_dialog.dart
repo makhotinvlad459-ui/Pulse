@@ -1,4 +1,6 @@
 import 'dart:typed_data';
+import 'dart:io' show File;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
@@ -227,33 +229,39 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
   }
 
   Future<void> _pickFiles() async {
-    final t = AppLocalizations.of(context)!;
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt'],
-      allowMultiple: true,
-    );
-    if (result != null && mounted) {
-      setState(() {
-        for (final file in result.files) {
-          if (file.bytes != null) {
-            _newFiles.add((bytes: file.bytes!, name: file.name));
-          }
-        }
-      });
-    } else if (!kIsWeb && mounted) {
-      final picker = ImagePicker();
-      final picked = await picker.pickImage(source: ImageSource.gallery);
-      if (picked != null) {
-        final bytes = await picked.readAsBytes();
-        if (mounted) {
-          setState(() {
-            _newFiles.add((bytes: bytes, name: picked.name));
-          });
-        }
+  final t = AppLocalizations.of(context)!;
+  final result = await FilePicker.platform.pickFiles(
+    type: FileType.custom,
+    allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt'],
+    allowMultiple: true,
+  );
+  if (result != null && mounted) {
+    setState(() {
+      for (final file in result.files) {
+        Uint8List? fileBytes;
+if (file.bytes != null) {
+  fileBytes = file.bytes;
+} else if (!kIsWeb && file.path != null) {
+  fileBytes = File(file.path!).readAsBytesSync();
+}
+if (fileBytes != null) {
+  _newFiles.add((bytes: fileBytes, name: file.name));
+} else {
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.fileReadError)));
+}
       }
+    });
+  } else if (!kIsWeb && mounted) {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: ImageSource.gallery);
+    if (picked != null) {
+      final bytes = await picked.readAsBytes();
+      setState(() {
+        _newFiles.add((bytes: bytes, name: picked.name));
+      });
     }
   }
+}
 
   void _removeNewFile(int index) {
     if (!mounted) return;

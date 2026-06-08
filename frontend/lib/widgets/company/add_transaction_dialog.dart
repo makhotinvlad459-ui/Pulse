@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -41,8 +43,7 @@ class _AddTransactionDialogState extends ConsumerState<AddTransactionDialog> {
   String _description = '';
   String _counterparty = '';
   bool _loading = false;
-  XFile? _photo;
-  PlatformFile? _webFile;
+  XFile? _attachmentFile; // единый файл
   List<Map<String, dynamic>> _selectedProducts = [];
 
   List<String> _existingCounterparties = [];
@@ -115,11 +116,26 @@ class _AddTransactionDialogState extends ConsumerState<AddTransactionDialog> {
   }
 
   Future<void> _pickFile() async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.image);
+    final t = AppLocalizations.of(context)!;
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt'],
+    );
     if (result != null) {
+      final file = result.files.first;
+      Uint8List? fileBytes;
+      if (file.bytes != null) {
+        fileBytes = file.bytes;
+      } else if (!kIsWeb && file.path != null) {
+        fileBytes = await File(file.path!).readAsBytes();
+      }
+      if (fileBytes == null) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.fileReadError)));
+        return;
+      }
+      final xfile = XFile.fromData(fileBytes, name: file.name);
       setState(() {
-        _webFile = result.files.first;
-        _photo = null; 
+        _attachmentFile = xfile;
       });
     }
   }
@@ -132,8 +148,7 @@ class _AddTransactionDialogState extends ConsumerState<AddTransactionDialog> {
       final picked = await picker.pickImage(source: ImageSource.camera);
       if (picked != null) {
         setState(() {
-          _photo = picked;
-          _webFile = null;
+          _attachmentFile = picked;
         });
       }
     }
@@ -264,23 +279,20 @@ class _AddTransactionDialogState extends ConsumerState<AddTransactionDialog> {
     try {
       String? attachmentUrl;
 
-      // Обработка файла
-      if (_photo != null || _webFile != null) {
-        final bytes = _webFile != null ? _webFile!.bytes! : await _photo!.readAsBytes();
-        final fileName = _webFile != null ? _webFile!.name : _photo!.name;
-        
-        final compressedBytes = await ImageCompression.compressImage(bytes);
-        
+      if (_attachmentFile != null) {
+        final bytes = await _attachmentFile!.readAsBytes();
+        final fileName = _attachmentFile!.name;
+        final ext = fileName.toLowerCase();
+        final isImage = ext.endsWith('.jpg') || ext.endsWith('.jpeg') || ext.endsWith('.png') || ext.endsWith('.webp');
+        final compressedBytes = isImage ? await ImageCompression.compressImage(bytes) : bytes;
         final result = await api.uploadTransactionFile(
           companyId: widget.companyId,
           bytes: compressedBytes, 
           filename: fileName,
         );
-        
         attachmentUrl = result['url'] ?? result['attachment_url'];
       }
 
-      // Отправка данных
       await api.post('/transactions/', queryParameters: {
         'company_id': widget.companyId
       }, data: {
@@ -574,19 +586,18 @@ class _AddTransactionDialogState extends ConsumerState<AddTransactionDialog> {
                     ),
                   ],
                 ),
-                if (_photo != null || _webFile != null)
+                if (_attachmentFile != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
                     child: Row(
                       children: [
                         const Icon(Icons.check_circle, color: Colors.green),
                         const SizedBox(width: 8),
-                        Text(_photo != null ? _photo!.name : _webFile!.name),
+                        Expanded(child: Text(_attachmentFile!.name)),
                         IconButton(
                           icon: const Icon(Icons.clear, size: 16),
                           onPressed: () => setState(() {
-                            _photo = null;
-                            _webFile = null;
+                            _attachmentFile = null;
                           }),
                         ),
                       ],
