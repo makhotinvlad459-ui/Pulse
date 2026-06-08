@@ -310,34 +310,47 @@ async def get_companies(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    # 1. Получаем компании (с подгрузкой счетов)
     if current_user.role == UserRole.FOUNDER:
         result = await db.execute(
-            select(Company).where(Company.founder_id == current_user.id)
+            select(Company)
+            .where(Company.founder_id == current_user.id)
             .options(selectinload(Company.accounts))
         )
     else:
         result = await db.execute(
-            select(Company).join(CompanyMember).where(CompanyMember.user_id == current_user.id)
+            select(Company)
+            .join(CompanyMember)
+            .where(CompanyMember.user_id == current_user.id)
             .options(selectinload(Company.accounts))
         )
     companies = result.scalars().all()
-    
+
+    if not companies:
+        return []
+
+    # 2. ОДНИМ запросом получаем все роли пользователя во всех компаниях
+    company_ids = [comp.id for comp in companies]
+    members_result = await db.execute(
+        select(CompanyMember).where(
+            CompanyMember.user_id == current_user.id,
+            CompanyMember.company_id.in_(company_ids)
+        )
+    )
+    # Создаём словарь для быстрого поиска роли по company_id
+    role_map = {member.company_id: member.role_in_company for member in members_result.scalars()}
+
+    # 3. Формируем ответ, используя подготовленный словарь
     response = []
     for comp in companies:
         total = sum(acc.balance for acc in comp.accounts)
-        current_user_role = None
+        
+        # Определяем роль пользователя в компании
         if current_user.role == UserRole.FOUNDER and comp.founder_id == current_user.id:
             current_user_role = 'founder'
         else:
-            result = await db.execute(
-                select(CompanyMember).where(
-                    CompanyMember.company_id == comp.id,
-                    CompanyMember.user_id == current_user.id
-                )
-            )
-            member = result.scalar_one_or_none()
-            if member:
-                current_user_role = member.role_in_company
+            current_user_role = role_map.get(comp.id)  # None, если не состоит
+        
         response.append(CompanyResponse(
             id=comp.id,
             inn=comp.inn,
@@ -346,9 +359,10 @@ async def get_companies(
             manager_full_name=comp.manager_full_name,
             manager_phone=comp.manager_phone,
             total_balance=total,
-            employees_credentials=[],
+            employees_credentials=[],  # если не используется, можно убрать из модели?
             current_user_role=current_user_role
         ))
+    
     return response
 
 # --- Получение членов компании ---
