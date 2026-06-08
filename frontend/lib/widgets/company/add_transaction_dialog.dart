@@ -43,7 +43,7 @@ class _AddTransactionDialogState extends ConsumerState<AddTransactionDialog> {
   String _description = '';
   String _counterparty = '';
   bool _loading = false;
-  XFile? _attachmentFile; // единый файл
+  ({Uint8List bytes, String name})? _attachment;
   List<Map<String, dynamic>> _selectedProducts = [];
 
   List<String> _existingCounterparties = [];
@@ -133,9 +133,8 @@ class _AddTransactionDialogState extends ConsumerState<AddTransactionDialog> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.fileReadError)));
         return;
       }
-      final xfile = XFile.fromData(fileBytes, name: file.name);
       setState(() {
-        _attachmentFile = xfile;
+        _attachment = (bytes: fileBytes!, name: file.name);
       });
     }
   }
@@ -147,11 +146,18 @@ class _AddTransactionDialogState extends ConsumerState<AddTransactionDialog> {
       final picker = ImagePicker();
       final picked = await picker.pickImage(source: ImageSource.camera);
       if (picked != null) {
+        final bytes = await picked.readAsBytes();
         setState(() {
-          _attachmentFile = picked;
+          _attachment = (bytes: bytes, name: picked.name);
         });
       }
     }
+  }
+
+  void _removeAttachment() {
+    setState(() {
+      _attachment = null;
+    });
   }
 
   String _translateCategoryName(String name, AppLocalizations t) {
@@ -279,16 +285,14 @@ class _AddTransactionDialogState extends ConsumerState<AddTransactionDialog> {
     try {
       String? attachmentUrl;
 
-      if (_attachmentFile != null) {
-        final bytes = await _attachmentFile!.readAsBytes();
-        final fileName = _attachmentFile!.name;
-        final ext = fileName.toLowerCase();
+      if (_attachment != null) {
+        final ext = _attachment!.name.toLowerCase();
         final isImage = ext.endsWith('.jpg') || ext.endsWith('.jpeg') || ext.endsWith('.png') || ext.endsWith('.webp');
-        final compressedBytes = isImage ? await ImageCompression.compressImage(bytes) : bytes;
+        final bytesToUpload = isImage ? await ImageCompression.compressImage(_attachment!.bytes) : _attachment!.bytes;
         final result = await api.uploadTransactionFile(
           companyId: widget.companyId,
-          bytes: compressedBytes, 
-          filename: fileName,
+          bytes: bytesToUpload, 
+          filename: _attachment!.name,
         );
         attachmentUrl = result['url'] ?? result['attachment_url'];
       }
@@ -586,19 +590,17 @@ class _AddTransactionDialogState extends ConsumerState<AddTransactionDialog> {
                     ),
                   ],
                 ),
-                if (_attachmentFile != null)
+                if (_attachment != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
                     child: Row(
                       children: [
                         const Icon(Icons.check_circle, color: Colors.green),
                         const SizedBox(width: 8),
-                        Expanded(child: Text(_attachmentFile!.name)),
+                        Expanded(child: Text(_attachment!.name)),
                         IconButton(
                           icon: const Icon(Icons.clear, size: 16),
-                          onPressed: () => setState(() {
-                            _attachmentFile = null;
-                          }),
+                          onPressed: _removeAttachment,
                         ),
                       ],
                     ),

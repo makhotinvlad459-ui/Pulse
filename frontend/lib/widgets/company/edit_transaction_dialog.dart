@@ -47,7 +47,7 @@ class _EditTransactionDialogState extends ConsumerState<EditTransactionDialog> {
   bool _loadingCounterparties = false;
   List<Map<String, dynamic>> _selectedProducts = [];
   bool _loading = false;
-  XFile? _attachmentFile;
+  ({Uint8List bytes, String name})? _attachment;
   bool _hasExistingAttachment = false;
 
   @override
@@ -130,9 +130,8 @@ class _EditTransactionDialogState extends ConsumerState<EditTransactionDialog> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.fileReadError)));
         return;
       }
-      final xfile = XFile.fromData(fileBytes, name: file.name);
       setState(() {
-        _attachmentFile = xfile;
+        _attachment = (bytes: fileBytes!, name: file.name);
         _hasExistingAttachment = false;
       });
     }
@@ -145,18 +144,19 @@ class _EditTransactionDialogState extends ConsumerState<EditTransactionDialog> {
       final picker = ImagePicker();
       final picked = await picker.pickImage(source: ImageSource.camera);
       if (picked != null) {
+        final bytes = await picked.readAsBytes();
         setState(() {
-          _attachmentFile = picked;
+          _attachment = (bytes: bytes, name: picked.name);
           _hasExistingAttachment = false;
         });
       }
     }
   }
 
-  Future<void> _deleteAttachment() async {
+  void _deleteAttachment() {
     setState(() {
       _hasExistingAttachment = false;
-      _attachmentFile = null;
+      _attachment = null;
     });
   }
 
@@ -337,20 +337,18 @@ class _EditTransactionDialogState extends ConsumerState<EditTransactionDialog> {
     try {
       String? attachmentUrl = widget.transaction['attachment_url'];
       
-      if (!_hasExistingAttachment && _attachmentFile == null) {
+      if (!_hasExistingAttachment && _attachment == null) {
         attachmentUrl = null;
       }
       
-      if (_attachmentFile != null) {
-        final bytes = await _attachmentFile!.readAsBytes();
-        final fileName = _attachmentFile!.name;
-        final ext = fileName.toLowerCase();
+      if (_attachment != null) {
+        final ext = _attachment!.name.toLowerCase();
         final isImage = ext.endsWith('.jpg') || ext.endsWith('.jpeg') || ext.endsWith('.png') || ext.endsWith('.webp');
-        final compressedBytes = isImage ? await ImageCompression.compressImage(bytes) : bytes;
+        final bytesToUpload = isImage ? await ImageCompression.compressImage(_attachment!.bytes) : _attachment!.bytes;
         final result = await api.uploadTransactionFile(
           companyId: widget.companyId,
-          bytes: compressedBytes,
-          filename: fileName,
+          bytes: bytesToUpload,
+          filename: _attachment!.name,
         );
         attachmentUrl = result['url'] ?? result['attachment_url'];
       }
@@ -375,7 +373,7 @@ class _EditTransactionDialogState extends ConsumerState<EditTransactionDialog> {
             : null,
       };
       
-      if (!_hasExistingAttachment && _attachmentFile == null && widget.transaction['attachment_url'] != null) {
+      if (!_hasExistingAttachment && _attachment == null && widget.transaction['attachment_url'] != null) {
         data['delete_attachment'] = true;
       }
       
@@ -773,7 +771,7 @@ class _EditTransactionDialogState extends ConsumerState<EditTransactionDialog> {
                       ),
                     ],
                   ),
-                  if (_hasExistingAttachment && _attachmentFile == null)
+                  if (_hasExistingAttachment && _attachment == null)
                     Padding(
                       padding: const EdgeInsets.only(top: 8),
                       child: Row(
@@ -785,18 +783,18 @@ class _EditTransactionDialogState extends ConsumerState<EditTransactionDialog> {
                         ],
                       ),
                     ),
-                  if (_attachmentFile != null)
+                  if (_attachment != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 8),
                       child: Row(
                         children: [
                           const Icon(Icons.check_circle, color: Colors.green),
                           const SizedBox(width: 8),
-                          Expanded(child: Text(_attachmentFile!.name, style: TextStyle(color: colorScheme.onSurface))),
+                          Expanded(child: Text(_attachment!.name, style: TextStyle(color: colorScheme.onSurface))),
                           IconButton(
                             icon: const Icon(Icons.clear, size: 16),
                             onPressed: () => setState(() {
-                              _attachmentFile = null;
+                              _attachment = null;
                               _hasExistingAttachment = false;
                             }),
                           ),
