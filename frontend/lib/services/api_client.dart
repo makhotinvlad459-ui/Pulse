@@ -138,6 +138,18 @@ _dio.interceptors.add(LogInterceptor(responseBody: true, requestBody: true));
     }
   }
 
+  // ========== НОВАЯ ОБРАБОТКА 402 (Payment Required) ==========
+  if (e.response?.statusCode == 402) {
+    // Показываем диалог о необходимости подписки
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (navigatorKey.currentContext != null) {
+        _showSubscriptionRequiredDialog(navigatorKey.currentContext!);
+      }
+    });
+    return e.response?.data?['detail'] ?? 'Достигнут лимит бесплатных операций. Оформите подписку.';
+  }
+  // ============================================================
+
   // Сетевые ошибки
   if (e.type == DioExceptionType.connectionTimeout ||
       e.type == DioExceptionType.receiveTimeout ||
@@ -150,11 +162,9 @@ _dio.interceptors.add(LogInterceptor(responseBody: true, requestBody: true));
     final statusCode = e.response!.statusCode;
     final data = e.response!.data;
 
-    // Пытаемся извлечь сообщение из поля detail
     if (data is Map<String, dynamic>) {
       if (data.containsKey('detail') && data['detail'] is String) {
         final detail = data['detail'] as String;
-        // Переводим стандартное сообщение о неверных учётных данных
         if (detail == 'Invalid credentials' && t != null) {
           return tr('error_invalid_credentials', 'Invalid email or password');
         }
@@ -168,17 +178,60 @@ _dio.interceptors.add(LogInterceptor(responseBody: true, requestBody: true));
       }
     }
 
-    // Если не удалось извлечь, возвращаем сообщение с кодом
     if (statusCode != null) {
       return tr('error_server', 'Server error: $statusCode').replaceFirst('{code}', '$statusCode');
     }
   }
 
-  // Неизвестная ошибка
   final msg = e.message ?? '';
   return tr('error_unknown', 'An error occurred: $msg').replaceFirst('{message}', msg);
 }
 
+void _showSubscriptionRequiredDialog(BuildContext context) {
+  final t = AppLocalizations.of(context);
+  
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => AlertDialog(
+      title: Row(
+        children: [
+          Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
+          const SizedBox(width: 8),
+          Text(t?.subscriptionRequiredTitle ?? 'Лимит исчерпан'),
+        ],
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(t?.subscriptionRequiredMessage ?? 'Вы достигли лимита бесплатных операций.'),
+          const SizedBox(height: 12),
+          Text(
+            t?.subscriptionRequiredAction ?? 'Оформите подписку, чтобы продолжить работу без ограничений.',
+            style: const TextStyle(fontWeight: FontWeight.w500),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () {
+            Navigator.of(context).pop();
+          },
+          child: Text(t?.cancel ?? 'Отмена'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            Navigator.of(context).pop();
+            // Переход на экран подписки
+            Navigator.of(context).pushNamed('/subscription');
+          },
+          child: Text(t?.upgrade ?? 'Оформить подписку'),
+        ),
+      ],
+    ),
+  );
+}
   // Базовые методы
   Future<Response> post(String path, {dynamic data, Map<String, dynamic>? queryParameters}) =>
       _dio.post(path, data: data, queryParameters: queryParameters);

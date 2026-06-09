@@ -764,5 +764,72 @@
   "amountLabel": "Amount",
   "totalLabel": "Total",
     "cashType": "Cash",
-  "bankType": "Bank"
+  "bankType": "Bank",
+  "subscriptionRequiredTitle": "Limit Reached",
+  "subscriptionRequiredMessage": "You have reached the limit of free operations.",
+  "subscriptionRequiredAction": "Subscribe to continue without restrictions.",
+  "upgrade": "Upgrade",
+  "remaining": "Remaining",
+  "limitExceeded": "Limit exceeded",
+  "transactions": "Transactions",
+  "messages": "Messages",
+  "companies": "Companies",
+  "basicSubscription": "Basic Subscription",
+  "extraCompany": "Extra Company",
+  "forLife": "forever",
+  "remainingFreeOperations": "Remaining free operations",
+  "unlimitedOperations": "unlimited operations",
+  "extraCompanyDescription": "Increases company limit by 1 forever",
+  "recommended": "Recommended",
+  "perMonth": "per month",
+  "used": "Used",
+  "outOf": "of",
+  "@@locale": "en",
+  
+  "subscription": "Subscription",
+  "activeSubscription": "Active subscription",
+  "noActiveSubscription": "No active subscription",
+  "expiresAt": "Expires at",
+  
+  "errorLoadingStatus": "Error loading status",
+  "errorPaymentUrlNotFound": "Error: payment URL not received",
+  "errorCreatingPayment": "Error creating payment",
+  "errorCannotOpenLink": "Cannot open link. Check your connection.",
+  "errorOpeningLink": "Error opening link",
+  
+  "remainingFreeOperations": "Remaining free operations",
+  "transactions": "Transactions",
+  "chatMessages": "Chat messages",
+  "companies": "Companies",
+  "remaining": "Remaining",
+  "used": "Used",
+  "outOf": "of",
+  "limitExhausted": "Limit exhausted",
+  
+  "selectPlan": "Select plan",
+  "basicSubscription": "Basic subscription",
+  "basicSubscriptionDescription": "2 companies, unlimited operations",
+  "extraCompany": "Additional company",
+  "extraCompanyDescription": "Increases company limit by 1",
+  "recommended": "Recommended",
+  "forever": "forever",
+  "perMonth": "per month",
+  "currencySymbol": "₽",
+  "subscriptionInfoText": "After purchasing a subscription, limits are completely removed. Additional companies remain forever.",
+  "limitReachedWarning": "Free operation limit reached. Subscribe to continue working.",
+  
+  "extraCompaniesInfo": "{count} extra companies +{price} ₽",
+  "@extraCompaniesInfo": {
+    "description": "Extra companies info",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "description": "Number of extra companies"
+      },
+      "price": {
+        "type": "int",
+        "description": "Price for extra companies"
+      }
+    }
+  }
 }

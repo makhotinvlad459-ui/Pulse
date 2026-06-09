@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 import httpx
 from pydantic import BaseModel
 
@@ -11,48 +11,56 @@ from app.database import get_db
 from app.models import User, Company, UserRole, PaymentOrder
 from app.deps import get_current_user
 from app.config import settings
+from app.services.subscription_limits import FREE_LIMITS, get_company_limit_info
 
 router = APIRouter(prefix="/subscription", tags=["subscription"], redirect_slashes=False)
 
-PRICES = {
-    "monthly": 480,
-    "half_year": 2400,
-    "yearly": 4000,
-    "extra_company": 250,
+# Новая структура цен
+SUBSCRIPTION_PRICES = {
+    "monthly": 500,      # базовая подписка (2 компании)
+    "extra_company": 250  # каждая доп. компания
 }
 
 class PaymentCreateRequest(BaseModel):
-    plan: str
+    plan: str  # "monthly", "extra_company"
 
 @router.get("/status")
 async def get_subscription_status(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    if current_user.role == UserRole.FOUNDER:
-        result = await db.execute(select(Company).where(Company.founder_id == current_user.id))
-        companies = result.scalars().all()
-        companies_count = len(companies)
-    else:
-        companies_count = 0
-
-    remaining_free_companies = max(0, 3 + (current_user.extra_companies or 0) - companies_count)
-    has_active_subscription = current_user.subscription_until and current_user.subscription_until > datetime.utcnow()
-
+    from app.services.subscription_limits import get_company_limit_info
+    
+    # Получаем количество компаний пользователя
+    result = await db.execute(
+        select(func.count(Company.id))
+        .where(Company.founder_id == current_user.id)
+    )
+    companies_count = result.scalar() or 0
+    
+    # Получаем общую информацию о лимитах
+    limits = await get_company_limit_info(db, current_user)
+    
+    has_active = current_user.subscription_until and current_user.subscription_until > datetime.utcnow()
+    
     return {
-        "has_active_subscription": has_active_subscription,
+        "has_active_subscription": has_active,
         "subscription_plan": current_user.subscription_plan,
         "subscription_expires_at": current_user.subscription_until.isoformat() if current_user.subscription_until else None,
         "companies_count": companies_count,
-        "free_companies_limit": 3 + (current_user.extra_companies or 0),
-        "remaining_free_companies": remaining_free_companies,
-        "can_create_company": (companies_count < 3 + (current_user.extra_companies or 0)) or has_active_subscription,
-        "limits": {
-            "transactions": 50,
-            "messages": 50,
-            "tasks": 50,
-            "orders": 50,
-        }
+        "companies_limit": limits["companies_limit"],
+        "remaining_companies": limits["remaining_companies"],
+        "extra_companies": limits["extra_companies"],
+        "next_payment_amount": limits["next_payment_amount"],
+        "transactions_used": limits["transactions_used"],
+        "transactions_limit": limits["transactions_limit"],
+        "messages_used": limits["messages_used"],
+        "messages_limit": limits["messages_limit"],
+        "remaining_transactions": limits["remaining_transactions"],
+        "remaining_messages": limits["remaining_messages"],
+        "can_create_transaction": has_active or limits["remaining_transactions"] > 0,
+        "can_create_message": has_active or limits["remaining_messages"] > 0,
+        "can_create_company": has_active or limits["remaining_companies"] > 0,
     }
 
 @router.post("/create-payment")
@@ -62,16 +70,15 @@ async def create_payment(
     current_user: User = Depends(get_current_user)
 ):
     plan = req.plan
-    if plan not in PRICES:
-        raise HTTPException(400, "Invalid plan")
-
-    if plan == "extra_company":
-        amount = PRICES["extra_company"]
-    else:
-        base_amount = PRICES[plan]
+    
+    if plan == "monthly":
+        # Расчёт суммы с учётом extra_companies
         extra_count = current_user.extra_companies or 0
-        extra_amount = extra_count * 250
-        amount = base_amount + extra_amount
+        amount = SUBSCRIPTION_PRICES["monthly"] + (extra_count * SUBSCRIPTION_PRICES["extra_company"])
+    elif plan == "extra_company":
+        amount = SUBSCRIPTION_PRICES["extra_company"]
+    else:
+        raise HTTPException(400, "Invalid plan")
 
     payment_order = PaymentOrder(
         user_id=current_user.id,
@@ -147,22 +154,19 @@ async def yookassa_webhook(request: Request, db: AsyncSession = Depends(get_db))
         return {"status": "user not found"}
 
     now = datetime.utcnow()
+    
     if plan == "extra_company":
+        # Добавляем дополнительную компанию навсегда
         user.extra_companies = (user.extra_companies or 0) + 1
-    else:
-        # Продление подписки
-        if plan == "monthly":
-            delta = timedelta(days=30)
-        elif plan == "half_year":
-            delta = timedelta(days=180)
-        else:  # yearly
-            delta = timedelta(days=365)
+    elif plan == "monthly":
+        # Продление базовой подписки на месяц
+        delta = timedelta(days=30)
         if user.subscription_until and user.subscription_until > now:
             user.subscription_until = user.subscription_until + delta
         else:
             user.subscription_until = now + delta
-        user.subscription_plan = plan
-        # extra_companies не сбрасываются
+        user.subscription_plan = "monthly"
+        # extra_companies НЕ сбрасываются!
 
     await db.commit()
     return {"status": "ok"}

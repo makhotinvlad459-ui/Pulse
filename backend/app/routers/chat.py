@@ -14,6 +14,7 @@ from app.websocket_manager import manager
 import aiohttp
 from fastapi.responses import Response
 from app.websocket_manager import manager, send_push_notification
+from app.services.subscription_limits import check_message_limit, check_transaction_limit
 
 router = APIRouter(prefix="/chat", tags=["chat"], redirect_slashes=False)
 
@@ -120,7 +121,15 @@ async def send_chat_message(
     if not await _check_company_access(company_id, current_user, db):
         raise HTTPException(status_code=404, detail="Company not found or access denied")
     
-    # Создаем сообщение
+    # ========== ПРОВЕРКА ЛИМИТА СООБЩЕНИЙ ==========
+    can_create, used, limit = await check_message_limit(db, current_user)
+    if not can_create:
+        raise HTTPException(
+            status_code=402,
+            detail=f"Достигнут лимит бесплатных сообщений ({used}/{limit}). Оформите подписку для продолжения работы."
+        )
+    # =================================================
+    
     new_msg = ChatMessage(
         company_id=company_id,
         user_id=current_user.id,
@@ -132,7 +141,6 @@ async def send_chat_message(
     await db.commit()
     await db.refresh(new_msg)
     
-    # Формируем данные для WebSocket
     ws_message_data = {
         "id": new_msg.id,
         "user_id": current_user.id,
@@ -144,65 +152,51 @@ async def send_chat_message(
         "updated_at": None,
     }
     
-    # Отправляем через WebSocket
-    print(f"📤 Broadcasting to company {company_id}: {ws_message_data}")
-    
     try:
         await manager.broadcast_chat(company_id, {
             "type": "new_message",
             "message": ws_message_data
         })
-        print("✅ WebSocket broadcast sent")
     except Exception as ws_error:
-        print(f"❌ WebSocket broadcast error: {ws_error}")
+        print(f"WebSocket broadcast error: {ws_error}")
     
-    # Уведомляем о необходимости обновить счетчики
     await manager.notify_company_members(company_id, {
         "type": "update_counters",
         "company_id": company_id
     }, db)
     
-    # ========== PUSH УВЕДОМЛЕНИЯ ==========
+    # Push уведомления
     try:
         from app.models import CompanyMember, User
         
-        # Получаем ID всех членов компании
         members_result = await db.execute(
             select(CompanyMember.user_id).where(CompanyMember.company_id == company_id)
         )
         member_ids = [row[0] for row in members_result.all()]
         
-        # Добавляем основателя
         result = await db.execute(select(Company).where(Company.id == company_id))
         company = result.scalar_one_or_none()
         if company and company.founder_id not in member_ids:
             member_ids.append(company.founder_id)
         
-        # Убираем отправителя из списка получателей
         receivers_ids = [m_id for m_id in member_ids if m_id != current_user.id]
         
         if receivers_ids:
-            # Получаем всех нужных пользователей одним запросом к БД
             users_result = await db.execute(
                 select(User).where(User.id.in_(receivers_ids))
             )
             users_to_notify = users_result.scalars().all()
             
-            # Отправляем push каждому члену компании
             for user in users_to_notify:
                 if user.fcm_token:
-                    # 1. Достаем язык пользователя (по умолчанию 'ru')
-                    user_lang = getattr(user, 'language', 'ru') 
-                    
-                    # 2. Формируем локализованный текст
+                    user_lang = getattr(user, 'language', 'ru')
                     if user_lang == 'en':
                         push_title = f"New message from {current_user.display_name}"
                         push_body = msg.message[:100] if msg.message else "📎 Attachment"
                     else:
                         push_title = f"Новое сообщение от {current_user.display_name}"
                         push_body = msg.message[:100] if msg.message else "📎 Вложение"
-
-                    # 3. Отправляем пуш, защищая цикл от падения при сбое одного пуша
+                    
                     try:
                         await send_push_notification(
                             user.fcm_token,
@@ -213,15 +207,11 @@ async def send_chat_message(
                                 "message_id": str(new_msg.id)
                             }
                         )
-                        print(f"📱 Push sent to user {user.id} in {user_lang}")
                     except Exception as push_err:
-                        print(f"❌ Failed to send push to user {user.id}: {push_err}")
-                        
+                        print(f"Push error to user {user.id}: {push_err}")
     except Exception as general_err:
-        print(f"❌ General error in push notification block: {general_err}")
-    # ===================================
+        print(f"Push notification error: {general_err}")
     
-    # Возвращаем ответ
     return ChatMessageResponse(
         id=new_msg.id,
         user_id=current_user.id,

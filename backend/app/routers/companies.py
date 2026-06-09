@@ -13,6 +13,7 @@ from app.models import User, Company,Counterparty, Account, CompanyMember, UserR
 from app.schemas import CompanyCreate, CompanyResponse, UpdateMemberRole, SetManagerRequest, CompanyUpdate
 from app.deps import get_current_user
 from app.auth import get_password_hash
+from app.services.subscription_limits import get_company_limit_info
 
 router = APIRouter(prefix="/companies", tags=["companies"], redirect_slashes=False)
 
@@ -67,21 +68,18 @@ async def create_company(
     if current_user.role != UserRole.FOUNDER:
         raise HTTPException(status_code=403, detail="Only founder can create companies")
     
-    # Проверка активной подписки
-    has_active_subscription = current_user.subscription_until and current_user.subscription_until > datetime.utcnow()
-    if not has_active_subscription:
-        raise HTTPException(status_code=403, detail="Subscription expired or not active")
+    # ========== ИСПРАВЛЕННАЯ ПРОВЕРКА ЛИМИТА КОМПАНИЙ ==========
+    from app.services.subscription_limits import get_company_limit_info
+    limits = await get_company_limit_info(db, current_user)
     
-    # Считаем количество уже созданных компаний
-    result = await db.execute(select(func.count()).select_from(Company).where(Company.founder_id == current_user.id))
-    companies_count = result.scalar() or 0
-    
-    free_limit = 3 + (current_user.extra_companies or 0)
-    if companies_count >= free_limit:
+    # Лимит компаний работает всегда: и на бесплатном тарифе (2 шт), 
+    # и на платном (2 + extra_companies)
+    if limits["remaining_companies"] <= 0:
         raise HTTPException(
-            status_code=403,
-            detail=f"Company limit reached. You can have up to {free_limit} companies. Please buy additional company slots."
+            status_code=402,
+            detail=f"Достигнут лимит компаний ({limits['companies_used']}/{limits['companies_limit']}). "
         )
+    # ====================================================
     
     # Создаём компанию
     inn = company_data.inn or ""

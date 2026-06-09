@@ -5,6 +5,7 @@ from typing import List, Optional
 from datetime import datetime
 from sqlalchemy.orm import selectinload
 import os
+from app.services.subscription_limits import check_transaction_limit
 import shutil
 from fastapi.responses import FileResponse
 from decimal import Decimal
@@ -94,6 +95,15 @@ async def create_transaction(
     if not company:
         raise HTTPException(status_code=404, detail="Company not found or access denied")
     
+    # ========== ПРОВЕРКА ЛИМИТА ТРАНЗАКЦИЙ ==========
+    can_create, used, limit = await check_transaction_limit(db, current_user)
+    if not can_create:
+        raise HTTPException(
+            status_code=402,
+            detail=f"Достигнут лимит бесплатных транзакций ({used}/{limit}). Оформите подписку для продолжения работы."
+        )
+    # =================================================
+    
     # Проверка счёта
     result = await db.execute(select(Account).where(Account.id == trans_data.account_id, Account.company_id == company_id))
     account = result.scalar_one_or_none()
@@ -164,7 +174,7 @@ async def create_transaction(
     if trans_data.date.tzinfo is not None:
         trans_data.date = trans_data.date.replace(tzinfo=None)
     
-    # Создаём транзакцию (Берем attachment_url, присланный с фронтенда)
+    # Создаём транзакцию
     new_trans = Transaction(
         company_id=company_id,
         account_id=trans_data.account_id,
@@ -173,7 +183,7 @@ async def create_transaction(
         date=trans_data.date,
         category_id=trans_data.category_id,
         description=trans_data.description,
-        attachment_url=trans_data.attachment_url,  # <-- СОХРАНЯЕМ URL СТРОКУ
+        attachment_url=trans_data.attachment_url,
         created_by=current_user.id,
         transfer_to_account_id=trans_data.transfer_to_account_id if is_transfer else None,
         number=new_number,
@@ -184,7 +194,7 @@ async def create_transaction(
     db.add(new_trans)
     await db.flush()
     
-    # Обработка товаров и сохранение в transaction_items
+    # Обработка товаров
     if not is_transfer and trans_data.items:
         for item in trans_data.items:
             prod_result = await db.execute(select(Product).where(Product.id == item.product_id, Product.company_id == company_id))
@@ -203,7 +213,6 @@ async def create_transaction(
             )
             db.add(trans_item)
     
-    # Пересчёт балансов счетов
     await recalc_account_balance(new_trans.account_id, db)
     if is_transfer and new_trans.transfer_to_account_id is not None:
         await recalc_account_balance(new_trans.transfer_to_account_id, db)
@@ -212,7 +221,6 @@ async def create_transaction(
     await db.refresh(new_trans)
     await db.refresh(new_trans, attribute_names=['creator', 'updater'])
     
-    # Загружаем товары для ответа
     items_result = await db.execute(
         select(TransactionItem).where(TransactionItem.transaction_id == new_trans.id)
         .options(selectinload(TransactionItem.product))

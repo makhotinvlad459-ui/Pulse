@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, or_
-from jose import jwt
+from jose import jwt, JWTError
 from passlib.context import CryptContext
 from pydantic import BaseModel, EmailStr, validator
 import secrets
@@ -13,7 +13,6 @@ from app.database import get_db
 from app.models import User, UserRole, PasswordResetToken
 from app.config import settings
 from app.deps import get_current_user
-from datetime import datetime, timedelta
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -83,6 +82,16 @@ class ResetPasswordRequest(BaseModel):
             raise ValueError('Password must be at least 8 characters')
         return v
 
+class ChangePasswordRequest(BaseModel):
+    old_password: str
+    new_password: str
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+class DeleteAccountRequest(BaseModel):
+    password: str
+
 # ---------- Утилиты ----------
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
@@ -120,15 +129,15 @@ async def register(register_data: RegisterRequest, db: AsyncSession = Depends(ge
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "User with this phone number already exists")
 
     hashed = get_password_hash(register_data.password)
-    subscription_until = datetime.utcnow() + timedelta(days=30)
     
+    # Новый пользователь НЕ получает подписку автоматически
     new_user = User(
         email=register_data.email,
         phone=register_data.phone,
         full_name=register_data.full_name,
         password_hash=hashed,
         role=UserRole.FOUNDER,
-        subscription_until=subscription_until,
+        subscription_until=None,  # ← Без подписки при регистрации
         soft_delete_retention_days=15,
         is_active=True
     )
@@ -237,10 +246,6 @@ async def reset_password(data: ResetPasswordRequest, db: AsyncSession = Depends(
     await db.commit()
     return {"detail": "Password has been reset"}
 
-class ChangePasswordRequest(BaseModel):
-    old_password: str
-    new_password: str
-
 @router.post("/change-password")
 async def change_password(
     data: ChangePasswordRequest,
@@ -272,9 +277,6 @@ async def update_language(
     await db.commit()
     return {"message": "Language updated"}
 
-class RefreshRequest(BaseModel):
-    refresh_token: str
-
 @router.post("/refresh")
 async def refresh_token(
     req: RefreshRequest,
@@ -289,7 +291,6 @@ async def refresh_token(
         user = result.scalar_one_or_none()
         if not user or user.refresh_token != req.refresh_token:
             raise HTTPException(status_code=401, detail="Invalid refresh token")
-        # Проверка срока действия refresh-токена (JWT уже проверил exp, но дополнительно)
         new_access = create_access_token(data={"sub": str(user.id), "role": user.role.value})
         return {"access_token": new_access}
     except JWTError:
@@ -300,10 +301,11 @@ async def logout(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    current_user.refresh_token = None# ---------- Удаление аккаунта ----------
-class DeleteAccountRequest(BaseModel):
-    password: str
+    current_user.refresh_token = None
+    await db.commit()
+    return {"detail": "Logged out"}
 
+# ---------- Удаление аккаунта ----------
 @router.delete("/me", status_code=200)
 async def delete_my_account(
     data: DeleteAccountRequest,
@@ -322,10 +324,6 @@ async def delete_my_account(
     current_user.refresh_token = None
     current_user.deleted_at = datetime.utcnow()
     
-    
     await db.commit()
     
     return {"detail": "Account permanently deleted. Your personal data has been removed."}
-    await db.commit()
-    return {"detail": "Logged out"}    
-

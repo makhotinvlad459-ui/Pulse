@@ -764,8 +764,75 @@
   "amountLabel": "Сумма",
   "totalLabel": "Итого",
   "cashType": "Наличные",
-  "bankType": "Банк"
-
+  "bankType": "Банк",
+  "subscriptionRequiredTitle": "Лимит исчерпан",
+  "subscriptionRequiredMessage": "Вы достигли лимита бесплатных операций.",
+  "subscriptionRequiredAction": "Оформите подписку, чтобы продолжить работу без ограничений.",
+  "upgrade": "Оформить подписку",
+  "remaining": "Осталось",
+  "limitExceeded": "Лимит исчерпан",
+  "transactions": "Транзакции",
+  "messages": "Сообщения",
+  "companies": "Компании",
+  "basicSubscription": "Базовая подписка",
+  "extraCompany": "Дополнительная компания",
+  "forLife": "навсегда",
+  "remainingFreeOperations": "Remaining free operations",
+  "unlimitedOperations": "unlimited operations",
+  "extraCompanyDescription": "Increases company limit by 1 forever",
+  "recommended": "Recommended",
+  "perMonth": "per month",
+  "used": "Used",
+  "outOf": "of",
+  "@@locale": "ru",
+  
+  "subscription": "Подписка",
+  "activeSubscription": "Активная подписка",
+  "noActiveSubscription": "Нет активной подписки",
+  "expiresAt": "Истекает",
+  
+  "errorLoadingStatus": "Ошибка загрузки статуса",
+  "errorPaymentUrlNotFound": "Ошибка: URL платежа не получен",
+  "errorCreatingPayment": "Ошибка создания платежа",
+  "errorCannotOpenLink": "Не удалось открыть ссылку. Проверьте подключение.",
+  "errorOpeningLink": "Ошибка открытия ссылки",
+  
+  "remainingFreeOperations": "Осталось бесплатных операций",
+  "transactions": "Транзакции",
+  "chatMessages": "Сообщения в чате",
+  "companies": "Компании",
+  "remaining": "Осталось",
+  "used": "Использовано",
+  "outOf": "из",
+  "limitExhausted": "Лимит исчерпан",
+  
+  "selectPlan": "Выберите тариф",
+  "basicSubscription": "Базовая подписка",
+  "basicSubscriptionDescription": "2 компании, безлимитные операции",
+  "extraCompany": "Дополнительная компания",
+  "extraCompanyDescription": "Увеличивает лимит компаний на 1",
+  "recommended": "Рекомендуем",
+  "forever": "навсегда",
+  "perMonth": "за месяц",
+  "currencySymbol": "₽",
+  "subscriptionInfoText": "После покупки подписки лимиты снимаются полностью. Дополнительные компании остаются навсегда.",
+  "limitReachedWarning": "Достигнут лимит бесплатных операций. Оформите подписку для продолжения работы.",
+  
+  "extraCompaniesInfo": "{count} доп. компаний +{price} ₽",
+  "@extraCompaniesInfo": {
+    "description": "Информация о дополнительных компаниях",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "description": "Количество дополнительных компаний"
+      },
+      "price": {
+        "type": "int",
+        "description": "Цена за дополнительные компании"
+      }
+    }
+  }
 }
+
   
 
