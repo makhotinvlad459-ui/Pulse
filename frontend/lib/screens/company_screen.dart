@@ -27,6 +27,7 @@ import '../widgets/company/counterparties_tab.dart';
 import '../services/websocket_service.dart';
 import 'package:frontend/l10n/app_localizations.dart';
 import '../widgets/company/journal/journal_tab.dart';
+import '../services/error/error_handler.dart';
 
 class RainTheme {
   final Color color;
@@ -453,8 +454,11 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
   } catch (e) {
     setState(() => _loading = false);
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('${AppLocalizations.of(context)!.error}: $e')));
+      await ErrorHandler.showErrorDialog(
+        context,
+        e,
+        onRetry: _loadData, 
+      );
     }
   }
 }

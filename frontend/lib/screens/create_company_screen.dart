@@ -5,6 +5,7 @@ import '../services/api_client.dart';
 import '../providers/locale_provider.dart';
 import '../screens/subscription_screen.dart';
 import 'package:frontend/l10n/app_localizations.dart';
+import '../services/error/error_handler.dart';
 
 class CreateCompanyScreen extends ConsumerStatefulWidget {
   const CreateCompanyScreen({super.key});
@@ -27,65 +28,70 @@ class _CreateCompanyScreenState extends ConsumerState<CreateCompanyScreen> {
   void _removeEmployee(int i) => setState(() => _employees.removeAt(i));
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() => _isLoading = true);
-    final api = ApiClient();
-    final t = AppLocalizations.of(context)!;
+  if (!_formKey.currentState!.validate()) return;
+  setState(() => _isLoading = true);
+  final api = ApiClient();
+  final t = AppLocalizations.of(context)!;
 
-    // 1. Проверяем, может ли пользователь создавать новую компанию
-    try {
-      final statusRes = await api.get('/subscription/status');
-      final data = statusRes.data;
-      final canCreate = data['can_create_company'] as bool;
-      if (!canCreate) {
-        setState(() => _isLoading = false);
-        _showLimitDialog();
-        return;
-      }
-    } catch (e) {
+  // 1. Проверяем, может ли пользователь создавать новую компанию
+  try {
+    final statusRes = await api.get('/subscription/status');
+    final data = statusRes.data;
+    final canCreate = data['can_create_company'] as bool;
+    if (!canCreate) {
       setState(() => _isLoading = false);
-      // Если запрос статуса не удался, всё равно пробуем создать (может, бэкенд ещё не обновлён)
-      // Но лучше прервать и показать ошибку.
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${t.error}: $e')),
-      );
+      _showLimitDialog();
       return;
     }
-
-    // 2. Создаём компанию
-    try {
-      final response = await api.post('/companies/', data: {
-        'name': _nameController.text,
-        'manager_full_name': _managerNameController.text,
-        'manager_phone': _managerPhoneController.text,
-        'employees': _employees
-            .where((e) => e['full_name']!.isNotEmpty && e['phone']!.isNotEmpty)
-            .toList(),
-      });
-      final credentials = response.data['employees_credentials'] as List? ?? [];
-      if (mounted) {
-        if (credentials.isNotEmpty) {
-          _showCredentialsDialog(credentials);
-        } else {
-          Navigator.pop(context, true);
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        String errorMsg = e.toString();
-        // Если бэкенд вернул 403 с сообщением о лимите – показываем диалог
-        if (errorMsg.contains('Company limit reached')) {
-          _showLimitDialog();
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('${t.error}: $e')),
-          );
-        }
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+  } catch (e) {
+    setState(() => _isLoading = false);
+    // Используем ErrorHandler для красивого отображения ошибки
+    if (mounted) {
+      await ErrorHandler.showErrorDialog(
+        context,
+        e,
+        onRetry: _submit,
+      );
     }
+    return;
   }
+
+  // 2. Создаём компанию
+  try {
+    final response = await api.post('/companies/', data: {
+      'name': _nameController.text,
+      'manager_full_name': _managerNameController.text,
+      'manager_phone': _managerPhoneController.text,
+      'employees': _employees
+          .where((e) => e['full_name']!.isNotEmpty && e['phone']!.isNotEmpty)
+          .toList(),
+    });
+    final credentials = response.data['employees_credentials'] as List? ?? [];
+    if (mounted) {
+      if (credentials.isNotEmpty) {
+        _showCredentialsDialog(credentials);
+      } else {
+        Navigator.pop(context, true);
+      }
+    }
+  } catch (e) {
+    if (mounted) {
+      // Проверяем специфическую ошибку лимита
+      if (e.toString().contains('Company limit reached')) {
+        _showLimitDialog();
+      } else {
+        // Используем ErrorHandler для остальных ошибок
+        await ErrorHandler.showErrorDialog(
+          context,
+          e,
+          onRetry: _submit,
+        );
+      }
+    }
+  } finally {
+    if (mounted) setState(() => _isLoading = false);
+  }
+}
 
   void _showLimitDialog() {
     final t = AppLocalizations.of(context)!;

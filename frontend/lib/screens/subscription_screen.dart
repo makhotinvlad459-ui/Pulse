@@ -4,6 +4,7 @@ import '../services/api_client.dart';
 import '../providers/locale_provider.dart';
 import 'package:frontend/l10n/app_localizations.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../services/error/error_handler.dart';
 
 class SubscriptionScreen extends ConsumerStatefulWidget {
   const SubscriptionScreen({super.key});
@@ -35,11 +36,16 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _loading = false);
-        _showSnackBar(AppLocalizations.of(context)!.errorLoadingStatus + ': $e');
-      }
+    setState(() => _loading = false);
+    await ErrorHandler.showErrorDialog(
+      context,
+      e,
+      onRetry: _loadStatus,
+      );
     }
   }
+}
+
 
   Future<void> _buyWithYooKassa(String plan) async {
     final api = ApiClient();

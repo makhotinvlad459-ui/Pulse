@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/api_client.dart';
 import '../providers/locale_provider.dart';
 import 'package:frontend/l10n/app_localizations.dart';
+import '../services/error/error_handler.dart';
 
 class ForgotPasswordScreen extends ConsumerStatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -31,20 +32,22 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
       _message = null;
     });
     final api = ApiClient();
+    final t = AppLocalizations.of(context)!;
     try {
       await api.post('/auth/forgot-password',
           data: {'email': _emailController.text.trim()});
       setState(() {
-        _message = AppLocalizations.of(context)!.resetLinkSent;
+        _message = t.resetLinkSent;
         _loading = false;
       });
     } catch (e) {
+      final appError = ErrorHandler.handleError(e, context: context);
       setState(() {
-        _message = '${AppLocalizations.of(context)!.error}: ${e.toString()}';
+        _message = appError.message;
         _loading = false;
       });
     }
-  }
+  } // <-- ЭТА СКОБКА ЗАКРЫВАЕТ МЕТОД _sendResetLink
 
   void _setLanguage(Locale locale) {
     ref.read(localeProvider.notifier).setLocale(locale);
@@ -53,9 +56,10 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final t = AppLocalizations.of(context)!;
     return Scaffold(
       appBar: AppBar(
-        title: Text(AppLocalizations.of(context)!.forgotPasswordTitle),
+        title: Text(t.forgotPasswordTitle),
         actions: [
           Row(
             children: [
@@ -80,22 +84,22 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
             children: [
               const SizedBox(height: 20),
               Text(
-                AppLocalizations.of(context)!.forgotPasswordInstruction,
+                t.forgotPasswordInstruction,
                 style: TextStyle(color: colorScheme.onSurfaceVariant),
               ),
               const SizedBox(height: 30),
               TextFormField(
                 controller: _emailController,
                 decoration: InputDecoration(
-                  labelText: AppLocalizations.of(context)!.emailLabel,
+                  labelText: t.emailLabel,
                   border: const OutlineInputBorder(),
                 ),
                 validator: (value) {
                   if (value == null || value.isEmpty) {
-                    return AppLocalizations.of(context)!.enterEmail;
+                    return t.enterEmail;
                   }
                   if (!value.contains('@') || !value.contains('.')) {
-                    return AppLocalizations.of(context)!.invalidEmail;
+                    return t.invalidEmail;
                   }
                   return null;
                 },
@@ -108,26 +112,23 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                   child: Text(
                     _message!,
                     style: TextStyle(
-                      color: _message!
-                              .startsWith(AppLocalizations.of(context)!.error)
-                          ? Colors.red
-                          : Colors.green,
+                      color: _message!.startsWith(t.error) ? Colors.red : Colors.green,
                     ),
                     textAlign: TextAlign.center,
                   ),
                 ),
               ElevatedButton(
                 onPressed: _loading ? null : _sendResetLink,
-                child: Text(AppLocalizations.of(context)!.sendResetLink),
+                child: Text(t.sendResetLink),
               ),
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: Text(AppLocalizations.of(context)!.backToLogin),
+                child: Text(t.backToLogin),
               ),
             ],
           ),
         ),
       ),
     );
-  }
-}
+  } // <-- ЭТА СКОБКА ЗАКРЫВАЕТ МЕТОД build
+} 

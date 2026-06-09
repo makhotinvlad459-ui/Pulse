@@ -16,6 +16,7 @@ import '../services/websocket_service.dart';
 import 'package:frontend/l10n/app_localizations.dart';
 import '../screens/subscription_screen.dart';
 import '../widgets/company/change_password_dialog.dart';
+import '../services/error/error_handler.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -185,16 +186,35 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     },
                     loading: () => const Center(child: CircularProgressIndicator()),
                     error: (error, stack) {
-                      print('Home error: $error\n$stack');
-                      final errorMessage = error is String
-                          ? error
-                          : error is Exception
-                              ? error.toString()
-                              : '${t.error}: $error';
+                      final appError = ErrorHandler.handleError(error);
+                      
                       return Center(
-                        child: Text(
-                          errorMessage,
-                          style: TextStyle(color: colorScheme.error),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.error_outline, size: 64, color: colorScheme.error),
+                            const SizedBox(height: 16),
+                            Text(
+                              appError.title,
+                              style: TextStyle(color: colorScheme.error, fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 8),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 32),
+                              child: Text(
+                                appError.message,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: colorScheme.onSurfaceVariant),
+                              ),
+                            ),
+                            if (appError.canRetry)
+                              ElevatedButton(
+                                onPressed: () {
+                                  ref.invalidate(homeProvider);
+                                },
+                                child: Text(t.retry),
+                              ),
+                          ],
                         ),
                       );
                     },
@@ -221,10 +241,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 }
 
+// ========== ВСЕ КЛАССЫ ДОЛЖНЫ БЫТЬ ЗДЕСЬ, ВНЕ _HomeScreenState ==========
 
 class _StatCard extends StatelessWidget {
   final String title;
   final double amount;
+  
   const _StatCard({required this.title, required this.amount});
 
   @override
@@ -281,8 +303,7 @@ class _CompanyCard extends StatefulWidget {
   State<_CompanyCard> createState() => _CompanyCardState();
 }
 
-class _CompanyCardState extends State<_CompanyCard>
-    with SingleTickerProviderStateMixin {
+class _CompanyCardState extends State<_CompanyCard> with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
 
   @override
@@ -306,8 +327,7 @@ class _CompanyCardState extends State<_CompanyCard>
     final isDark = colorScheme.brightness == Brightness.dark;
     final borderBase = isDark ? Colors.grey.shade600 : Colors.grey.shade400;
     final borderLight = isDark ? Colors.grey.shade500 : Colors.grey.shade300;
-    final highlight =
-        isDark ? Colors.white.withOpacity(0.6) : Colors.white.withOpacity(0.8);
+    final highlight = isDark ? Colors.white.withOpacity(0.6) : Colors.white.withOpacity(0.8);
     final t = AppLocalizations.of(context)!;
     final currency = t.currencySymbol;
 
@@ -348,8 +368,7 @@ class _CompanyCardState extends State<_CompanyCard>
                 onTap: () async {
                   await Navigator.push(
                     context,
-                    MaterialPageRoute(
-                        builder: (_) => CompanyScreen(company: widget.company)),
+                    MaterialPageRoute(builder: (_) => CompanyScreen(company: widget.company)),
                   );
                   widget.ref.invalidate(homeProvider);
                 },
@@ -357,8 +376,7 @@ class _CompanyCardState extends State<_CompanyCard>
                 splashColor: colorScheme.primary.withOpacity(0.2),
                 highlightColor: colorScheme.primary.withOpacity(0.1),
                 child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -377,37 +395,32 @@ class _CompanyCardState extends State<_CompanyCard>
                               ),
                             ),
                           ),
-                          if (widget.unreadMessages > 0 ||
-                              widget.pendingTasks > 0)
+                          if (widget.unreadMessages > 0 || widget.pendingTasks > 0)
                             Row(
                               children: [
                                 if (widget.unreadMessages > 0)
                                   Container(
                                     margin: const EdgeInsets.only(right: 8),
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 6, vertical: 2),
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(
                                       color: Colors.red,
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: Text(
                                       '${t.messages}: ${widget.unreadMessages}',
-                                      style: const TextStyle(
-                                          color: Colors.white, fontSize: 10),
+                                      style: const TextStyle(color: Colors.white, fontSize: 10),
                                     ),
                                   ),
                                 if (widget.pendingTasks > 0)
                                   Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 6, vertical: 2),
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(
                                       color: Colors.orange,
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: Text(
                                       '${t.tasks}: ${widget.pendingTasks}',
-                                      style: const TextStyle(
-                                          color: Colors.white, fontSize: 10),
+                                      style: const TextStyle(color: Colors.white, fontSize: 10),
                                     ),
                                   ),
                               ],
@@ -416,11 +429,9 @@ class _CompanyCardState extends State<_CompanyCard>
                       ),
                       const SizedBox(height: 4),
                       Text('${t.manager}: ${widget.company.managerFullName}',
-                          style:
-                              TextStyle(color: colorScheme.onSurfaceVariant)),
+                          style: TextStyle(color: colorScheme.onSurfaceVariant)),
                       Text('${t.phone}: ${widget.company.managerPhone}',
-                          style:
-                              TextStyle(color: colorScheme.onSurfaceVariant)),
+                          style: TextStyle(color: colorScheme.onSurfaceVariant)),
                       const SizedBox(height: 4),
                       if (widget.showBalance)
                         Text(
@@ -493,8 +504,7 @@ class SettingsDrawer extends StatelessWidget {
   const SettingsDrawer({super.key});
 
   void _setLanguage(BuildContext context, Locale locale) {
-    final ref =
-        ProviderScope.containerOf(context).read(localeProvider.notifier);
+    final ref = ProviderScope.containerOf(context).read(localeProvider.notifier);
     ref.setLocale(locale);
   }
 
@@ -534,7 +544,6 @@ class SettingsDrawer extends StatelessWidget {
     try {
       final api = ApiClient();
       await api.deleteMyAccount(passwordController.text);
-      // Выход из системы
       final ref = ProviderScope.containerOf(context).read(authProvider.notifier);
       await ref.logout();
       WebSocketService().disconnectAll();
@@ -545,8 +554,9 @@ class SettingsDrawer extends StatelessWidget {
         );
       }
     } catch (e) {
+      final appError = ErrorHandler.handleError(e, context: context);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${AppLocalizations.of(context)!.error}: $e')),
+        SnackBar(content: Text(appError.message)),
       );
     }
   }
@@ -564,13 +574,10 @@ class SettingsDrawer extends StatelessWidget {
         children: [
           DrawerHeader(
             decoration: BoxDecoration(
-              color: isDark
-                  ? Colors.grey[800]
-                  : const Color.fromARGB(255, 191, 193, 194),
+              color: isDark ? Colors.grey[800] : const Color.fromARGB(255, 191, 193, 194),
             ),
             child: Text(t.settings,
-                style: TextStyle(
-                    fontSize: 28, color: isDark ? Colors.white : Colors.white)),
+                style: TextStyle(fontSize: 28, color: isDark ? Colors.white : Colors.white)),
           ),
           ListTile(
             leading: const Icon(Icons.language),
@@ -591,16 +598,13 @@ class SettingsDrawer extends StatelessWidget {
           ),
           const Divider(),
           ListTile(
-            leading:
-                Icon(Icons.help_outline, color: colorScheme.onSurfaceVariant),
-            title: Text(t.userGuide,
-                style: TextStyle(color: colorScheme.onSurfaceVariant)),
+            leading: Icon(Icons.help_outline, color: colorScheme.onSurfaceVariant),
+            title: Text(t.userGuide, style: TextStyle(color: colorScheme.onSurfaceVariant)),
             onTap: () {
               showDialog(
                 context: context,
                 builder: (context) => AlertDialog(
-                  title: Text(t.userGuide,
-                      style: TextStyle(color: colorScheme.onSurface)),
+                  title: Text(t.userGuide, style: TextStyle(color: colorScheme.onSurface)),
                   content: SingleChildScrollView(
                     child: Text(
                       t.userGuideText,
@@ -610,9 +614,7 @@ class SettingsDrawer extends StatelessWidget {
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.pop(context),
-                      child: Text(t.close,
-                          style:
-                              TextStyle(color: colorScheme.onSurfaceVariant)),
+                      child: Text(t.close, style: TextStyle(color: colorScheme.onSurfaceVariant)),
                     ),
                   ],
                 ),
@@ -648,8 +650,7 @@ class SettingsDrawer extends StatelessWidget {
                       break;
                   }
                   return RadioListTile<AppTheme>(
-                    title: Text(themeName,
-                        style: TextStyle(color: colorScheme.onSurfaceVariant)),
+                    title: Text(themeName, style: TextStyle(color: colorScheme.onSurfaceVariant)),
                     value: theme,
                     groupValue: currentTheme,
                     onChanged: (value) {
@@ -685,14 +686,12 @@ class SettingsDrawer extends StatelessWidget {
             },
           ),
           ExpansionTile(
-            title: Text(t.support,
-                style: TextStyle(color: colorScheme.onSurfaceVariant)),
+            title: Text(t.support, style: TextStyle(color: colorScheme.onSurfaceVariant)),
             children: [
               ListTile(title: Text('${t.emailSupport}: pulse.yourmoney@gmail.com'))
             ],
           ),
           const Divider(),
-          // 👇 НОВЫЙ ПУНКТ: УДАЛЕНИЕ АККАУНТА
           ListTile(
             leading: const Icon(Icons.delete_forever, color: Colors.red),
             title: Text(t.deleteAccount, style: const TextStyle(color: Colors.red)),

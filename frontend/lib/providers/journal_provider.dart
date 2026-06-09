@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/journal_entry.dart';
 import '../services/api_client.dart';
+import '../services/error/error_handler.dart';
 
 final journalProvider = StateNotifierProvider<JournalNotifier, JournalState>((ref) {
   return JournalNotifier();
@@ -25,7 +26,8 @@ class JournalNotifier extends StateNotifier<JournalState> {
       final entries = await _api.getJournalEntries(companyId, start, end);
       state = JournalState(entries: entries);
     } catch (e) {
-      state = JournalState(entries: state.entries, error: e.toString());
+      final appError = ErrorHandler.handleError(e);
+      state = JournalState(entries: state.entries, error: appError.message);
     }
   }
 
@@ -54,7 +56,8 @@ class JournalNotifier extends StateNotifier<JournalState> {
       state = JournalState(entries: [...state.entries, newEntry]);
       return newEntry;
     } catch (e) {
-      state = JournalState(entries: state.entries, error: e.toString());
+      final appError = ErrorHandler.handleError(e);
+      state = JournalState(entries: state.entries, error: appError.message);
       return null;
     }
   }
@@ -88,7 +91,8 @@ class JournalNotifier extends StateNotifier<JournalState> {
       state = JournalState(entries: newEntries);
       return true;
     } catch (e) {
-      state = JournalState(entries: state.entries, error: e.toString());
+      final appError = ErrorHandler.handleError(e);
+      state = JournalState(entries: state.entries, error: appError.message);
       return false;
     }
   }
@@ -99,7 +103,8 @@ class JournalNotifier extends StateNotifier<JournalState> {
       state = JournalState(entries: state.entries.where((e) => e.id != entryId).toList());
       return true;
     } catch (e) {
-      state = JournalState(entries: state.entries, error: e.toString());
+      final appError = ErrorHandler.handleError(e);
+      state = JournalState(entries: state.entries, error: appError.message);
       return false;
     }
   }
@@ -107,9 +112,11 @@ class JournalNotifier extends StateNotifier<JournalState> {
   Future<bool> completeEntry(int companyId, int entryId, int accountId) async {
     try {
       await _api.completeJournalEntry(companyId, entryId, accountId);
+      state = JournalState(entries: state.entries);
       return true;
     } catch (e) {
-      state = JournalState(entries: state.entries, error: e.toString());
+      final appError = ErrorHandler.handleError(e);
+      state = JournalState(entries: state.entries, error: appError.message);
       return false;
     }
   }

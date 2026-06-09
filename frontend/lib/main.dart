@@ -14,12 +14,14 @@ import 'screens/reset_password_screen.dart';
 import 'services/websocket_service.dart';
 import 'services/push_notifications.dart';
 import 'package:frontend/l10n/app_localizations.dart';
+import 'screens/subscription_screen.dart';
+import 'services/error/global_error_handler.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+  GlobalErrorHandler.initialize();
   // Инициализация Firebase
   try {
     if (kIsWeb) {

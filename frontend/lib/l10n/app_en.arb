@@ -831,5 +831,21 @@
         "description": "Price for extra companies"
       }
     }
-  }
+  },
+  "error_subscription_title": "Subscription Required",
+  "error_subscription_message": "You have reached the limit of free operations. Please subscribe to continue.",
+  "error_network_title": "Network Error",
+  "error_network_message": "Unable to connect to the server. Please check your internet connection.",
+  "error_server_title": "Server Error",
+  "error_server_message": "An error occurred on the server. Please try again later.",
+  "error_validation_title": "Validation Error",
+  "error_validation_message": "Please check your input and try again.",
+  "error_auth_title": "Session Expired",
+  "error_auth_message": "Your session has expired. Please login again.",
+  "error_forbidden_title": "Access Denied",
+  "error_forbidden_message": "You don't have permission to perform this action.",
+  "error_not_found_title": "Not Found",
+  "error_not_found_message": "The requested resource was not found.",
+  "retry": "Retry",
+  "close": "Close"
 }

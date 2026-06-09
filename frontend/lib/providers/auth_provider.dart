@@ -5,6 +5,7 @@ import '../services/secure_storage.dart';
 import '../services/websocket_service.dart';
 import '../models/user.dart';
 import 'package:dio/dio.dart';
+import '../services/error/error_handler.dart';
 
 final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) => AuthNotifier());
 
@@ -74,7 +75,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
       'password': password,
     });
     
-    // Если дошли сюда, значит ошибок нет (статус 200)
     final data = response.data;
     if (data is! Map<String, dynamic>) throw Exception('Invalid response format');
     
@@ -95,16 +95,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
     
     return loaded;
-  } catch (e, stack) {
-    print('login error: $e');
-    String errorMsg;
-    if (e is DioException) {
-      // Извлекаем наше локализованное сообщение из поля error
-      errorMsg = e.error?.toString() ?? 'Ошибка соединения';
-    } else {
-      errorMsg = e.toString();
-    }
-    state = AuthState(error: errorMsg);
+  } catch (e) {
+    // Используем ErrorHandler для красивого сообщения
+    final appError = ErrorHandler.handleError(e);
+    state = AuthState(error: appError.message);
     return false;
   }
 }

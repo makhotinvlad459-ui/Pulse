@@ -233,11 +233,30 @@ void _showSubscriptionRequiredDialog(BuildContext context) {
   );
 }
   // Базовые методы
-  Future<Response> post(String path, {dynamic data, Map<String, dynamic>? queryParameters}) =>
-      _dio.post(path, data: data, queryParameters: queryParameters);
+  Future<Response> post(String path, {dynamic data, Map<String, dynamic>? queryParameters}) async {
+  try {
+    return await _dio.post(path, data: data, queryParameters: queryParameters);
+  } catch (e) {
+    throw _normalizeError(e);
+  }
+}
 
-  Future<Response> get(String path, {Map<String, dynamic>? queryParameters}) =>
-      _dio.get(path, queryParameters: queryParameters);
+  Future<Response> get(String path, {Map<String, dynamic>? queryParameters}) async {
+  try {
+    return await _dio.get(path, queryParameters: queryParameters);
+  } catch (e) {
+    throw _normalizeError(e);
+  }
+}
+
+  dynamic _normalizeError(dynamic error) {
+  if (error is DioException) {
+    // Пробрасываем DioException дальше, но с понятным сообщением
+    return error;
+  }
+  return Exception('Unknown error occurred');
+}
+
 
   Future<Response> put(String path, {dynamic data, Map<String, dynamic>? queryParameters}) =>
       _dio.put(path, data: data, queryParameters: queryParameters);

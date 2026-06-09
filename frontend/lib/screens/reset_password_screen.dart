@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/api_client.dart';
 import '../providers/locale_provider.dart';
 import 'package:frontend/l10n/app_localizations.dart';
+import '../services/error/error_handler.dart';
 
 class ResetPasswordScreen extends ConsumerStatefulWidget {
   final String token;
@@ -38,79 +39,85 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
   }
 
   Future<void> _resetPassword() async {
-    if (_tokenUsed) {
-      // Если токен уже был использован, не даём отправить запрос повторно
-      if (mounted) {
+  if (_tokenUsed) {
+    // Если токен уже был использован, не даём отправить запрос повторно
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              'Ссылка уже использована. Перенаправление на страницу входа...'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) {
+          Navigator.pushNamedAndRemoveUntil(
+              context, '/login', (route) => false);
+        }
+      });
+    }
+    return;
+  }
+
+  if (!_formKey.currentState!.validate()) return;
+  setState(() => _loading = true);
+  final api = ApiClient();
+  final t = AppLocalizations.of(context)!;
+  
+  try {
+    await api.post('/auth/reset-password', data: {
+      'token': widget.token,
+      'new_password': _passwordController.text.trim(),
+    });
+
+    if (mounted) {
+      // Устанавливаем флаг, что токен использован
+      _tokenUsed = true;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(t.passwordChangedSuccess),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+
+      // Заменяем текущий маршрут на /login
+      Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+    }
+  } catch (e) {
+    if (mounted) {
+      final appError = ErrorHandler.handleError(e, context: context);
+      
+      // Проверяем специфическую ошибку просроченного токена
+      if (appError.message.toLowerCase().contains('expired') || 
+          appError.message.toLowerCase().contains('invalid') ||
+          e.toString().toLowerCase().contains('expired') ||
+          e.toString().toLowerCase().contains('invalid')) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-                'Ссылка уже использована. Перенаправление на страницу входа...'),
+                'Ссылка устарела или недействительна. Запросите сброс пароля заново.'),
             backgroundColor: Colors.orange,
           ),
         );
         Future.delayed(const Duration(seconds: 2), () {
           if (mounted) {
-            Navigator.pushNamedAndRemoveUntil(
-                context, '/login', (route) => false);
+            Navigator.pushReplacementNamed(context, '/forgot-password');
           }
         });
-      }
-      return;
-    }
-
-    if (!_formKey.currentState!.validate()) return;
-    setState(() => _loading = true);
-    final api = ApiClient();
-    try {
-      await api.post('/auth/reset-password', data: {
-        'token': widget.token,
-        'new_password': _passwordController.text.trim(),
-      });
-
-      if (mounted) {
-        // Устанавливаем флаг, что токен использован
-        _tokenUsed = true;
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(AppLocalizations.of(context)!.passwordChangedSuccess),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 2),
-          ),
+      } else {
+        // Используем ErrorHandler для отображения ошибки
+        await ErrorHandler.showErrorDialog(
+          context,
+          e,
+          onRetry: _resetPassword,
         );
-
-        // Заменяем текущий маршрут на /login, чтобы при нажатии "назад" или обновлении не возвращаться на эту страницу
-        Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
       }
-    } catch (e) {
-      if (mounted) {
-        String errorMsg = e.toString();
-        if (errorMsg.contains('expired') || errorMsg.contains('invalid')) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                  'Ссылка устарела или недействительна. Запросите сброс пароля заново.'),
-              backgroundColor: Colors.orange,
-            ),
-          );
-          Future.delayed(const Duration(seconds: 2), () {
-            if (mounted) {
-              Navigator.pushReplacementNamed(context, '/forgot-password');
-            }
-          });
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                  '${AppLocalizations.of(context)!.error}: ${e.toString()}'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-        setState(() => _loading = false);
-      }
+      setState(() => _loading = false);
     }
   }
+}
 
   void _setLanguage(Locale locale) {
     ref.read(localeProvider.notifier).setLocale(locale);
