@@ -72,6 +72,38 @@ class _AddTransactionDialogState extends ConsumerState<AddTransactionDialog> {
     return double.tryParse(normalized) ?? 0;
   }
 
+  String _translateAccountName(String name, AppLocalizations t) {
+    switch (name) {
+      case 'Наличные':
+        return t.cashType;
+      case 'Банк':
+        return t.bankType;
+      default:
+        return name;
+    }
+  }
+
+  String _translateCategoryName(String name, AppLocalizations t) {
+    switch (name) {
+      case 'Зарплата': return t.catSalary;
+      case 'Аренда': return t.catRent;
+      case 'Транспортные': return t.catTransport;
+      case 'Продукты': return t.catFood;
+      case 'Связь': return t.catCommunication;
+      case 'Реклама': return t.catAdvertising;
+      case 'Налоги': return t.catTaxes;
+      case 'Прочее': return t.catOther;
+      case 'Реализация': return t.catSales;
+      case 'Продажи': return t.catSales;
+      case 'Касса': return t.catCashbox;
+      case 'Офис': return t.catOffice;
+      case 'Магазин': return t.catShop;
+      case 'Подрядчики': return t.catContractors;
+      case 'Без категории': return t.withoutCategory;
+      default: return name;
+    }
+  }
+
   Future<void> _loadCounterparties() async {
     setState(() => _loadingCounterparties = true);
     final api = ApiClient();
@@ -158,27 +190,6 @@ class _AddTransactionDialogState extends ConsumerState<AddTransactionDialog> {
     setState(() {
       _attachment = null;
     });
-  }
-
-  String _translateCategoryName(String name, AppLocalizations t) {
-    switch (name) {
-      case 'Зарплата': return t.catSalary;
-      case 'Аренда': return t.catRent;
-      case 'Транспортные': return t.catTransport;
-      case 'Продукты': return t.catFood;
-      case 'Связь': return t.catCommunication;
-      case 'Реклама': return t.catAdvertising;
-      case 'Налоги': return t.catTaxes;
-      case 'Прочее': return t.catOther;
-      case 'Реализация': return t.catSales;
-      case 'Продажи': return t.catSales;
-      case 'Касса': return t.catCashbox;
-      case 'Офис': return t.catOffice;
-      case 'Магазин': return t.catShop;
-      case 'Подрядчики': return t.catContractors;
-      case 'Без категории': return t.withoutCategory;
-      default: return name;
-    }
   }
 
   Future<void> _addProduct() async {
@@ -459,13 +470,10 @@ class _AddTransactionDialogState extends ConsumerState<AddTransactionDialog> {
                 const SizedBox(height: 12),
                 DropdownButtonFormField<int>(
                   value: _accountId,
-                  items: widget.accounts
-                      .map<DropdownMenuItem<int>>(
-                          (a) => DropdownMenuItem<int>(
-                                value: a['id'],
-                                child: Text(a['name']),
-                              ))
-                      .toList(),
+                  items: widget.accounts.map<DropdownMenuItem<int>>((a) => DropdownMenuItem<int>(
+                        value: a['id'],
+                        child: Text(_translateAccountName(a['name'], t)),
+                      )).toList(),
                   onChanged: (v) {
                     setState(() {
                       _accountId = v;
@@ -562,7 +570,7 @@ class _AddTransactionDialogState extends ConsumerState<AddTransactionDialog> {
                     value: _transferToAccountId,
                     items: widget.accounts.map<DropdownMenuItem<int>>((a) => DropdownMenuItem<int>(
                           value: a['id'],
-                          child: Text(a['name']),
+                          child: Text(_translateAccountName(a['name'], t)),
                         )).toList(),
                     onChanged: (v) => setState(() => _transferToAccountId = v),
                     decoration: InputDecoration(labelText: t.toAccountLabel, border: const OutlineInputBorder()),

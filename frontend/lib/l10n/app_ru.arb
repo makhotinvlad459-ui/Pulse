@@ -762,7 +762,10 @@
   "noDataToExport": "Нет данных для экспорта",
   "categoryLabel": "Категория",
   "amountLabel": "Сумма",
-  "totalLabel": "Итого"
+  "totalLabel": "Итого",
+  "cashType": "Наличные",
+  "bankType": "Банк"
+
 }
   
 

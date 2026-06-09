@@ -762,5 +762,7 @@
   "noDataToExport": "No data to export",
   "categoryLabel": "Category",
   "amountLabel": "Amount",
-  "totalLabel": "Total"
+  "totalLabel": "Total",
+    "cashType": "Cash",
+  "bankType": "Bank"
 }
