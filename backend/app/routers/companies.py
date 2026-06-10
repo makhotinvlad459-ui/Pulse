@@ -783,11 +783,59 @@ async def delete_company(
 ):
     if current_user.role != UserRole.FOUNDER:
         raise HTTPException(status_code=403, detail="Only founder can delete companies")
+    
     result = await db.execute(select(Company).where(Company.id == company_id, Company.founder_id == current_user.id))
     company = result.scalar_one_or_none()
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
+    
+    # ✅ 1. Сначала удаляем связи order_items (через продукты компании)
+    from app.models import OrderItem, Order, Product
+    
+    # Находим все продукты компании
+    products_result = await db.execute(
+        select(Product.id).where(Product.company_id == company_id)
+    )
+    product_ids = [row[0] for row in products_result.all()]
+    
+    if product_ids:
+        # Удаляем order_items для этих продуктов
+        await db.execute(
+            delete(OrderItem).where(OrderItem.product_id.in_(product_ids))
+        )
+    
+    # ✅ 2. Удаляем заказы компании
+    await db.execute(
+        delete(Order).where(Order.company_id == company_id)
+    )
+    
+    # ✅ 3. Удаляем продукты
+    await db.execute(
+        delete(Product).where(Product.company_id == company_id)
+    )
+    
+    # ✅ 4. Удаляем остальные связанные данные (транзакции, счета, категории и т.д.)
+    from app.models import Transaction, Account, Category, CompanyMember, Counterparty
+    
+    await db.execute(
+        delete(Transaction).where(Transaction.company_id == company_id)
+    )
+    await db.execute(
+        delete(Account).where(Account.company_id == company_id)
+    )
+    await db.execute(
+        delete(Category).where(Category.company_id == company_id)
+    )
+    await db.execute(
+        delete(CompanyMember).where(CompanyMember.company_id == company_id)
+    )
+    await db.execute(
+        delete(Counterparty).where(Counterparty.company_id == company_id)
+    )
+    
+    # ✅ 5. В конце удаляем саму компанию
     await db.delete(company)
+    
     await db.commit()
     return {"detail": "Company deleted"}
 
