@@ -287,51 +287,65 @@ class _AddTransactionDialogState extends ConsumerState<AddTransactionDialog> {
   }
 
   Future<void> _submit() async {
-    final t = AppLocalizations.of(context)!;
-    if (!_formKey.currentState!.validate()) return;
-    
-    setState(() => _loading = true);
-    final api = ApiClient();
-    
-    try {
-      String? attachmentUrl;
+  final t = AppLocalizations.of(context)!;
+  if (!_formKey.currentState!.validate()) return;
+  
+  setState(() => _loading = true);
+  final api = ApiClient();
+  
+  try {
+    String? attachmentUrl;
 
-      if (_attachment != null) {
-        final ext = _attachment!.name.toLowerCase();
-        final isImage = ext.endsWith('.jpg') || ext.endsWith('.jpeg') || ext.endsWith('.png') || ext.endsWith('.webp');
-        final bytesToUpload = isImage ? await ImageCompression.compressImage(_attachment!.bytes) : _attachment!.bytes;
-        final result = await api.uploadTransactionFile(
-          companyId: widget.companyId,
-          bytes: bytesToUpload, 
-          filename: _attachment!.name,
-        );
-        attachmentUrl = result['url'] ?? result['attachment_url'];
-      }
-
-      await api.post('/transactions/', queryParameters: {
-        'company_id': widget.companyId
-      }, data: {
-        'type': _type,
-        'amount': _selectedProducts.isNotEmpty ? _calculatedAmount : _amount,
-        'date': _date.toIso8601String(),
-        'account_id': _accountId,
-        'category_id': _categoryId,
-        'description': _description,
-        'counterparty': _counterparty,
-        'attachment_url': attachmentUrl,
-        'items': _selectedProducts.isNotEmpty ? _selectedProducts : null,
-      });
-
-      widget.onSuccess();
-      if (mounted) Navigator.pop(context);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
-      }
-    } finally {
-      if (mounted) setState(() => _loading = false);
+    if (_attachment != null) {
+      final ext = _attachment!.name.toLowerCase();
+      final isImage = ext.endsWith('.jpg') || ext.endsWith('.jpeg') || ext.endsWith('.png') || ext.endsWith('.webp');
+      final bytesToUpload = isImage ? await ImageCompression.compressImage(_attachment!.bytes) : _attachment!.bytes;
+      final result = await api.uploadTransactionFile(
+        companyId: widget.companyId,
+        bytes: bytesToUpload, 
+        filename: _attachment!.name,
+      );
+      attachmentUrl = result['url'] ?? result['attachment_url'];
     }
+
+    // ✅ ФОРМИРУЕМ ДАННЫЕ В ЗАВИСИМОСТИ ОТ ТИПА ОПЕРАЦИИ
+    final Map<String, dynamic> requestData = {
+      'type': _type,
+      'amount': _selectedProducts.isNotEmpty ? _calculatedAmount : _amount,
+      'date': _date.toIso8601String(),
+      'account_id': _accountId,
+      'description': _description,
+      'counterparty': _counterparty,
+      'attachment_url': attachmentUrl,
+    };
+
+    // Для income/expense добавляем category_id и items
+    if (_type == 'income' || _type == 'expense') {
+      requestData['category_id'] = _categoryId;
+      if (_selectedProducts.isNotEmpty) {
+        requestData['items'] = _selectedProducts;
+      }
+    }
+    
+    // Для transfer добавляем transfer_to_account_id
+    if (_type == 'transfer') {
+      requestData['transfer_to_account_id'] = _transferToAccountId;
+    }
+
+    await api.post('/transactions/', queryParameters: {
+      'company_id': widget.companyId
+    }, data: requestData);
+
+    widget.onSuccess();
+    if (mounted) Navigator.pop(context);
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+    }
+  } finally {
+    if (mounted) setState(() => _loading = false);
   }
+}
 
   @override
   Widget build(BuildContext context) {
