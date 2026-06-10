@@ -112,20 +112,26 @@ async def create_transaction(
     
     is_transfer = (trans_data.type.value == 'transfer')
     
-    # Валидация перевода
+    # ========== ДЛЯ ПЕРЕВОДА ==========
     if is_transfer:
+        # Проверка счёта назначения
         if trans_data.transfer_to_account_id is None:
             raise HTTPException(status_code=400, detail="Transfer requires transfer_to_account_id")
+        
         result = await db.execute(select(Account).where(Account.id == trans_data.transfer_to_account_id, Account.company_id == company_id))
         target_account = result.scalar_one_or_none()
         if not target_account:
             raise HTTPException(status_code=404, detail="Target account not found")
         if trans_data.account_id == trans_data.transfer_to_account_id:
             raise HTTPException(status_code=400, detail="Cannot transfer to the same account")
-    
-    # Категории для дохода/расхода (если нет товаров)
-    if not is_transfer and not trans_data.items:
-        if not trans_data.category_id:
+        
+        # Для перевода не нужны категория и товары
+        trans_data.category_id = None
+        trans_data.items = []
+    # ========== ДЛЯ ДОХОДА/РАСХОДА ==========
+    else:
+        if not trans_data.items and not trans_data.category_id:
+            # Создание категории по умолчанию
             result = await db.execute(select(Category).where(Category.company_id == company_id, Category.is_system == True))
             default_cat = result.scalar_one_or_none()
             if not default_cat:
@@ -139,7 +145,7 @@ async def create_transaction(
                 db.add(default_cat)
                 await db.flush()
             trans_data.category_id = default_cat.id
-        else:
+        elif trans_data.category_id:
             result = await db.execute(select(Category).where(Category.id == trans_data.category_id, Category.company_id == company_id))
             if not result.scalar_one_or_none():
                 raise HTTPException(status_code=404, detail="Category not found")
@@ -194,7 +200,7 @@ async def create_transaction(
     db.add(new_trans)
     await db.flush()
     
-    # Обработка товаров
+    # Обработка товаров (только для income/expense)
     if not is_transfer and trans_data.items:
         for item in trans_data.items:
             prod_result = await db.execute(select(Product).where(Product.id == item.product_id, Product.company_id == company_id))
