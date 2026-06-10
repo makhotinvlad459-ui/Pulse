@@ -790,63 +790,70 @@ async def delete_company(
         raise HTTPException(status_code=404, detail="Company not found")
     
     from app.models import (
-        OrderItem, Order, Product, Transaction, TransactionItem, 
+        OrderItem, Order, OrderPayment, Product, Transaction, TransactionItem, 
         Account, Category, CompanyMember, Counterparty
     )
     
-    # ✅ 1. Находим все продукты компании
+    # ✅ 1. Удаляем платежи по заказам (order_payments)
+    await db.execute(
+        delete(OrderPayment).where(OrderPayment.order_id.in_(
+            select(Order.id).where(Order.company_id == company_id)
+        ))
+    )
+    
+    # ✅ 2. Находим все продукты компании
     products_result = await db.execute(
         select(Product.id).where(Product.company_id == company_id)
     )
     product_ids = [row[0] for row in products_result.all()]
     
     if product_ids:
-        # ✅ 2. Удаляем связи transaction_items (товары в транзакциях)
+        # ✅ 3. Удаляем связи transaction_items
         await db.execute(
             delete(TransactionItem).where(TransactionItem.product_id.in_(product_ids))
         )
         
-        # ✅ 3. Удаляем связи order_items (товары в заказах)
+        # ✅ 4. Удаляем связи order_items
         await db.execute(
             delete(OrderItem).where(OrderItem.product_id.in_(product_ids))
         )
     
-    # ✅ 4. Удаляем транзакции компании
+    # ✅ 5. Удаляем транзакции
     await db.execute(
         delete(Transaction).where(Transaction.company_id == company_id)
     )
     
-    # ✅ 5. Удаляем заказы компании
+    # ✅ 6. Удаляем заказы
     await db.execute(
         delete(Order).where(Order.company_id == company_id)
     )
     
-    # ✅ 6. Удаляем продукты
+    # ✅ 7. Удаляем продукты
     await db.execute(
         delete(Product).where(Product.company_id == company_id)
     )
     
-    # ✅ 7. Удаляем счета
+    # ✅ 8. Удаляем счета
     await db.execute(
         delete(Account).where(Account.company_id == company_id)
     )
     
-    # ✅ 8. Удаляем категории
+    # ✅ 9. Удаляем категории
     await db.execute(
         delete(Category).where(Category.company_id == company_id)
     )
     
-    # ✅ 9. Удаляем членов компании
+    # ✅ 10. Удаляем членов компании
     await db.execute(
         delete(CompanyMember).where(CompanyMember.company_id == company_id)
     )
     
-    # ✅ 10. Удаляем контрагентов
+    # ✅ 11. Удаляем контрагентов
     await db.execute(
         delete(Counterparty).where(Counterparty.company_id == company_id)
     )
     
-    # ✅ 11. В конце удаляем саму компанию
+    # ✅ 12. В конце удаляем саму компанию
     await db.delete(company)
     
     await db.commit()

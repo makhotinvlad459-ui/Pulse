@@ -17,6 +17,8 @@ import 'package:frontend/l10n/app_localizations.dart';
 import '../screens/subscription_screen.dart';
 import '../widgets/company/change_password_dialog.dart';
 import '../services/error/error_handler.dart';
+import 'dart:async' show Future; 
+import 'company_screen.dart' deferred as CompanyScreen;
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -367,13 +369,16 @@ class _CompanyCardState extends State<_CompanyCard> with SingleTickerProviderSta
             child: Material(
               color: Colors.transparent,
               child: InkWell(
-                onTap: () async {
-                  await Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => CompanyScreen(company: widget.company)),
-                  );
-                  widget.ref.invalidate(homeProvider);
-                },
+               onTap: () async {
+  // ✅ Ленивая загрузка через deferred
+  await CompanyScreen.loadLibrary();
+  
+  await Navigator.push(
+    context,
+    MaterialPageRoute(builder: (_) => CompanyScreen.CompanyScreen(company: widget.company)),
+  );
+  widget.ref.invalidate(homeProvider);
+},
                 borderRadius: BorderRadius.circular(8),
                 splashColor: colorScheme.primary.withOpacity(0.2),
                 highlightColor: colorScheme.primary.withOpacity(0.1),
