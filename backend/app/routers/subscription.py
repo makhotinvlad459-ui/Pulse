@@ -71,14 +71,26 @@ async def create_payment(
 ):
     plan = req.plan
     
+    # Проверяем активность подписки
+    has_active_subscription = current_user.subscription_until and current_user.subscription_until > datetime.utcnow()
+    
     if plan == "monthly":
         # Расчёт суммы с учётом extra_companies
         extra_count = current_user.extra_companies or 0
         amount = SUBSCRIPTION_PRICES["monthly"] + (extra_count * SUBSCRIPTION_PRICES["extra_company"])
     elif plan == "extra_company":
+        # Нельзя купить дополнительную компанию без активной базовой подписки
+        if not has_active_subscription:
+            raise HTTPException(
+                status_code=400,
+                detail="ERROR_NEED_BASE_SUBSCRIPTION"
+            )
         amount = SUBSCRIPTION_PRICES["extra_company"]
     else:
-        raise HTTPException(400, "Invalid plan")
+        raise HTTPException(
+            status_code=400,
+            detail="ERROR_INVALID_PLAN"
+        )
 
     payment_order = PaymentOrder(
         user_id=current_user.id,

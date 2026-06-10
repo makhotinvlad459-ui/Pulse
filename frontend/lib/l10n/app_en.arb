@@ -847,5 +847,8 @@
   "error_not_found_title": "Not Found",
   "error_not_found_message": "The requested resource was not found.",
   "retry": "Retry",
-  "close": "Close"
+  "close": "Close",
+  "need_base_subscription": "Cannot buy extra company without active base subscription. Please subscribe first.",
+  "invalid_plan": "Invalid subscription plan"
+
 }

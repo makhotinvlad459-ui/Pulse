@@ -44,6 +44,42 @@ class ErrorHandler {
 
     // Dio ошибки
     if (error is DioException) {
+      // ✅ НОВЫЙ БЛОК: Обработка кодов ошибок из detail
+      final responseData = error.response?.data;
+      if (responseData is Map && responseData.containsKey('detail')) {
+        final detail = responseData['detail'];
+        if (detail is String && detail.startsWith('ERROR_')) {
+          // Это код ошибки с бэкенда
+          switch (detail) {
+            case 'ERROR_NEED_BASE_SUBSCRIPTION':
+              return AppError(
+                title: getText('error_subscription_title', 'Subscription Required'),
+                message: getText('need_base_subscription', 'Cannot buy extra company without active base subscription. Please subscribe first.'),
+                canRetry: false,
+                onRetry: () {
+                  if (effectiveContext != null) {
+                    Navigator.of(effectiveContext).pushNamed('/subscription');
+                  }
+                },
+              );
+            case 'ERROR_INVALID_PLAN':
+              return AppError(
+                title: getText('error_generic_title', 'Error'),
+                message: getText('invalid_plan', 'Invalid subscription plan'),
+                canRetry: false,
+              );
+            default:
+              // Если неизвестный код ошибки, показываем как есть
+              return AppError(
+                title: getText('error_generic_title', 'Error'),
+                message: detail,
+                canRetry: true,
+                onRetry: onRetry,
+              );
+          }
+        }
+      }
+
       // 402 - Payment Required
       if (error.response?.statusCode == 402) {
         return AppError(
