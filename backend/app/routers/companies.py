@@ -148,7 +148,7 @@ async def create_company(
         founder_member = CompanyMember(
             company_id=new_company.id,
             user_id=current_user.id,
-            role_in_company='employee',
+            role_in_company='employee',  # Учредитель - особая роль
             invited_by=current_user.id
         )
         db.add(founder_member)
@@ -164,7 +164,7 @@ async def create_company(
     
     employees_credentials = []
     
-    # --- Создаём пользователя для управляющего ---
+    # --- СОЗДАЁМ ПОЛЬЗОВАТЕЛЯ ДЛЯ УПРАВЛЯЮЩЕГО (role_in_company = "manager") ---
     if company_data.manager_phone and company_data.manager_full_name:
         result = await db.execute(select(User).where(User.phone == company_data.manager_phone))
         existing_manager = result.scalar_one_or_none()
@@ -172,7 +172,7 @@ async def create_company(
             member = CompanyMember(
                 company_id=new_company.id,
                 user_id=existing_manager.id,
-                role_in_company="employee",
+                role_in_company="manager",  
                 invited_by=current_user.id
             )
             db.add(member)
@@ -187,6 +187,7 @@ async def create_company(
                 "view_products", "create_product", "edit_product",
                 "view_materials", "create_material", "edit_material"
             ], current_user.id, db)
+            # Не добавляем в employees_credentials, так как существующий пользователь
         else:
             manager_password = generate_random_password()
             manager_password_hash = get_password_hash(manager_password)
@@ -195,7 +196,7 @@ async def create_company(
                 phone=company_data.manager_phone,
                 full_name=company_data.manager_full_name,
                 password_hash=manager_password_hash,
-                role=UserRole.EMPLOYEE,
+                role=UserRole.EMPLOYEE,  # В системе роль EMPLOYEE (не FOUNDER)
                 subscription_until=None,
                 soft_delete_retention_days=15
             )
@@ -204,7 +205,7 @@ async def create_company(
             member = CompanyMember(
                 company_id=new_company.id,
                 user_id=manager_user.id,
-                role_in_company="employee",
+                role_in_company="manager",  # ✅ ИСПРАВЛЕНО: manager, а не employee
                 invited_by=current_user.id
             )
             db.add(member)
@@ -223,10 +224,10 @@ async def create_company(
                 "full_name": company_data.manager_full_name,
                 "phone": company_data.manager_phone,
                 "password": manager_password,
-                "role": "manager"
+                "role": "manager"  # ✅ Здесь правильно указано "manager"
             })
     
-    # --- Добавляем сотрудников (employee) ---
+    # --- ДОБАВЛЯЕМ СОТРУДНИКОВ (role_in_company = "employee") ---
     for emp in company_data.employees:
         phone = emp.get("phone")
         full_name = emp.get("full_name")
@@ -414,19 +415,87 @@ async def remove_member(
     if not await _can_manage_employees(company_id, current_user, db):
         raise HTTPException(status_code=403, detail="Only founder or manager can remove members")
     
-    result = await db.execute(select(CompanyMember).where(CompanyMember.company_id == company_id, CompanyMember.user_id == user_id))
+    # ✅ ПОЛУЧАЕМ КОМПАНИЮ
+    result = await db.execute(select(Company).where(Company.id == company_id))
+    company = result.scalar_one_or_none()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    
+    # Находим удаляемого члена
+    result = await db.execute(
+        select(CompanyMember)
+        .where(
+            CompanyMember.company_id == company_id, 
+            CompanyMember.user_id == user_id
+        )
+    )
     member = result.scalar_one_or_none()
     if not member:
         raise HTTPException(status_code=404, detail="Member not found in this company")
     
+    # Проверяем, был ли это управляющий
+    was_manager = (member.role_in_company == "manager")
+    
+    # Удаляем члена
     await db.delete(member)
     
-    # Проверяем, есть ли у пользователя другие членства в других компаниях
+    # Если удалили управляющего - назначаем нового
+    if was_manager:
+        # Ищем другого управляющего
+        other_manager = await db.execute(
+            select(CompanyMember.user_id)
+            .where(
+                CompanyMember.company_id == company_id,
+                CompanyMember.user_id != user_id,
+                CompanyMember.role_in_company == "manager"
+            )
+            .limit(1)
+        )
+        other_manager_user_id = other_manager.scalar_one_or_none()
+        
+        if other_manager_user_id:
+            user_data = await db.execute(
+                select(User.full_name, User.phone)
+                .where(User.id == other_manager_user_id)
+            )
+            user = user_data.first()
+            if user:
+                await db.execute(
+                    update(Company)
+                    .where(Company.id == company_id)
+                    .values(
+                        manager_full_name=user[0] or "",
+                        manager_phone=user[1] or ""
+                    )
+                )
+        else:
+            # Назначаем учредителя
+            founder = await db.get(User, company.founder_id)
+            if founder:
+                await db.execute(
+                    update(Company)
+                    .where(Company.id == company_id)
+                    .values(
+                        manager_full_name=founder.full_name or "",
+                        manager_phone=founder.phone or ""
+                    )
+                )
+            else:
+                # Если ничего нет - ставим заглушку
+                await db.execute(
+                    update(Company)
+                    .where(Company.id == company_id)
+                    .values(
+                        manager_full_name="",
+                        manager_phone=""
+                    )
+                )
+    
+    # Деактивируем пользователя, если нет других компаний
     other_memberships = await db.execute(
         select(CompanyMember).where(CompanyMember.user_id == user_id)
     )
     if not other_memberships.scalar_one_or_none():
-        # Нет других компаний – деактивируем пользователя
         await db.execute(update(User).where(User.id == user_id).values(is_active=False))
     
     await db.commit()
@@ -598,24 +667,36 @@ async def set_company_manager(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
-    company.manager_full_name = user.full_name
-    company.manager_phone = user.phone
-    await db.flush()
-    
-    # Понизить предыдущего управляющего до employee (если он был)
-    result = await db.execute(select(CompanyMember).where(CompanyMember.company_id == company_id, CompanyMember.role_in_company == 'manager'))
+    # ✅ Понижаем предыдущего управляющего
+    result = await db.execute(
+        select(CompanyMember)
+        .where(
+            CompanyMember.company_id == company_id,
+            CompanyMember.role_in_company == 'manager'
+        )
+    )
     old_manager = result.scalar_one_or_none()
     if old_manager and old_manager.user_id != req.user_id:
         old_manager.role_in_company = 'employee'
     
-    # Назначаем новую роль (управляющий получает роль manager)
+    # ✅ Назначаем нового управляющего
     member.role_in_company = 'manager'
-   
+    
+    # ✅ ОБНОВЛЯЕМ ПОЛЯ В ТАБЛИЦЕ COMPANY
+    await db.execute(
+        update(Company)
+        .where(Company.id == company_id)
+        .values(
+            manager_full_name=user.full_name,
+            manager_phone=user.phone
+        )
+    )
     
     await db.commit()
     return {"detail": "Manager updated", "manager_full_name": user.full_name, "manager_phone": user.phone}
 
 # --- Обновление роли участника (только founder) ---
+
 @router.patch("/{company_id}/members/{user_id}/role")
 async def update_member_role(
     company_id: int,
@@ -639,20 +720,58 @@ async def update_member_role(
     if req.role_in_company not in ('manager', 'employee'):
         raise HTTPException(status_code=400, detail="Invalid role")
     
+    old_role = member.role_in_company
     member.role_in_company = req.role_in_company
-    await db.commit()
     
+    user = await db.get(User, user_id)
+    
+    # ✅ Если назначаем управляющим
     if req.role_in_company == 'manager':
-        result = await db.execute(select(User).where(User.id == user_id))
-        user = result.scalar_one_or_none()
-        if user:
-            company_result = await db.execute(select(Company).where(Company.id == company_id))
-            company = company_result.scalar_one_or_none()
-            if company:
-                company.manager_full_name = user.full_name
-                company.manager_phone = user.phone
-                await db.commit()
+        await db.execute(
+            update(Company)
+            .where(Company.id == company_id)
+            .values(
+                manager_full_name=user.full_name if user else None,
+                manager_phone=user.phone if user else None
+            )
+        )
+    # ✅ Если снимаем роль управляющего
+    elif old_role == 'manager' and req.role_in_company == 'employee':
+        # Ищем другого управляющего
+        other_manager = await db.execute(
+            select(CompanyMember)
+            .where(
+                CompanyMember.company_id == company_id,
+                CompanyMember.user_id != user_id,
+                CompanyMember.role_in_company == 'manager'
+            )
+            .options(selectinload(CompanyMember.user))
+            .limit(1)
+        )
+        other_manager = other_manager.scalar_one_or_none()
+        
+        if other_manager and other_manager.user:
+            await db.execute(
+                update(Company)
+                .where(Company.id == company_id)
+                .values(
+                    manager_full_name=other_manager.user.full_name,
+                    manager_phone=other_manager.user.phone
+                )
+            )
+        else:
+            # Нет другого управляющего - назначаем учредителя
+            founder = await db.get(User, current_user.id)
+            await db.execute(
+                update(Company)
+                .where(Company.id == company_id)
+                .values(
+                    manager_full_name=founder.full_name if founder else "",
+                    manager_phone=founder.phone if founder else ""
+                )
+            )
     
+    await db.commit()
     return {"detail": "Role updated", "new_role": req.role_in_company}
 
 # --- Удаление компании ---
