@@ -195,11 +195,12 @@ class WebSocketService with WidgetsBindingObserver {
   }
 
   void disconnectUser() {
-    _userChannel?.sink.close(status.goingAway);
-    _userChannel = null;
-    _currentUserId = null;
-    _currentUserToken = null;
-  }
+  _userChannel?.sink.close(status.goingAway);
+  _userChannel = null;
+  _currentUserId = null;
+  _currentUserToken = null;
+  if (kDebugMode) print('🔌 WS User disconnected');
+}
 
   void disconnectAll() {
     _shouldReconnect = false;

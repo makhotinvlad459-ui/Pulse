@@ -40,11 +40,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final token = await api.getToken();
     if (token == null) return;
     
+    WebSocketService().disconnectUser();
     WebSocketService().connectUser(user.id, token);
   }
 
   @override
   void dispose() {
+    WebSocketService().disconnectUser();
     super.dispose();
   }
 
