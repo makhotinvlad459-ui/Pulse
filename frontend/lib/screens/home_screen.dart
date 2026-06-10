@@ -55,7 +55,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   String _getVideoPath(AppTheme theme) {
     switch (theme) {
       case AppTheme.light:
-        return 'assets/videos/for_home.mp4';
+        return 'assets/videos/city.mp4';
       case AppTheme.dark:
         return 'assets/videos/dark1.mp4';
       case AppTheme.blue:
