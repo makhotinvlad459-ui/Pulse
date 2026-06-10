@@ -63,7 +63,10 @@ flutter:
   uses-material-design: true
   assets:
     - assets/logo.png
-    - assets/videos/
+    - assets/videos/city.mp4
+    - assets/videos/dark1.mp4
+    - assets/videos/city_blue.mp4
+    - assets/videos/city_green.mp4
 flutter_launcher_icons:
   android: "launcher_icon"
   ios: true
