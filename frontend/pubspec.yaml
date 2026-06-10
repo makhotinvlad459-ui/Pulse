@@ -62,12 +62,17 @@ flutter:
   generate: true
   uses-material-design: true
   assets:
-     - assets/
+    - assets/logo.png
+    - assets/videos/city.mp4
+    - assets/videos/dark1.mp4
+    - assets/videos/city_blue.mp4
+    - assets/videos/city_green.mp4
      
 flutter_launcher_icons:
   android: "launcher_icon"
   ios: true
   image_path: "assets/logo.png"  # ← ИСПРАВЛЕНО (путь должен быть правильным)
+  remove_alpha_ios: true  
   adaptive_icon_background: "#000000" 
   adaptive_icon_foreground: "assets/logo_foreground.png"  # ← Убедись, что файл существует
   web:
