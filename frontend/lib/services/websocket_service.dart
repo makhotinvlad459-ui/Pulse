@@ -1,18 +1,22 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/widgets.dart'; 
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/status.dart' as status;
 import 'secure_storage.dart';
-import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode, kReleaseMode; // добавить импорт
+import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode, kReleaseMode;
 
-class WebSocketService {
+class WebSocketService with WidgetsBindingObserver {
   static final WebSocketService _instance = WebSocketService._internal();
   factory WebSocketService() => _instance;
-  WebSocketService._internal();
+  
+  WebSocketService._internal() {
+    WidgetsBinding.instance.addObserver(this);
+  }
 
-  final SecureStorage _storage = SecureStorage(); // добавить
+  final SecureStorage _storage = SecureStorage();
 
   WebSocketChannel? _chatChannel;
   WebSocketChannel? _tasksChannel;
@@ -20,6 +24,7 @@ class WebSocketService {
   
   bool _shouldReconnect = true;
   Timer? _reconnectTimer;
+  Timer? _lifecycleReconnectTimer;  // ✅ Отдельный таймер для lifecycle
   
   int? _currentChatCompanyId;
   String? _currentChatToken;
@@ -27,6 +32,9 @@ class WebSocketService {
   String? _currentTasksToken;
   int? _currentUserId;
   String? _currentUserToken;
+  
+  bool _isReconnecting = false;  // ✅ Флаг, чтобы не было повторных вызовов
+  bool _isAppResuming = false;   // ✅ Флаг для отслеживания возобновления
   
   final _chatStreamController = StreamController<Map<String, dynamic>>.broadcast();
   final _taskStreamController = StreamController<Map<String, dynamic>>.broadcast();
@@ -37,20 +45,20 @@ class WebSocketService {
   Stream<Map<String, dynamic>> get userStream => _userStreamController.stream;
 
   static String get _baseUrl {
-  if (kIsWeb) {
+    if (kIsWeb) {
+      if (kReleaseMode) {
+        return 'wss://pulse-yourmoney.com';
+      }
+      return 'ws://localhost:8000';
+    }
     if (kReleaseMode) {
       return 'wss://pulse-yourmoney.com';
     }
+    if (Platform.isAndroid) {
+      return 'ws://10.0.2.2:8000';
+    }
     return 'ws://localhost:8000';
   }
-  if (kReleaseMode) {
-    return 'wss://pulse-yourmoney.com';
-  }
-  if (Platform.isAndroid) {
-    return 'ws://10.0.2.2:8000';
-  }
-  return 'ws://localhost:8000';
-}
 
   void connectChat(int companyId, String token) {
     if (_chatChannel != null && _currentChatCompanyId == companyId) {
@@ -151,10 +159,13 @@ class WebSocketService {
     if (type == 'user') _userChannel = null;
     
     if (!_shouldReconnect) return;
+    if (_isReconnecting) return;  // ✅ Не переподключаемся, если уже идёт переподключение
     
     _reconnectTimer?.cancel();
     _reconnectTimer = Timer(const Duration(seconds: 5), () {
       if (kDebugMode) print('🔄 WS $type: Reconnecting...');
+      _isReconnecting = true;
+      
       if (type == 'chat' && _currentChatCompanyId != null && _currentChatToken != null) {
         connectChat(_currentChatCompanyId!, _currentChatToken!);
       } else if (type == 'tasks' && _currentTasksCompanyId != null && _currentTasksToken != null) {
@@ -162,6 +173,10 @@ class WebSocketService {
       } else if (type == 'user' && _currentUserId != null && _currentUserToken != null) {
         connectUser(_currentUserId!, _currentUserToken!);
       }
+      
+      Future.delayed(const Duration(seconds: 1), () {
+        _isReconnecting = false;
+      });
     });
   }
 
@@ -189,6 +204,7 @@ class WebSocketService {
   void disconnectAll() {
     _shouldReconnect = false;
     _reconnectTimer?.cancel();
+    _lifecycleReconnectTimer?.cancel();
     disconnectChat();
     disconnectTasks();
     disconnectUser();
@@ -196,23 +212,62 @@ class WebSocketService {
   }
   
   Future<void> refreshAllConnections() async {
+    if (_isAppResuming) return;  // ✅ Если уже идёт процесс, не запускаем новый
+    
+    _isAppResuming = true;
+    
+    // ✅ Даём приложению время полностью восстановиться
+    await Future.delayed(const Duration(milliseconds: 800));
+    
     final token = await _storage.read(key: 'access_token');
-    if (token == null) return;
-    if (_currentChatCompanyId != null) {
+    if (token == null) {
+      _isAppResuming = false;
+      return;
+    }
+    
+    if (kDebugMode) print('🔄 Refreshing all WebSocket connections...');
+    
+    // ✅ Переподключаем только если соединение реально мёртво
+    if (_currentChatCompanyId != null && (_chatChannel == null)) {
       disconnectChat();
       connectChat(_currentChatCompanyId!, token);
     }
-    if (_currentTasksCompanyId != null) {
+    if (_currentTasksCompanyId != null && (_tasksChannel == null)) {
       disconnectTasks();
       connectTasks(_currentTasksCompanyId!, token);
     }
-    if (_currentUserId != null) {
+    if (_currentUserId != null && (_userChannel == null)) {
       disconnectUser();
       connectUser(_currentUserId!, token);
+    }
+    
+    _isAppResuming = false;
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (kDebugMode) print('📱 App lifecycle: $state');
+    
+    // ✅ При возобновлении не переподключаем сразу, даём приложению "проснуться"
+    if (state == AppLifecycleState.resumed) {
+      if (kDebugMode) print('🔄 App resumed, will refresh connections after delay...');
+      
+      _lifecycleReconnectTimer?.cancel();
+      _lifecycleReconnectTimer = Timer(const Duration(milliseconds: 1500), () {
+        if (kDebugMode) print('🔄 Executing delayed reconnect...');
+        refreshAllConnections();
+      });
+    }
+    
+    // ✅ При уходе в фон - ничего не делаем, просто логируем
+    if (state == AppLifecycleState.paused) {
+      if (kDebugMode) print('📱 App paused, WebSockets will be checked on resume');
     }
   }
 
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _lifecycleReconnectTimer?.cancel();
     disconnectAll();
     _chatStreamController.close();
     _taskStreamController.close();

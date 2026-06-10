@@ -66,6 +66,13 @@ class _MyAppState extends ConsumerState<MyApp> {
     PushNotificationsService.init();
   }
 
+    @override
+  void dispose() {
+    // ✅ Закрываем WebSocket при закрытии приложения
+    WebSocketService().dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final appTheme = ref.watch(themeProvider);
