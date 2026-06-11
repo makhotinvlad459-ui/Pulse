@@ -33,16 +33,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Future<void> _initWebSocket() async {
-    final authState = ref.read(authProvider);
-    final user = authState.user;
-    if (user == null) return;
-    final api = ApiClient();
-    final token = await api.getToken();
-    if (token == null) return;
-    
-    WebSocketService().disconnectUser();
-    WebSocketService().connectUser(user.id, token);
-  }
+  final authState = ref.read(authProvider);
+  final user = authState.user;
+  if (user == null) return;
+  final api = ApiClient();
+  final token = await api.getToken();
+  if (token == null) return;
+  
+  // ✅ Отключаем всё перед новым подключением
+  WebSocketService().disconnectChat();
+  WebSocketService().disconnectTasks();
+  WebSocketService().disconnectUser();
+  
+  WebSocketService().connectUser(user.id, token);
+}
 
   @override
   void dispose() {
