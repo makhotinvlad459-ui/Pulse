@@ -213,7 +213,7 @@ class _ManageEmployeesDialogState extends ConsumerState<ManageEmployeesDialog> {
               ),
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
-                value: selectedRole,
+                initialValue: selectedRole,
                 items: [
                   DropdownMenuItem(value: 'employee', child: Text(t.employeeRole)),
                   DropdownMenuItem(value: 'manager', child: Text(t.managerRole)),
@@ -335,7 +335,7 @@ class _ManageEmployeesDialogState extends ConsumerState<ManageEmployeesDialog> {
                             children: [
                               Expanded(
                                 child: DropdownButtonFormField<String>(
-                                  value: _selectedRole,
+                                  initialValue: _selectedRole,
                                   items: [
                                     DropdownMenuItem(value: 'employee', child: Text(t.employeeRole)),
                                     DropdownMenuItem(value: 'manager', child: Text(t.managerRole)),
@@ -449,13 +449,13 @@ class _ManageEmployeesDialogState extends ConsumerState<ManageEmployeesDialog> {
                               children: [
                                 if (_canManageEmployees || isFounder)
                                   IconButton(
-                                    icon: Icon(Icons.edit, color: Colors.blue),
+                                    icon: const Icon(Icons.edit, color: Colors.blue),
                                     onPressed: () => _editMember(m),
                                     tooltip: t.editEmployee,
                                   ),
                                 if (_canManagePermissions || isFounder)
                                   IconButton(
-                                    icon: Icon(Icons.security, color: Colors.blue),
+                                    icon: const Icon(Icons.security, color: Colors.blue),
                                     onPressed: () async {
                                       final api = ApiClient();
                                       final res = await api.getCompanyPermissions(widget.companyId);
@@ -489,7 +489,7 @@ class _ManageEmployeesDialogState extends ConsumerState<ManageEmployeesDialog> {
                                   ),
                                 if (_canManageEmployees || isFounder)
                                   IconButton(
-                                    icon: Icon(Icons.refresh, color: Colors.blueGrey),
+                                    icon: const Icon(Icons.refresh, color: Colors.blueGrey),
                                     onPressed: () => _resetPassword(m['user_id'], m['full_name']),
                                     tooltip: t.resetPasswordTooltip,
                                   ),

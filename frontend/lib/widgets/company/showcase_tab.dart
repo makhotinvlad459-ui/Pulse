@@ -136,7 +136,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
           final colorScheme = Theme.of(context).colorScheme;
           return AlertDialog(
             title: Text(t.changeOrder, style: TextStyle(color: colorScheme.onSurface)),
-            content: Container(
+            content: SizedBox(
               width: double.maxFinite,
               height: 400,
               child: ReorderableListView.builder(
@@ -674,7 +674,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
           final colorScheme = Theme.of(context).colorScheme;
           return AlertDialog(
             title: Text(t.bulkSale, style: TextStyle(color: colorScheme.onSurface)),
-            content: Container(
+            content: SizedBox(
               width: double.maxFinite,
               height: MediaQuery.of(context).size.height * 0.6,
               child: Column(
@@ -713,7 +713,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                                     controller: controller,
                                     keyboardType: TextInputType.number,
                                     textAlign: TextAlign.center,
-                                    decoration: InputDecoration(border: OutlineInputBorder(), isDense: true, contentPadding: const EdgeInsets.symmetric(vertical: 4)),
+                                    decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true, contentPadding: EdgeInsets.symmetric(vertical: 4)),
                                     style: TextStyle(color: colorScheme.onSurface),
                                     onChanged: (v) {
                                       final q = double.tryParse(v) ?? 0;
@@ -1099,7 +1099,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                             const SizedBox(width: 6),
                             Text(
                               '${item.price.toStringAsFixed(2)}$currency',
-                              style: TextStyle(color: Colors.green, fontWeight: FontWeight.w600, fontSize: 11),
+                              style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w600, fontSize: 11),
                             ),
                           ],
                         ),

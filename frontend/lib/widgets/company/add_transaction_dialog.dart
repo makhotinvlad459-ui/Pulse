@@ -44,7 +44,7 @@ class _AddTransactionDialogState extends ConsumerState<AddTransactionDialog> {
   String _counterparty = '';
   bool _loading = false;
   ({Uint8List bytes, String name})? _attachment;
-  List<Map<String, dynamic>> _selectedProducts = [];
+  final List<Map<String, dynamic>> _selectedProducts = [];
 
   List<String> _existingCounterparties = [];
   bool _loadingCounterparties = false;
@@ -483,7 +483,7 @@ class _AddTransactionDialogState extends ConsumerState<AddTransactionDialog> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<int>(
-                  value: _accountId,
+                  initialValue: _accountId,
                   items: widget.accounts.map<DropdownMenuItem<int>>((a) => DropdownMenuItem<int>(
                         value: a['id'],
                         child: Text(_translateAccountName(a['name'], t)),
@@ -571,7 +571,7 @@ class _AddTransactionDialogState extends ConsumerState<AddTransactionDialog> {
                 const SizedBox(height: 12),
                 if (_type == 'income' || _type == 'expense')
                   DropdownButtonFormField<int>(
-                    value: _categoryId,
+                    initialValue: _categoryId,
                     items: widget.categories.map<DropdownMenuItem<int>>((c) => DropdownMenuItem<int>(
                           value: c['id'],
                           child: Text('${c['icon'] ?? '📁'} ${_translateCategoryName(c['name'], t)}'),
@@ -581,7 +581,7 @@ class _AddTransactionDialogState extends ConsumerState<AddTransactionDialog> {
                   ),
                 if (_type == 'transfer')
                   DropdownButtonFormField<int>(
-                    value: _transferToAccountId,
+                    initialValue: _transferToAccountId,
                     items: widget.accounts.map<DropdownMenuItem<int>>((a) => DropdownMenuItem<int>(
                           value: a['id'],
                           child: Text(_translateAccountName(a['name'], t)),

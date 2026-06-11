@@ -28,9 +28,9 @@ class AccountCard extends ConsumerWidget {
     final currency = t.currencySymbol;
     final colorScheme = Theme.of(context).colorScheme;
     String icon;
-    if (account['type'] == 'cash')
+    if (account['type'] == 'cash') {
       icon = '💵';
-    else if (account['type'] == 'bank')
+    } else if (account['type'] == 'bank')
       icon = '🏦';
     else
       icon = '📁';

@@ -168,10 +168,10 @@ class _MaterialConsumptionWidgetState extends ConsumerState<MaterialConsumptionW
                   DataCell(Text((item['total_quantity'] as num).toStringAsFixed(2), style: TextStyle(color: colorScheme.onSurface))),
                   DataCell(Text('${(item['total_cost'] as num).toStringAsFixed(2)}$currency', style: TextStyle(color: colorScheme.onSurface))),
                 ]);
-              }).toList(),
+              }),
               DataRow(
                 cells: [
-                  DataCell(Text(t.totalLabel, style: TextStyle(fontWeight: FontWeight.bold))),
+                  DataCell(Text(t.totalLabel, style: const TextStyle(fontWeight: FontWeight.bold))),
                   const DataCell(Text('')),
                   DataCell(Text(totalQuantity.toStringAsFixed(2), style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface))),
                   DataCell(Text('${totalCost.toStringAsFixed(2)}$currency', style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface))),

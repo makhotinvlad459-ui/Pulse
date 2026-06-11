@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -9,7 +8,6 @@ import '../providers/locale_provider.dart';
 import '../widgets/video_background.dart';
 import '../models/company.dart';
 import '../screens/create_company_screen.dart';
-import '../screens/company_screen.dart';
 import '../services/api_client.dart';
 import '../providers/theme_provider.dart';
 import '../services/websocket_service.dart';
@@ -17,7 +15,7 @@ import 'package:frontend/l10n/app_localizations.dart';
 import '../screens/subscription_screen.dart';
 import '../widgets/company/change_password_dialog.dart';
 import '../services/error/error_handler.dart';
-import 'dart:async' show Future; 
+import 'dart:async' show Future;
 import 'company_screen.dart' deferred as CompanyScreen;
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -58,8 +56,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         return 'assets/videos/city.mp4';
       case AppTheme.dark:
         return 'assets/videos/dark1.mp4';
-      case AppTheme.blue:
-        return 'assets/videos/city_blue.mp4';
       case AppTheme.green:
         return 'assets/videos/city_green.mp4';
     }
@@ -369,16 +365,16 @@ class _CompanyCardState extends State<_CompanyCard> with SingleTickerProviderSta
             child: Material(
               color: Colors.transparent,
               child: InkWell(
-               onTap: () async {
-  // ✅ Ленивая загрузка через deferred
-  await CompanyScreen.loadLibrary();
-  
-  await Navigator.push(
-    context,
-    MaterialPageRoute(builder: (_) => CompanyScreen.CompanyScreen(company: widget.company)),
-  );
-  widget.ref.invalidate(homeProvider);
-},
+                onTap: () async {
+                  // ✅ Ленивая загрузка через deferred
+                  await CompanyScreen.loadLibrary();
+                  
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => CompanyScreen.CompanyScreen(company: widget.company)),
+                  );
+                  widget.ref.invalidate(homeProvider);
+                },
                 borderRadius: BorderRadius.circular(8),
                 splashColor: colorScheme.primary.withOpacity(0.2),
                 highlightColor: colorScheme.primary.withOpacity(0.1),
@@ -633,7 +629,7 @@ class SettingsDrawer extends StatelessWidget {
             padding: const EdgeInsets.only(left: 16.0, top: 8.0, bottom: 4.0),
             child: Text(
               t.chooseTheme,
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
             ),
           ),
           Consumer(
@@ -648,9 +644,6 @@ class SettingsDrawer extends StatelessWidget {
                       break;
                     case AppTheme.dark:
                       themeName = t.themeDark;
-                      break;
-                    case AppTheme.blue:
-                      themeName = t.themeBlue;
                       break;
                     case AppTheme.green:
                       themeName = t.themeGreen;

@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -43,8 +42,6 @@ RainTheme getRainTheme(AppTheme theme) {
       return const RainTheme(color: Colors.grey, opacity: 0.25, speed: 0.25);
     case AppTheme.dark:
       return const RainTheme(color: Colors.grey, opacity: 0.35, speed: 0.3);
-    case AppTheme.blue:
-      return const RainTheme(color: Colors.blueGrey, opacity: 0.3, speed: 0.28);
     case AppTheme.green:
       return const RainTheme(color: Colors.teal, opacity: 0.35, speed: 0.3);
   }
@@ -56,8 +53,6 @@ Color getGridColor(AppTheme theme, ColorScheme colorScheme) {
       return colorScheme.onSurfaceVariant.withOpacity(0.15);
     case AppTheme.dark:
       return Colors.grey.shade700.withOpacity(0.25);
-    case AppTheme.blue:
-      return Colors.blueGrey.shade200.withOpacity(0.25);
     case AppTheme.green:
       return Colors.teal.shade800.withOpacity(0.4);
   }
@@ -525,7 +520,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
 
     final gridColor = getGridColor(currentTheme, colorScheme);
     final rain = getRainTheme(currentTheme);
-    final double rainHeight = 260;
+    const double rainHeight = 260;
 
     // Подписка на userStream для обновления счетчиков
     ref.listen(StreamProvider((ref) => WebSocketService().userStream), (previous, next) {
@@ -634,33 +629,39 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
         ),
       );
     }
-                            if (value == 'add_account' && showAddAccount)
+                            if (value == 'add_account' && showAddAccount) {
                               await showDialog(
                                   context: context,
                                   builder: (_) => AddAccountDialog(
                                       companyId: _company.id,
                                       onSuccess: _refresh));
+                            }
                             if (value == 'manage_categories' &&
-                                showManageCategories)
+                                showManageCategories) {
                               await showDialog(
                                   context: context,
                                   builder: (_) => ManageCategoriesDialog(
                                       companyId: _company.id,
                                       onSuccess: _refresh,
                                       categories: _categories));
+                            }
                             if (value == 'manage_employees' &&
-                                showManageEmployees)
+                                showManageEmployees) {
                               await showDialog(
                                   context: context,
                                   builder: (_) => ManageEmployeesDialog(
                                       companyId: _company.id,
                                       onSuccess: _refresh));
-                            if (value == 'archive' && showArchive)
+                            }
+                            if (value == 'archive' && showArchive) {
                               _openArchive();
-                            if (value == 'delete' && showDeleteCompany)
+                            }
+                            if (value == 'delete' && showDeleteCompany) {
                               await _confirmDeleteCompany();
-                            if (value == 'reorder_tabs' && showReorderTabs)
+                            }
+                            if (value == 'reorder_tabs' && showReorderTabs) {
                               await _openReorderTabsDialog();
+                            }
                           },
                           itemBuilder: (context) {
                             final items = <PopupMenuItem<String>>[];
@@ -861,9 +862,10 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
           Navigator.pop(context, true);
         }
       } catch (e) {
-        if (mounted)
+        if (mounted) {
           ScaffoldMessenger.of(context)
               .showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+        }
       }
     }
   }

@@ -160,10 +160,10 @@ class _SalesTablesState extends ConsumerState<SalesTables> {
               DataCell(Text((item['quantity'] as num).toStringAsFixed(2), style: TextStyle(color: colorScheme.onSurface))),
               DataCell(Text('${(item['amount'] as num).toStringAsFixed(2)}$currency', style: TextStyle(color: colorScheme.onSurface))),
             ]);
-          }).toList(),
+          }),
           DataRow(
             cells: [
-              DataCell(Text(t.totalLabel, style: TextStyle(fontWeight: FontWeight.bold))),
+              DataCell(Text(t.totalLabel, style: const TextStyle(fontWeight: FontWeight.bold))),
               DataCell(Text(totalQuantity.toStringAsFixed(2), style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface))),
               DataCell(Text('${totalAmount.toStringAsFixed(2)}$currency', style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface))),
             ],

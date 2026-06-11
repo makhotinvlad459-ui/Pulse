@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../services/api_client.dart';
-import '../../providers/locale_provider.dart';
 import 'package:frontend/l10n/app_localizations.dart';
 
 class ChangePasswordDialog extends ConsumerStatefulWidget {

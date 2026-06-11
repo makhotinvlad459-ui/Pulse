@@ -12,7 +12,7 @@ class TransactionsByCategoryScreen extends ConsumerWidget {
   final String type;
   final DateTime startDate;
   final DateTime endDate;
-  const TransactionsByCategoryScreen({
+  const TransactionsByCategoryScreen({super.key, 
     required this.companyId,
     this.categoryId,
     required this.categoryName,

@@ -4,7 +4,6 @@ import '../services/api_client.dart';
 import '../services/secure_storage.dart';
 import '../services/websocket_service.dart';
 import '../models/user.dart';
-import 'package:dio/dio.dart';
 import '../services/error/error_handler.dart';
 
 final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) => AuthNotifier());

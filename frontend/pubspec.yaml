@@ -52,6 +52,7 @@ dependencies:
 
   http: any
   video_player: any
+  image: any
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -64,7 +65,6 @@ flutter:
   assets:
     - assets/logo.png
     - assets/videos/city.mp4
-    - assets/videos/for_home.mp4
     - assets/videos/dark1.mp4
     - assets/videos/city_blue.mp4
     - assets/videos/city_green.mp4

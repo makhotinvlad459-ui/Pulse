@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import '../../../services/api_client.dart';
 import '../../../services/image_compression.dart';
 import '../../../l10n/app_localizations.dart';
@@ -40,7 +39,7 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
   bool _isManualAmountEnabled = true;
 
   List<Map<String, dynamic>> _attachments = [];
-  List<({Uint8List bytes, String name})> _newFiles = [];
+  final List<({Uint8List bytes, String name})> _newFiles = [];
   bool _uploading = false;
 
   // Автоподбор контрагентов
@@ -531,7 +530,7 @@ if (fileBytes != null) {
                         ),
                       ),
                     );
-                  }).toList(),
+                  }),
                   if (_items.isEmpty)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 8),

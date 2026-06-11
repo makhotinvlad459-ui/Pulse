@@ -674,7 +674,7 @@ String _getAccountType(int? accountId) {
                                             : () => _editTransaction(trans),
                                       ),
                                     );
-                                  }).toList(),
+                                  }),
                                 ],
                               );
                             },

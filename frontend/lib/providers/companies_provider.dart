@@ -1,7 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/api_client.dart';
 import '../models/company.dart';
-import '../services/error/safe_api_call.dart';
 import '../services/error/error_handler.dart';
 
 final companiesProvider = FutureProvider<List<Company>>((ref) async {

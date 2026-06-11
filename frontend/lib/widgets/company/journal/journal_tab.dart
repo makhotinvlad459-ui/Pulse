@@ -425,7 +425,7 @@ class _JournalTabState extends ConsumerState<JournalTab> {
             if (entry.totalAmount > 0)
               Text('${t.sumLabel}: ${entry.totalAmount.toStringAsFixed(2)} ${t.currencySymbol}', style: const TextStyle(fontSize: 11)),
             if (isCompleted && entry.transactionId != null)
-              Text('${t.transactionLabel}: #${entry.transactionId}', style: TextStyle(fontSize: 10, color: Colors.green)),
+              Text('${t.transactionLabel}: #${entry.transactionId}', style: const TextStyle(fontSize: 10, color: Colors.green)),
             if (attachments.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 6),

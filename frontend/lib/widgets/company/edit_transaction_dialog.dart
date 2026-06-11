@@ -449,8 +449,9 @@ class _EditTransactionDialogState extends ConsumerState<EditTransactionDialog> {
         SnackBar(content: Text(widget.isFounder ? t.transactionDeletedPermanent : t.transactionHidden)),
       );
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -601,7 +602,7 @@ class _EditTransactionDialogState extends ConsumerState<EditTransactionDialog> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<int>(
-                  value: _accountId,
+                  initialValue: _accountId,
                   items: widget.accounts.map<DropdownMenuItem<int>>((a) => DropdownMenuItem<int>(
                         value: a['id'],
                         child: Text(_translateAccountName(a['name'], t), style: TextStyle(color: colorScheme.onSurface)),
@@ -611,8 +612,11 @@ class _EditTransactionDialogState extends ConsumerState<EditTransactionDialog> {
                       _accountId = v!;
                       if (_type == 'transfer') {
                         final available = widget.accounts.where((a) => a['id'] != _accountId).toList();
-                        if (available.isNotEmpty) _transferToAccountId = available[0]['id'];
-                        else _transferToAccountId = null;
+                        if (available.isNotEmpty) {
+                          _transferToAccountId = available[0]['id'];
+                        } else {
+                          _transferToAccountId = null;
+                        }
                       }
                     });
                   },
@@ -666,7 +670,7 @@ class _EditTransactionDialogState extends ConsumerState<EditTransactionDialog> {
                 const SizedBox(height: 12),
                 if (_type == 'income' || _type == 'expense')
                   DropdownButtonFormField<int>(
-                    value: _categoryId,
+                    initialValue: _categoryId,
                     items: widget.categories.map<DropdownMenuItem<int>>((c) => DropdownMenuItem<int>(
                           value: c['id'],
                           child: Text('${c['icon'] ?? '📁'} ${_translateCategoryName(c['name'], t)}', style: TextStyle(color: colorScheme.onSurface)),
@@ -684,7 +688,7 @@ class _EditTransactionDialogState extends ConsumerState<EditTransactionDialog> {
                   ),
                 if (_type == 'transfer')
                   DropdownButtonFormField<int>(
-                    value: _transferToAccountId,
+                    initialValue: _transferToAccountId,
                     items: widget.accounts.map<DropdownMenuItem<int>>((a) => DropdownMenuItem<int>(
                           value: a['id'],
                           child: Text(_translateAccountName(a['name'], t), style: TextStyle(color: colorScheme.onSurface)),

@@ -243,7 +243,7 @@ class _CreateCompanyScreenState extends ConsumerState<CreateCompanyScreen> {
                 }),
             const SizedBox(height: 20),
             Text(t.employeesOptional,
-                style: TextStyle(fontWeight: FontWeight.bold)),
+                style: const TextStyle(fontWeight: FontWeight.bold)),
             ..._employees.asMap().entries.map((e) {
               int idx = e.key;
               return Card(

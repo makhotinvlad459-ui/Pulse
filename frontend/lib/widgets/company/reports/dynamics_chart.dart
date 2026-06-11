@@ -34,7 +34,7 @@ class DynamicsChart extends ConsumerWidget {
       height: 300,
       child: LineChart(
         LineChartData(
-          gridData: FlGridData(show: true),
+          gridData: const FlGridData(show: true),
           titlesData: FlTitlesData(
             leftTitles: AxisTitles(
               sideTitles: SideTitles(
@@ -60,8 +60,8 @@ class DynamicsChart extends ConsumerWidget {
                 },
               ),
             ),
-            rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
           ),
           borderData: FlBorderData(show: true),
           lineBarsData: [
@@ -70,7 +70,7 @@ class DynamicsChart extends ConsumerWidget {
               isCurved: true,
               color: Colors.green,
               barWidth: 3,
-              dotData: FlDotData(show: true),
+              dotData: const FlDotData(show: true),
               belowBarData: BarAreaData(show: true, color: Colors.green.withOpacity(0.2)),
             ),
             LineChartBarData(
@@ -78,7 +78,7 @@ class DynamicsChart extends ConsumerWidget {
               isCurved: true,
               color: Colors.red,
               barWidth: 3,
-              dotData: FlDotData(show: true),
+              dotData: const FlDotData(show: true),
               belowBarData: BarAreaData(show: true, color: Colors.red.withOpacity(0.2)),
             ),
           ],

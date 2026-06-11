@@ -74,8 +74,8 @@ class _CounterpartiesReportWidgetState extends ConsumerState<CounterpartiesRepor
           final balance = row['balance'] as double;
           return DataRow(cells: [
             DataCell(Text(row['name'], style: TextStyle(color: colorScheme.onSurface))),
-            DataCell(Text(row['total_income'].toStringAsFixed(2), style: TextStyle(color: Colors.green))),
-            DataCell(Text(row['total_expense'].toStringAsFixed(2), style: TextStyle(color: Colors.red))),
+            DataCell(Text(row['total_income'].toStringAsFixed(2), style: const TextStyle(color: Colors.green))),
+            DataCell(Text(row['total_expense'].toStringAsFixed(2), style: const TextStyle(color: Colors.red))),
             DataCell(Text(balance.toStringAsFixed(2), style: TextStyle(color: balance >= 0 ? Colors.green : Colors.red))),
           ]);
         }).toList(),

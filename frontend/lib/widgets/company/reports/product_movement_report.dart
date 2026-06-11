@@ -138,7 +138,7 @@ class _ProductMovementReportState extends ConsumerState<ProductMovementReport> {
         final blob = html.Blob([bytes]);
         final url = html.Url.createObjectUrlFromBlob(blob);
         final anchor = html.AnchorElement(href: url)
-          ..setAttribute('download', 'product_movement_${_selectedProductName}.xlsx')
+          ..setAttribute('download', 'product_movement_$_selectedProductName.xlsx')
           ..click();
         html.Url.revokeObjectUrl(url);
       } else {

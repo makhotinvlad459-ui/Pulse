@@ -177,7 +177,7 @@ class _MemberPermissionsDialogState extends ConsumerState<MemberPermissionsDialo
                       title: Text(_getGroupTitle(groupKey, t), style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
                       children: groupPerms.map((p) {
                         final name = p['name'] as String;
-                        final enabled = true;
+                        const enabled = true;
                         return CheckboxListTile(
                           title: Text(_translatePermissionName(name, t), style: TextStyle(color: colorScheme.onSurface)),
                           value: _permissionsState[name],

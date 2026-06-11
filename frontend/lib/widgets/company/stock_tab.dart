@@ -500,7 +500,7 @@ class _StockTabState extends ConsumerState<StockTab> {
                                         ),
                                       ),
                                       Text('${p['current_quantity']} ${_unitKeyToDisplay(p['unit'], t)}',
-                                          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+                                          style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
                                       if (_canDelete)
                                         IconButton(
                                           icon: const Icon(Icons.delete, color: Colors.red),

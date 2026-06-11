@@ -122,7 +122,7 @@ class _LittleManPainter extends CustomPainter {
     canvas.drawCircle(headCenter, 8, paint);
 
     // Тело (линия)
-    final bodyTop = Offset(60, 38);
+    const bodyTop = Offset(60, 38);
     final bodyBottom = Offset(60 + bodyTilt * 0.5, 80);
     canvas.drawLine(bodyTop, bodyBottom, paint);
 
@@ -142,7 +142,7 @@ class _LittleManPainter extends CustomPainter {
     final boxRect = Rect.fromLTWH(130 + moneyOffset, 45, 45, 35);
     canvas.drawRect(boxRect, paint);
     // Текст "💰"
-    final textSpan = TextSpan(text: "💰", style: const TextStyle(fontSize: 18));
+    const textSpan = TextSpan(text: "💰", style: TextStyle(fontSize: 18));
     final tp = TextPainter(text: textSpan, textDirection: TextDirection.ltr);
     tp.layout();
     tp.paint(canvas, Offset(135 + moneyOffset, 50));
@@ -150,20 +150,20 @@ class _LittleManPainter extends CustomPainter {
     // Капли пота (только при отдыхе)
     if (isResting) {
       final sweatPaint = Paint()..color = Colors.blue.withOpacity(0.7 * sweatOpacity);
-      canvas.drawCircle(Offset(55, 22), 2, sweatPaint);
-      canvas.drawCircle(Offset(50, 26), 1.5, sweatPaint);
-      canvas.drawCircle(Offset(65, 20), 2.5, sweatPaint);
+      canvas.drawCircle(const Offset(55, 22), 2, sweatPaint);
+      canvas.drawCircle(const Offset(50, 26), 1.5, sweatPaint);
+      canvas.drawCircle(const Offset(65, 20), 2.5, sweatPaint);
     }
 
     // Лицо: глаза и рот
-    canvas.drawCircle(Offset(57, 28), 1.2, paint);
-    canvas.drawCircle(Offset(63, 28), 1.2, paint);
+    canvas.drawCircle(const Offset(57, 28), 1.2, paint);
+    canvas.drawCircle(const Offset(63, 28), 1.2, paint);
     if (isResting) {
       // усталый рот – дуга вниз
-      canvas.drawArc(Rect.fromCircle(center: Offset(60, 35), radius: 4), 0, 3.14, false, paint);
+      canvas.drawArc(Rect.fromCircle(center: const Offset(60, 35), radius: 4), 0, 3.14, false, paint);
     } else {
       // напряжённый рот – прямая линия
-      canvas.drawLine(Offset(57, 35), Offset(63, 35), paint);
+      canvas.drawLine(const Offset(57, 35), const Offset(63, 35), paint);
     }
   }
 

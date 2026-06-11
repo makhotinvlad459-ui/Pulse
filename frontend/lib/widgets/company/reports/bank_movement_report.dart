@@ -152,8 +152,9 @@ class _BankAccountMovementReportState extends ConsumerState<BankAccountMovementR
     double totalIncome = 0;
     double totalExpense = 0;
     for (var tx in _transactions) {
-      if (tx['type'] == 'income') totalIncome += tx['amount'];
-      else if (tx['type'] == 'expense') totalExpense += tx['amount'];
+      if (tx['type'] == 'income') {
+        totalIncome += tx['amount'];
+      } else if (tx['type'] == 'expense') totalExpense += tx['amount'];
     }
 
     if (_bankAccountId == null) {
@@ -224,9 +225,9 @@ class _BankAccountMovementReportState extends ConsumerState<BankAccountMovementR
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  Text('${t.totalLabel} ${t.incomeType}: ${totalIncome.toStringAsFixed(2)} ₽', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+                  Text('${t.totalLabel} ${t.incomeType}: ${totalIncome.toStringAsFixed(2)} ₽', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
                   const SizedBox(width: 16),
-                  Text('${t.totalLabel} ${t.expenseType}: ${totalExpense.toStringAsFixed(2)} ₽', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
+                  Text('${t.totalLabel} ${t.expenseType}: ${totalExpense.toStringAsFixed(2)} ₽', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
                 ],
               ),
             ],

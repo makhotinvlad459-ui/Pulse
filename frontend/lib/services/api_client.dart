@@ -3,7 +3,6 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'secure_storage.dart';
 import '../models/company.dart';
 import '../models/statistics.dart';
@@ -18,7 +17,7 @@ class ApiClient {
   static String get baseUrl {
     const bool isProduction = bool.fromEnvironment('dart.vm.product');
     // Переопределение для отладки на реальном устройстве
-    const String? customDebugUrl = String.fromEnvironment('DEBUG_API_URL');
+    const String customDebugUrl = String.fromEnvironment('DEBUG_API_URL');
     
     // Web
     if (kIsWeb) {
@@ -34,7 +33,7 @@ class ApiClient {
     // Debug-режим на мобильных устройствах
     if (kDebugMode) {
       // Если передан кастомный URL через --dart-define, используем его
-      if (customDebugUrl != null && customDebugUrl.isNotEmpty) {
+      if (customDebugUrl.isNotEmpty) {
         return customDebugUrl;
       }
       // Для Android-эмулятора
@@ -196,7 +195,7 @@ void _showSubscriptionRequiredDialog(BuildContext context) {
     builder: (context) => AlertDialog(
       title: Row(
         children: [
-          Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
+          const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
           const SizedBox(width: 8),
           Text(t?.subscriptionRequiredTitle ?? 'Лимит исчерпан'),
         ],

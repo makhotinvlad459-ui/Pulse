@@ -62,7 +62,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
         _showSnackBar(t.errorPaymentUrlNotFound);
       }
     } catch (e) {
-      _showSnackBar(t.errorCreatingPayment + ': $e');
+      _showSnackBar('${t.errorCreatingPayment}: $e');
     }
   }
 
@@ -76,7 +76,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
         _showSnackBar(t.errorCannotOpenLink);
       }
     } catch (e) {
-      _showSnackBar(t.errorOpeningLink + ': $e');
+      _showSnackBar('${t.errorOpeningLink}: $e');
     }
   }
 
@@ -246,7 +246,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
               price: '${nextPayment.toInt()} ${t.currencySymbol}',
               priceNote:
                   extraCompanies > 0
-                      ? '${t.extraCompaniesInfo(extraCompanies, extraCompanies * 250)}'
+                      ? t.extraCompaniesInfo(extraCompanies, extraCompanies * 250)
                       : null,
               onPress: () => _buyWithYooKassa('monthly'),
               isRecommended: true,
@@ -352,7 +352,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
         borderRadius: BorderRadius.circular(12),
         side:
             isRecommended
-                ? BorderSide(color: Colors.green, width: 2)
+                ? const BorderSide(color: Colors.green, width: 2)
                 : BorderSide.none,
       ),
       child: ListTile(

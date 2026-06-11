@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../services/api_client.dart';
 import '../../../providers/auth_provider.dart';
-import '../../../providers/locale_provider.dart';
 import '../../../models/user.dart';
 import 'package:frontend/l10n/app_localizations.dart';
 
@@ -128,8 +127,9 @@ class _TasksTabState extends ConsumerState<TasksTab> with AutomaticKeepAliveClie
                         firstDate: DateTime.now(),
                         lastDate: DateTime.now().add(const Duration(days: 365)),
                       );
-                      if (picked != null)
+                      if (picked != null) {
                         setStateDialog(() => deadline = picked);
+                      }
                     },
                   ),
                 ],
@@ -257,7 +257,7 @@ class _TasksTabState extends ConsumerState<TasksTab> with AutomaticKeepAliveClie
     final authState = ref.watch(authProvider);
     final currentUser = authState.user;
     final isFounder = currentUser?.role == UserRole.founder;
-    final canCreateTask = true;
+    const canCreateTask = true;
     final colorScheme = Theme.of(context).colorScheme;
 
     return Column(
@@ -396,7 +396,7 @@ class _TasksTabState extends ConsumerState<TasksTab> with AutomaticKeepAliveClie
       label: Text(label, style: TextStyle(fontSize: 12, color: active ? colorScheme.onPrimary : colorScheme.onSurface)),
       selected: active,
       selectedColor: colorScheme.primary,
-      backgroundColor: colorScheme.surfaceVariant,
+      backgroundColor: colorScheme.surfaceContainerHighest,
       onSelected: (val) {
         if (val) {
           setState(() {

@@ -64,9 +64,10 @@ class _IncomeExpenseTabState extends ConsumerState<IncomeExpenseTab> {
       });
     } catch (e) {
       setState(() => _loading = false);
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+      }
     }
   }
 
@@ -259,7 +260,7 @@ class TransactionsByCategoryScreen extends StatelessWidget {
   final String type;
   final DateTime startDate;
   final DateTime endDate;
-  const TransactionsByCategoryScreen({
+  const TransactionsByCategoryScreen({super.key, 
     required this.companyId,
     this.categoryId,
     required this.categoryName,

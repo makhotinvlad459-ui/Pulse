@@ -142,7 +142,7 @@ class _CounterpartiesTabState extends ConsumerState<CounterpartiesTab> {
                     title: Text('${tItem['amount']} ₽'),
                     subtitle: Text('${tItem['type'] == 'income' ? t.income : t.expense} • ${tItem['description'] ?? ''}'),
                     trailing: Text(DateFormat('dd.MM.yyyy').format(DateTime.parse(tItem['date']))),
-                  )).toList(),
+                  )),
                 ],
               ),
             ),

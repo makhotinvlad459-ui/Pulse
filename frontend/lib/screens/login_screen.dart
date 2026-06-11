@@ -99,8 +99,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         return 'assets/videos/city.mp4';
       case AppTheme.dark:
         return 'assets/videos/dark1.mp4';
-      case AppTheme.blue:
-        return 'assets/videos/city_blue.mp4';
       case AppTheme.green:
         return 'assets/videos/city_green.mp4';
     }

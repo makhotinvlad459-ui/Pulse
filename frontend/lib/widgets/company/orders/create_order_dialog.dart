@@ -28,7 +28,7 @@ class _CreateOrderDialogState extends ConsumerState<CreateOrderDialog> {
   final _workPriceController = TextEditingController();
   int? _assigneeId;
   DateTime? _deadline;
-  List<Map<String, dynamic>> _items = [];
+  final List<Map<String, dynamic>> _items = [];
   List<dynamic> _products = [];
   bool _loadingProducts = true;
 

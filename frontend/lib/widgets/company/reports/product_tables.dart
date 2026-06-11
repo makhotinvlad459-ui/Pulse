@@ -45,7 +45,9 @@ class ProductTables extends ConsumerWidget {
   Widget _buildProductTable(List<dynamic> data, ColorScheme colorScheme, AppLocalizations t) {
     if (data.isEmpty) return Text(t.noData, style: TextStyle(color: colorScheme.onSurfaceVariant));
     double totalQuantity = 0;
-    for (var item in data) totalQuantity += (item['quantity'] as num).toDouble();
+    for (var item in data) {
+      totalQuantity += (item['quantity'] as num).toDouble();
+    }
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Padding(
@@ -73,7 +75,7 @@ class ProductTables extends ConsumerWidget {
                   Padding(padding: const EdgeInsets.all(8), child: Text((item['quantity'] as num).toStringAsFixed(2), style: TextStyle(color: colorScheme.onSurface))),
                 ],
               );
-            }).toList(),
+            }),
             TableRow(
               decoration: BoxDecoration(color: colorScheme.surface),
               children: [

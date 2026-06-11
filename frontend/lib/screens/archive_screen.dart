@@ -105,7 +105,7 @@ class _ArchiveScreenState extends ConsumerState<ArchiveScreen> {
                                     '${_typeName(tx.type, t)} • ${tx.description ?? ''}'),
                                 if (tx.creatorName != null)
                                   Text('${t.createdBy}: ${tx.creatorName}',
-                                      style: TextStyle(
+                                      style: const TextStyle(
                                           fontSize: 10, color: Colors.grey)),
                               ],
                             ),

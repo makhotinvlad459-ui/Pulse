@@ -8,19 +8,14 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:photo_view/photo_view.dart';
-import 'package:path_provider/path_provider.dart';
 import '../../../services/api_client.dart';
 import '../../../services/image_compression.dart';
 import '../../../providers/auth_provider.dart';
-import '../../../providers/locale_provider.dart';
 import '../../../models/user.dart';
 import 'package:frontend/l10n/app_localizations.dart';
 import 'chat_tab_platform_interface.dart';
 import 'chat_tab_platform_factory.dart';
 // Условный импорт: на мобильные — mobile, на веб — web
-import 'chat_tab_mobile.dart'
-    if (dart.library.html) 'chat_tab_web.dart';
 
 enum _MessageAction { edit, delete, cancel }
 
@@ -559,8 +554,8 @@ Future<void> _reconnectWebSocket() async {
               onTap: () => Navigator.pop(context, _MessageAction.edit),
             ),
             ListTile(
-              leading: Icon(Icons.delete, color: Colors.red),
-              title: Text(t.delete, style: TextStyle(color: Colors.red)),
+              leading: const Icon(Icons.delete, color: Colors.red),
+              title: Text(t.delete, style: const TextStyle(color: Colors.red)),
               onTap: () => Navigator.pop(context, _MessageAction.delete),
             ),
           ],

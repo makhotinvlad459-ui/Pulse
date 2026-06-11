@@ -311,7 +311,7 @@ class _OrderDetailsDialogState extends ConsumerState<OrderDetailsDialog> {
               Text('${t.materialsTotal}: ${calculatedMaterialsTotal.toStringAsFixed(2)}$currency',
                   style: TextStyle(color: colorScheme.onSurface)),
               Text('${t.materialsPaid}: ${materialsPaid.toStringAsFixed(2)}$currency',
-                  style: TextStyle(color: Colors.green)),
+                  style: const TextStyle(color: Colors.green)),
               Text('${t.orderTotal}: ${_fullOrder['total_amount']}$currency',
                   style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
               Text('${t.totalPaid}: ${_fullOrder['paid_amount']}$currency',
@@ -675,7 +675,7 @@ class _OrderDetailsDialogState extends ConsumerState<OrderDetailsDialog> {
                   ),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<int>(
-                    value: selectedAccountId,
+                    initialValue: selectedAccountId,
                     items: accounts.map((acc) => DropdownMenuItem<int>(
                       value: acc['id'],
                       child: Text('${acc['name']} (${acc['balance']}$currency)'),

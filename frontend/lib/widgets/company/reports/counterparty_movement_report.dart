@@ -23,7 +23,7 @@ class _CounterpartyMovementReportState extends ConsumerState<CounterpartyMovemen
   List<String> _counterparties = [];
   List<Map<String, dynamic>> _transactions = [];
   List<Map<String, dynamic>> _filteredTransactions = [];
-  Map<int, String> _accountNames = {};
+  final Map<int, String> _accountNames = {};
   bool _loading = false;
   bool _loadingCounterparties = true;
   String? _selectedCounterparty;
@@ -186,8 +186,9 @@ class _CounterpartyMovementReportState extends ConsumerState<CounterpartyMovemen
     double totalIncome = 0;
     double totalExpense = 0;
     for (var tx in _filteredTransactions) {
-      if (tx['type'] == 'income') totalIncome += tx['amount'];
-      else if (tx['type'] == 'expense') totalExpense += tx['amount'];
+      if (tx['type'] == 'income') {
+        totalIncome += tx['amount'];
+      } else if (tx['type'] == 'expense') totalExpense += tx['amount'];
     }
 
     return Column(
@@ -283,9 +284,9 @@ class _CounterpartyMovementReportState extends ConsumerState<CounterpartyMovemen
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  Text('${t.totalLabel} ${t.incomeType}: ${totalIncome.toStringAsFixed(2)} ${t.currencySymbol}', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+                  Text('${t.totalLabel} ${t.incomeType}: ${totalIncome.toStringAsFixed(2)} ${t.currencySymbol}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
                   const SizedBox(width: 16),
-                  Text('${t.totalLabel} ${t.expenseType}: ${totalExpense.toStringAsFixed(2)} ${t.currencySymbol}', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
+                  Text('${t.totalLabel} ${t.expenseType}: ${totalExpense.toStringAsFixed(2)} ${t.currencySymbol}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
                 ],
               ),
             ],

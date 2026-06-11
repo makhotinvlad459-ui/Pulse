@@ -244,9 +244,9 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
               subtitle: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('${t.workPrice}: ${order['work_price']}$currency', style: TextStyle(fontSize: 12)),
-                  Text('${t.materials}: ${(total - (order['work_price'] as num)).toStringAsFixed(2)}$currency', style: TextStyle(fontSize: 12)),
-                  Text('${t.paid}: ${paid.toStringAsFixed(2)}$currency', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  Text('${t.workPrice}: ${order['work_price']}$currency', style: const TextStyle(fontSize: 12)),
+                  Text('${t.materials}: ${(total - (order['work_price'] as num)).toStringAsFixed(2)}$currency', style: const TextStyle(fontSize: 12)),
+                  Text('${t.paid}: ${paid.toStringAsFixed(2)}$currency', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                 ],
               ),
               trailing: canDelete

@@ -22,14 +22,14 @@ class CashVsNoncashBar extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
+        SizedBox(
           height: 30,
           child: Row(
             children: [
               Expanded(
                 flex: cashPercent.toInt(),
                 child: Container(
-                  decoration: BoxDecoration(
+                  decoration: const BoxDecoration(
                     color: Colors.orange,
                     borderRadius: BorderRadius.only(topLeft: Radius.circular(8), bottomLeft: Radius.circular(8)),
                   ),
@@ -39,7 +39,7 @@ class CashVsNoncashBar extends ConsumerWidget {
               Expanded(
                 flex: noncashPercent.toInt(),
                 child: Container(
-                  decoration: BoxDecoration(
+                  decoration: const BoxDecoration(
                     color: Colors.blue,
                     borderRadius: BorderRadius.only(topRight: Radius.circular(8), bottomRight: Radius.circular(8)),
                   ),
