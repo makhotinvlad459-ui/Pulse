@@ -343,33 +343,38 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
   // -------------------------------------------------------------
 
   @override
-  void initState() {
-    super.initState();
-    _company = widget.company;
-    initializeDateFormatting('ru_RU', null);
-    _tabController = TabController(length: 0, vsync: this);
-    _loadData();
-    _initWebSocket();
-    _loadTabOrder();
-  }
+void initState() {
+  super.initState();
+  _company = widget.company;
+  initializeDateFormatting('ru_RU', null);
+  _tabController = TabController(length: 0, vsync: this);
+  _loadData();
+  _initWebSocket();
+  _loadTabOrder();
+}
 
-  @override
-  void dispose() {
-    _tabController.dispose();
-    if (_hasChanges) Navigator.pop(context, true);
-    super.dispose();
-  }
+@override
+void dispose() {
+  _tabController.dispose();
+  WebSocketService().disconnectChat();
+  WebSocketService().disconnectTasks();
+  if (_hasChanges) Navigator.pop(context, true);
+  super.dispose();
+}
 
   Future<void> _initWebSocket() async {
-    final authState = ref.read(authProvider);
-    final user = authState.user;
-    if (user == null) return;
-    final api = ApiClient();
-    final token = await api.getToken();
-    if (token == null) return;
-    
-    WebSocketService().connectUser(user.id, token);
-  }
+  final authState = ref.read(authProvider);
+  final user = authState.user;
+  if (user == null) return;
+  final api = ApiClient();
+  final token = await api.getToken();
+  if (token == null) return;
+  
+  WebSocketService().connectUser(user.id, token);
+  WebSocketService().connectChat(_company.id, token);
+  WebSocketService().connectTasks(_company.id, token);
+}
+
 
   Future<void> _refreshCounters() async {
     final api = ApiClient();
