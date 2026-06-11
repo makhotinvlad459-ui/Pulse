@@ -61,13 +61,15 @@ class WebSocketService with WidgetsBindingObserver {
   }
 
   void connectChat(int companyId, String token) {
-    // ✅ Принудительно закрываем старое соединение
+    if (_currentChatCompanyId == companyId && _chatChannel != null) {
+      if (kDebugMode) print('✅ Already connected to chat company $companyId');
+      return;
+    }
+    
     if (_chatChannel != null) {
       try {
         _chatChannel!.sink.close();
-      } catch (e) {
-        print('Error closing old chat: $e');
-      }
+      } catch (e) {}
       _chatChannel = null;
     }
     
@@ -91,13 +93,15 @@ class WebSocketService with WidgetsBindingObserver {
   }
 
   void connectTasks(int companyId, String token) {
-    // ✅ Принудительно закрываем старое соединение
+    if (_currentTasksCompanyId == companyId && _tasksChannel != null) {
+      if (kDebugMode) print('✅ Already connected to tasks company $companyId');
+      return;
+    }
+    
     if (_tasksChannel != null) {
       try {
         _tasksChannel!.sink.close();
-      } catch (e) {
-        print('Error closing old tasks: $e');
-      }
+      } catch (e) {}
       _tasksChannel = null;
     }
     
@@ -151,13 +155,13 @@ class WebSocketService with WidgetsBindingObserver {
       
       switch (type) {
         case 'chat':
-          _chatStreamController.add(data);
+          if (!_chatStreamController.isClosed) _chatStreamController.add(data);
           break;
         case 'tasks':
-          _taskStreamController.add(data);
+          if (!_taskStreamController.isClosed) _taskStreamController.add(data);
           break;
         case 'user':
-          _userStreamController.add(data);
+          if (!_userStreamController.isClosed) _userStreamController.add(data);
           break;
       }
     } catch (e) {
@@ -166,109 +170,97 @@ class WebSocketService with WidgetsBindingObserver {
   }
 
   void _handleDisconnect(String type) {
-  // ✅ Проверяем на null перед закрытием
-  if (type == 'chat') {
+    if (type == 'chat') {
+      if (_chatChannel != null) {
+        try { _chatChannel!.sink.close(); } catch (e) {}
+        _chatChannel = null;
+      }
+      if (kDebugMode) print('🔌 Chat WebSocket disconnected');
+    }
+    
+    if (type == 'tasks') {
+      if (_tasksChannel != null) {
+        try { _tasksChannel!.sink.close(); } catch (e) {}
+        _tasksChannel = null;
+      }
+      if (kDebugMode) print('🔌 Tasks WebSocket disconnected');
+    }
+    
+    if (type == 'user') {
+      if (_userChannel != null) {
+        try { _userChannel!.sink.close(); } catch (e) {}
+        _userChannel = null;
+      }
+      if (kDebugMode) print('🔌 User WebSocket disconnected');
+    }
+    
+    if (!_shouldReconnect) {
+      if (kDebugMode) print('⏸️ Reconnection disabled, skipping');
+      return;
+    }
+    
+    if (_isReconnecting) {
+      if (kDebugMode) print('⏸️ Already reconnecting, skipping');
+      return;
+    }
+    
+    _isReconnecting = true;
+    
+    _reconnectTimer?.cancel();
+    _reconnectTimer = Timer(const Duration(seconds: 3), () {
+      _isReconnecting = false;
+      if (!_shouldReconnect) return;
+      
+      if (kDebugMode) print('🔄 WS $type: Reconnecting...');
+      
+      if (type == 'chat' && _currentChatCompanyId != null && _currentChatToken != null) {
+        connectChat(_currentChatCompanyId!, _currentChatToken!);
+      } else if (type == 'tasks' && _currentTasksCompanyId != null && _currentTasksToken != null) {
+        connectTasks(_currentTasksCompanyId!, _currentTasksToken!);
+      } else if (type == 'user' && _currentUserId != null && _currentUserToken != null) {
+        connectUser(_currentUserId!, _currentUserToken!);
+      }
+    });
+  }
+
+  void disconnectChat() {
+    _shouldReconnect = false;
     if (_chatChannel != null) {
       try {
-        _chatChannel!.sink.close();
-      } catch (e) {
-        print('Error closing chat channel: $e');
-      }
+        _chatChannel!.sink.close(status.goingAway);
+      } catch (e) {}
       _chatChannel = null;
     }
-    if (kDebugMode) print('🔌 Chat WebSocket disconnected');
+    _currentChatCompanyId = null;
+    _currentChatToken = null;
+    // После отключения возвращаем флаг для будущих подключений
+    _shouldReconnect = true;
   }
-  
-  if (type == 'tasks') {
-    if (_tasksChannel != null) {
-      try {
-        _tasksChannel!.sink.close();
-      } catch (e) {
-        print('Error closing tasks channel: $e');
-      }
-      _tasksChannel = null;
-    }
-    if (kDebugMode) print('🔌 Tasks WebSocket disconnected');
-  }
-  
-  if (type == 'user') {
-    if (_userChannel != null) {
-      try {
-        _userChannel!.sink.close();
-      } catch (e) {
-        print('Error closing user channel: $e');
-      }
-      _userChannel = null;
-    }
-    if (kDebugMode) print('🔌 User WebSocket disconnected');
-  }
-  
-  // ✅ Не переподключаемся, если отключение было намеренным
-  if (!_shouldReconnect) {
-    if (kDebugMode) print('⏸️ Reconnection disabled, skipping');
-    return;
-  }
-  
-  // ✅ Не переподключаемся, если уже идёт процесс
-  if (_isReconnecting) {
-    if (kDebugMode) print('⏸️ Already reconnecting, skipping');
-    return;
-  }
-  
-  _isReconnecting = true;
-  
-  _reconnectTimer?.cancel();
-  _reconnectTimer = Timer(const Duration(seconds: 3), () {
-    _isReconnecting = false;
-    if (kDebugMode) print('🔄 WS $type: Reconnecting...');
-    
-    if (type == 'chat' && _currentChatCompanyId != null && _currentChatToken != null) {
-      connectChat(_currentChatCompanyId!, _currentChatToken!);
-    } else if (type == 'tasks' && _currentTasksCompanyId != null && _currentTasksToken != null) {
-      connectTasks(_currentTasksCompanyId!, _currentTasksToken!);
-    } else if (type == 'user' && _currentUserId != null && _currentUserToken != null) {
-      connectUser(_currentUserId!, _currentUserToken!);
-    }
-  });
-}
-  void disconnectChat() {
-  if (_chatChannel != null) {
-    try {
-      _chatChannel!.sink.close(status.goingAway);
-    } catch (e) {
-      print('Error closing chat: $e');
-    }
-    _chatChannel = null;
-  }
-  _currentChatCompanyId = null;
-  _currentChatToken = null;
-}
 
   void disconnectTasks() {
-  if (_tasksChannel != null) {
-    try {
-      _tasksChannel!.sink.close(status.goingAway);
-    } catch (e) {
-      print('Error closing tasks: $e');
+    _shouldReconnect = false;
+    if (_tasksChannel != null) {
+      try {
+        _tasksChannel!.sink.close(status.goingAway);
+      } catch (e) {}
+      _tasksChannel = null;
     }
-    _tasksChannel = null;
+    _currentTasksCompanyId = null;
+    _currentTasksToken = null;
+    _shouldReconnect = true;
   }
-  _currentTasksCompanyId = null;
-  _currentTasksToken = null;
-}
+
   void disconnectUser() {
-  if (_userChannel != null) {
-    try {
-      _userChannel!.sink.close(status.goingAway);
-    } catch (e) {
-      print('Error closing user: $e');
+    if (_userChannel != null) {
+      try {
+        _userChannel!.sink.close(status.goingAway);
+      } catch (e) {}
+      _userChannel = null;
     }
-    _userChannel = null;
+    _currentUserId = null;
+    _currentUserToken = null;
+    if (kDebugMode) print('🔌 WS User disconnected');
   }
-  _currentUserId = null;
-  _currentUserToken = null;
-  if (kDebugMode) print('🔌 WS User disconnected');
-}
 
   void disconnectAll() {
     _shouldReconnect = false;

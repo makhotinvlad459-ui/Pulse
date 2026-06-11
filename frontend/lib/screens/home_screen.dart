@@ -374,11 +374,26 @@ class _CompanyCardState extends State<_CompanyCard> with SingleTickerProviderSta
                   await CompanyScreen.loadLibrary();
                   
                   await Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => CompanyScreen.CompanyScreen(company: widget.company)),
-                  );
-                  widget.ref.invalidate(homeProvider);
-                },
+                     context,
+    MaterialPageRoute(builder: (_) => CompanyScreen.CompanyScreen(company: widget.company)),
+  );
+  
+  // ✅ Возвращаемся из компании — восстанавливаем WebSocket
+  if (context.mounted) {
+    final authState = widget.ref.read(authProvider);
+    final user = authState.user;
+    if (user != null) {
+      final api = ApiClient();
+      final token = await api.getToken();
+      if (token != null) {
+        WebSocketService().disconnectChat();
+        WebSocketService().disconnectTasks();
+        WebSocketService().connectUser(user.id, token);
+      }
+    }
+    widget.ref.invalidate(homeProvider);
+  }
+},
                 borderRadius: BorderRadius.circular(8),
                 splashColor: colorScheme.primary.withOpacity(0.2),
                 highlightColor: colorScheme.primary.withOpacity(0.1),
