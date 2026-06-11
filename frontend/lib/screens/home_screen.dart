@@ -40,11 +40,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   final token = await api.getToken();
   if (token == null) return;
   
-  // ✅ Отключаем всё перед новым подключением
+  // ✅ Добавь эти две строки
   WebSocketService().disconnectChat();
   WebSocketService().disconnectTasks();
-  WebSocketService().disconnectUser();
   
+  WebSocketService().disconnectUser();
   WebSocketService().connectUser(user.id, token);
 }
 

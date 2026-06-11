@@ -24,7 +24,7 @@ class WebSocketService with WidgetsBindingObserver {
   
   bool _shouldReconnect = true;
   Timer? _reconnectTimer;
-  Timer? _lifecycleReconnectTimer;  // ✅ Отдельный таймер для lifecycle
+  Timer? _lifecycleReconnectTimer;
   
   int? _currentChatCompanyId;
   String? _currentChatToken;
@@ -33,8 +33,8 @@ class WebSocketService with WidgetsBindingObserver {
   int? _currentUserId;
   String? _currentUserToken;
   
-  bool _isReconnecting = false;  // ✅ Флаг, чтобы не было повторных вызовов
-  bool _isAppResuming = false;   // ✅ Флаг для отслеживания возобновления
+  bool _isReconnecting = false;
+  bool _isAppResuming = false;
   
   final _chatStreamController = StreamController<Map<String, dynamic>>.broadcast();
   final _taskStreamController = StreamController<Map<String, dynamic>>.broadcast();
@@ -61,10 +61,16 @@ class WebSocketService with WidgetsBindingObserver {
   }
 
   void connectChat(int companyId, String token) {
-    if (_chatChannel != null && _currentChatCompanyId == companyId) {
-      return;
+    // ✅ Принудительно закрываем старое соединение
+    if (_chatChannel != null) {
+      try {
+        _chatChannel!.sink.close();
+      } catch (e) {
+        print('Error closing old chat: $e');
+      }
+      _chatChannel = null;
     }
-    disconnectChat();
+    
     _currentChatCompanyId = companyId;
     _currentChatToken = token;
     _shouldReconnect = true;
@@ -85,10 +91,16 @@ class WebSocketService with WidgetsBindingObserver {
   }
 
   void connectTasks(int companyId, String token) {
-    if (_tasksChannel != null && _currentTasksCompanyId == companyId) {
-      return;
+    // ✅ Принудительно закрываем старое соединение
+    if (_tasksChannel != null) {
+      try {
+        _tasksChannel!.sink.close();
+      } catch (e) {
+        print('Error closing old tasks: $e');
+      }
+      _tasksChannel = null;
     }
-    disconnectTasks();
+    
     _currentTasksCompanyId = companyId;
     _currentTasksToken = token;
     _shouldReconnect = true;
@@ -154,18 +166,40 @@ class WebSocketService with WidgetsBindingObserver {
   }
 
   void _handleDisconnect(String type) {
-    if (type == 'chat') _chatChannel = null;
-    if (type == 'tasks') _tasksChannel = null;
-    if (type == 'user') _userChannel = null;
+    if (type == 'chat') {
+      if (_chatChannel != null) {
+        try {
+          _chatChannel!.sink.close();
+        } catch (e) {}
+        _chatChannel = null;
+      }
+    }
+    if (type == 'tasks') {
+      if (_tasksChannel != null) {
+        try {
+          _tasksChannel!.sink.close();
+        } catch (e) {}
+        _tasksChannel = null;
+      }
+    }
+    if (type == 'user') {
+      if (_userChannel != null) {
+        try {
+          _userChannel!.sink.close();
+        } catch (e) {}
+        _userChannel = null;
+      }
+    }
     
     if (!_shouldReconnect) return;
-    if (_isReconnecting) return;  // ✅ Не переподключаемся, если уже идёт переподключение
+    if (_isReconnecting) return;
+    
+    _isReconnecting = true;
     
     _reconnectTimer?.cancel();
-    _reconnectTimer = Timer(const Duration(seconds: 5), () {
+    _reconnectTimer = Timer(const Duration(seconds: 3), () {
+      _isReconnecting = false;
       if (kDebugMode) print('🔄 WS $type: Reconnecting...');
-      _isReconnecting = true;
-      
       if (type == 'chat' && _currentChatCompanyId != null && _currentChatToken != null) {
         connectChat(_currentChatCompanyId!, _currentChatToken!);
       } else if (type == 'tasks' && _currentTasksCompanyId != null && _currentTasksToken != null) {
@@ -173,34 +207,42 @@ class WebSocketService with WidgetsBindingObserver {
       } else if (type == 'user' && _currentUserId != null && _currentUserToken != null) {
         connectUser(_currentUserId!, _currentUserToken!);
       }
-      
-      Future.delayed(const Duration(seconds: 1), () {
-        _isReconnecting = false;
-      });
     });
   }
 
   void disconnectChat() {
-    _chatChannel?.sink.close(status.goingAway);
-    _chatChannel = null;
+    if (_chatChannel != null) {
+      try {
+        _chatChannel!.sink.close(status.goingAway);
+      } catch (e) {}
+      _chatChannel = null;
+    }
     _currentChatCompanyId = null;
     _currentChatToken = null;
   }
 
   void disconnectTasks() {
-    _tasksChannel?.sink.close(status.goingAway);
-    _tasksChannel = null;
+    if (_tasksChannel != null) {
+      try {
+        _tasksChannel!.sink.close(status.goingAway);
+      } catch (e) {}
+      _tasksChannel = null;
+    }
     _currentTasksCompanyId = null;
     _currentTasksToken = null;
   }
 
   void disconnectUser() {
-  _userChannel?.sink.close(status.goingAway);
-  _userChannel = null;
-  _currentUserId = null;
-  _currentUserToken = null;
-  if (kDebugMode) print('🔌 WS User disconnected');
-}
+    if (_userChannel != null) {
+      try {
+        _userChannel!.sink.close(status.goingAway);
+      } catch (e) {}
+      _userChannel = null;
+    }
+    _currentUserId = null;
+    _currentUserToken = null;
+    if (kDebugMode) print('🔌 WS User disconnected');
+  }
 
   void disconnectAll() {
     _shouldReconnect = false;
@@ -213,11 +255,9 @@ class WebSocketService with WidgetsBindingObserver {
   }
   
   Future<void> refreshAllConnections() async {
-    if (_isAppResuming) return;  // ✅ Если уже идёт процесс, не запускаем новый
+    if (_isAppResuming) return;
     
     _isAppResuming = true;
-    
-    // ✅ Даём приложению время полностью восстановиться
     await Future.delayed(const Duration(milliseconds: 800));
     
     final token = await _storage.read(key: 'access_token');
@@ -228,7 +268,6 @@ class WebSocketService with WidgetsBindingObserver {
     
     if (kDebugMode) print('🔄 Refreshing all WebSocket connections...');
     
-    // ✅ Переподключаем только если соединение реально мёртво
     if (_currentChatCompanyId != null && (_chatChannel == null)) {
       disconnectChat();
       connectChat(_currentChatCompanyId!, token);
@@ -249,7 +288,6 @@ class WebSocketService with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (kDebugMode) print('📱 App lifecycle: $state');
     
-    // ✅ При возобновлении не переподключаем сразу, даём приложению "проснуться"
     if (state == AppLifecycleState.resumed) {
       if (kDebugMode) print('🔄 App resumed, will refresh connections after delay...');
       
@@ -260,7 +298,6 @@ class WebSocketService with WidgetsBindingObserver {
       });
     }
     
-    // ✅ При уходе в фон - ничего не делаем, просто логируем
     if (state == AppLifecycleState.paused) {
       if (kDebugMode) print('📱 App paused, WebSockets will be checked on resume');
     }
@@ -269,9 +306,11 @@ class WebSocketService with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _lifecycleReconnectTimer?.cancel();
+    _reconnectTimer?.cancel();
     disconnectAll();
     _chatStreamController.close();
     _taskStreamController.close();
     _userStreamController.close();
+    if (kDebugMode) print('🔌 WS: Service disposed');
   }
 }
