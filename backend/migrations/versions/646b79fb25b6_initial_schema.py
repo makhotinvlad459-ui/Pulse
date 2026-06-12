@@ -1,18 +1,18 @@
-"""initial_migration
+"""initial_schema
 
-Revision ID: b74b78a0dbf0
+Revision ID: 646b79fb25b6
 Revises: 
-Create Date: 2026-06-01 18:52:41.579799
+Create Date: 2026-06-12 21:26:13.731621
 
 """
 from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
-
+from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision: str = 'b74b78a0dbf0'
+revision: str = '646b79fb25b6'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -40,6 +40,7 @@ def upgrade() -> None:
     sa.Column('is_active', sa.Boolean(), nullable=False),
     sa.Column('fcm_token', sa.String(length=500), nullable=True),
     sa.Column('language', sa.String(length=2), nullable=False),
+    sa.Column('refresh_token', sa.String(length=500), nullable=True),
     sa.Column('last_login', sa.DateTime(), nullable=True),
     sa.Column('subscription_plan', sa.String(length=50), nullable=True),
     sa.Column('extra_companies', sa.Integer(), nullable=False),
@@ -148,6 +149,21 @@ def upgrade() -> None:
     sa.ForeignKeyConstraint(['company_id'], ['companies.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
+    op.create_table('manufactured_products',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('company_id', sa.Integer(), nullable=False),
+    sa.Column('name', sa.String(length=100), nullable=False),
+    sa.Column('unit', sa.String(length=20), nullable=False),
+    sa.Column('price', sa.Numeric(precision=15, scale=2), nullable=False),
+    sa.Column('recipe', sa.Text(), nullable=True),
+    sa.Column('current_stock', sa.Numeric(precision=15, scale=3), nullable=False),
+    sa.Column('sort_order', sa.Integer(), nullable=False),
+    sa.Column('created_at', sa.DateTime(), nullable=False),
+    sa.Column('updated_at', sa.DateTime(), nullable=False),
+    sa.Column('is_deleted', sa.Boolean(), nullable=False),
+    sa.ForeignKeyConstraint(['company_id'], ['companies.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id')
+    )
     op.create_table('orders',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('company_id', sa.Integer(), nullable=False),
@@ -221,6 +237,18 @@ def upgrade() -> None:
     sa.ForeignKeyConstraint(['permission_id'], ['permissions.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
+    op.create_table('counterparty_documents',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('counterparty_id', sa.Integer(), nullable=False),
+    sa.Column('file_url', sa.String(length=500), nullable=False),
+    sa.Column('uploaded_by', sa.Integer(), nullable=False),
+    sa.Column('uploaded_at', sa.DateTime(), nullable=False),
+    sa.Column('file_name', sa.String(length=255), nullable=False),
+    sa.Column('description', sa.String(length=500), nullable=True),
+    sa.ForeignKeyConstraint(['counterparty_id'], ['counterparties.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['uploaded_by'], ['users.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
     op.create_table('order_attachments',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('order_id', sa.Integer(), nullable=False),
@@ -242,6 +270,25 @@ def upgrade() -> None:
     sa.Column('is_paid', sa.Boolean(), nullable=False),
     sa.ForeignKeyConstraint(['order_id'], ['orders.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['product_id'], ['products.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_table('production_journal_entries',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('company_id', sa.Integer(), nullable=False),
+    sa.Column('product_id', sa.Integer(), nullable=False),
+    sa.Column('planned_quantity', sa.Numeric(precision=15, scale=3), nullable=False),
+    sa.Column('actual_quantity', sa.Numeric(precision=15, scale=3), nullable=False),
+    sa.Column('production_date', sa.DateTime(), nullable=False),
+    sa.Column('shift', sa.String(length=20), nullable=False),
+    sa.Column('worker_name', sa.String(length=100), nullable=True),
+    sa.Column('notes', sa.Text(), nullable=True),
+    sa.Column('status', sa.Enum('PLANNED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', name='productionorderstatus'), nullable=False),
+    sa.Column('created_by', sa.Integer(), nullable=False),
+    sa.Column('created_at', sa.DateTime(), nullable=False),
+    sa.Column('updated_at', sa.DateTime(), nullable=False),
+    sa.ForeignKeyConstraint(['company_id'], ['companies.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['created_by'], ['users.id'], ),
+    sa.ForeignKeyConstraint(['product_id'], ['manufactured_products.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_table('showcase_items',
@@ -321,6 +368,29 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_transactions_date'), 'transactions', ['date'], unique=False)
+    op.create_table('journal_entries',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('company_id', sa.Integer(), nullable=False),
+    sa.Column('datetime_start', sa.DateTime(), nullable=False),
+    sa.Column('datetime_end', sa.DateTime(), nullable=False),
+    sa.Column('description', sa.String(length=500), nullable=True),
+    sa.Column('counterparty', sa.String(length=200), nullable=True),
+    sa.Column('status', sa.Enum('PLANNED', 'COMPLETED', 'CANCELLED', name='journalentrystatus'), nullable=False),
+    sa.Column('transaction_id', sa.Integer(), nullable=True),
+    sa.Column('showcase_item_id', sa.Integer(), nullable=True),
+    sa.Column('quantity', sa.Integer(), nullable=False),
+    sa.Column('total_amount', sa.Numeric(precision=15, scale=2), nullable=False),
+    sa.Column('created_by', sa.Integer(), nullable=False),
+    sa.Column('created_at', sa.DateTime(), nullable=False),
+    sa.Column('updated_at', sa.DateTime(), nullable=False),
+    sa.Column('items', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+    sa.ForeignKeyConstraint(['company_id'], ['companies.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['created_by'], ['users.id'], ),
+    sa.ForeignKeyConstraint(['showcase_item_id'], ['showcase_items.id'], ),
+    sa.ForeignKeyConstraint(['transaction_id'], ['transactions.id'], ),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('transaction_id')
+    )
     op.create_table('order_payments',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('order_id', sa.Integer(), nullable=False),
@@ -333,6 +403,24 @@ def upgrade() -> None:
     sa.ForeignKeyConstraint(['transaction_id'], ['transactions.id'], ),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('transaction_id')
+    )
+    op.create_table('production_stock_transactions',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('company_id', sa.Integer(), nullable=False),
+    sa.Column('product_id', sa.Integer(), nullable=False),
+    sa.Column('type', sa.Enum('PRODUCTION', 'SALE', name='productiontransactiontype'), nullable=False),
+    sa.Column('quantity', sa.Numeric(precision=15, scale=3), nullable=False),
+    sa.Column('price_per_unit', sa.Numeric(precision=15, scale=2), nullable=True),
+    sa.Column('journal_entry_id', sa.Integer(), nullable=True),
+    sa.Column('transaction_id', sa.Integer(), nullable=True),
+    sa.Column('created_at', sa.DateTime(), nullable=False),
+    sa.Column('created_by', sa.Integer(), nullable=False),
+    sa.ForeignKeyConstraint(['company_id'], ['companies.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['created_by'], ['users.id'], ),
+    sa.ForeignKeyConstraint(['journal_entry_id'], ['production_journal_entries.id'], ),
+    sa.ForeignKeyConstraint(['product_id'], ['manufactured_products.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['transaction_id'], ['transactions.id'], ),
+    sa.PrimaryKeyConstraint('id')
     )
     op.create_table('transaction_comments',
     sa.Column('id', sa.Integer(), nullable=False),
@@ -354,26 +442,44 @@ def upgrade() -> None:
     sa.ForeignKeyConstraint(['transaction_id'], ['transactions.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
+    op.create_table('journal_attachments',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('journal_entry_id', sa.Integer(), nullable=False),
+    sa.Column('file_url', sa.String(length=500), nullable=False),
+    sa.Column('uploaded_by', sa.Integer(), nullable=False),
+    sa.Column('uploaded_at', sa.DateTime(), nullable=False),
+    sa.Column('file_name', sa.String(length=255), nullable=True),
+    sa.Column('test_column', sa.String(length=50), nullable=True),
+    sa.ForeignKeyConstraint(['journal_entry_id'], ['journal_entries.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['uploaded_by'], ['users.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
     # ### end Alembic commands ###
 
 
 def downgrade() -> None:
     # ### commands auto generated by Alembic - please adjust! ###
+    op.drop_table('journal_attachments')
     op.drop_table('transaction_items')
     op.drop_table('transaction_comments')
+    op.drop_table('production_stock_transactions')
     op.drop_table('order_payments')
+    op.drop_table('journal_entries')
     op.drop_index(op.f('ix_transactions_date'), table_name='transactions')
     op.drop_table('transactions')
     op.drop_table('stock_write_offs')
     op.drop_table('stock_entries')
     op.drop_table('showcase_items')
+    op.drop_table('production_journal_entries')
     op.drop_table('order_items')
     op.drop_table('order_attachments')
+    op.drop_table('counterparty_documents')
     op.drop_table('company_member_permissions')
     op.drop_table('user_chat_visits')
     op.drop_table('tasks')
     op.drop_table('products')
     op.drop_table('orders')
+    op.drop_table('manufactured_products')
     op.drop_table('counterparties')
     op.drop_table('company_members')
     op.drop_table('chat_messages')
