@@ -19,28 +19,12 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Создаем ENUM типы (без IF NOT EXISTS, оборачиваем в DO блок)
-    op.execute("""
-        DO $$
-        BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'productionorderstatus') THEN
-                CREATE TYPE productionorderstatus AS ENUM ('PLANNED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED');
-            END IF;
-        END
-        $$;
-    """)
+    # Создаем ENUM типы (каждый в отдельном execute, без проверки IF NOT EXISTS)
+    # Если типы уже существуют, эти команды выдадут ошибку, но мы их выполним вручную
+    op.execute("CREATE TYPE productionorderstatus AS ENUM ('PLANNED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED');")
+    op.execute("CREATE TYPE productiontransactiontype AS ENUM ('PRODUCTION', 'SALE');")
     
-    op.execute("""
-        DO $$
-        BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'productiontransactiontype') THEN
-                CREATE TYPE productiontransactiontype AS ENUM ('PRODUCTION', 'SALE');
-            END IF;
-        END
-        $$;
-    """)
-    
-    # Таблицы через op.create_table (без IF EXISTS)
+    # Таблицы
     op.create_table('manufactured_products',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('company_id', sa.Integer(), nullable=False),
