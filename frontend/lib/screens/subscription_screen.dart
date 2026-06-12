@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../services/api_client.dart';
 import '../providers/locale_provider.dart';
 import 'package:frontend/l10n/app_localizations.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../services/error/error_handler.dart';
+import '../payment/payment.dart';
+import '../services/api_client.dart';  // ← ДОБАВЛЕНО
 
 class SubscriptionScreen extends ConsumerStatefulWidget {
   const SubscriptionScreen({super.key});
@@ -25,7 +25,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
   }
 
   Future<void> _loadStatus() async {
-    final api = ApiClient();
+    final api = ApiClient();  // ← Теперь работает
     try {
       final res = await api.get('/subscription/status');
       if (mounted) {
@@ -36,47 +36,32 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
       }
     } catch (e) {
       if (mounted) {
-    setState(() => _loading = false);
-    await ErrorHandler.showErrorDialog(
-      context,
-      e,
-      onRetry: _loadStatus,
-      );
-    }
-  }
-}
-
-
-  Future<void> _buyWithYooKassa(String plan) async {
-    final api = ApiClient();
-    final t = AppLocalizations.of(context)!;
-    try {
-      final res = await api.post(
-        '/subscription/create-payment',
-        data: {'plan': plan},
-      );
-      final url = res.data['confirmation_url'];
-      if (url != null && url is String && url.isNotEmpty) {
-        await _openUrl(url);
-      } else {
-        _showSnackBar(t.errorPaymentUrlNotFound);
+        setState(() => _loading = false);
+        await ErrorHandler.showErrorDialog(
+          context,
+          e,
+          onRetry: _loadStatus,
+        );
       }
-    } catch (e) {
-      _showSnackBar('${t.errorCreatingPayment}: $e');
     }
   }
 
-  Future<void> _openUrl(String url) async {
+  // НОВЫЙ метод - единая точка входа для всех покупок
+  Future<void> _handlePurchase(String plan) async {
     final t = AppLocalizations.of(context)!;
-    final Uri uri = Uri.parse(url);
+    
     try {
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else {
-        _showSnackBar(t.errorCannotOpenLink);
+      await paymentService.purchase(plan);
+      
+      // После успешной оплаты обновляем статус подписки
+      if (mounted) {
+        _showSnackBar(t.paymentSuccess);
+        await _loadStatus();
       }
     } catch (e) {
-      _showSnackBar('${t.errorOpeningLink}: $e');
+      if (mounted) {
+        _showSnackBar('${t.errorCreatingPayment}: $e');
+      }
     }
   }
 
@@ -248,7 +233,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                   extraCompanies > 0
                       ? t.extraCompaniesInfo(extraCompanies, extraCompanies * 250)
                       : null,
-              onPress: () => _buyWithYooKassa('monthly'),
+              onPress: () => _handlePurchase('monthly'),
               isRecommended: true,
               t: t,
             ),
@@ -259,7 +244,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
               subtitle: t.extraCompanyDescription,
               price: '250 ${t.currencySymbol}',
               priceNote: t.forever,
-              onPress: () => _buyWithYooKassa('extra_company'),
+              onPress: () => _handlePurchase('extra_company'),
               isRecommended: false,
               t: t,
             ),

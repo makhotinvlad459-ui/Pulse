@@ -848,6 +848,7 @@
   "retry": "Retry",
   "close": "Close",
   "need_base_subscription": "Cannot buy extra company without active base subscription. Please subscribe first.",
-  "invalid_plan": "Invalid subscription plan"
+  "invalid_plan": "Invalid subscription plan",
+  "paymentSuccess": "Payment successful!"
 
 }
