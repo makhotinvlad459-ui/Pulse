@@ -19,11 +19,28 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Создаем ENUM типы
-    op.execute("CREATE TYPE IF NOT EXISTS productionorderstatus AS ENUM ('PLANNED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED');")
-    op.execute("CREATE TYPE IF NOT EXISTS productiontransactiontype AS ENUM ('PRODUCTION', 'SALE');")
+    # Создаем ENUM типы (без IF NOT EXISTS, оборачиваем в DO блок)
+    op.execute("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'productionorderstatus') THEN
+                CREATE TYPE productionorderstatus AS ENUM ('PLANNED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED');
+            END IF;
+        END
+        $$;
+    """)
     
-    # Создаем таблицы
+    op.execute("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'productiontransactiontype') THEN
+                CREATE TYPE productiontransactiontype AS ENUM ('PRODUCTION', 'SALE');
+            END IF;
+        END
+        $$;
+    """)
+    
+    # Таблицы через op.create_table (без IF EXISTS)
     op.create_table('manufactured_products',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('company_id', sa.Integer(), nullable=False),
@@ -79,7 +96,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id')
     )
     
-    # Создаем индексы
+    # Индексы
     op.create_index('idx_manufactured_products_company', 'manufactured_products', ['company_id'])
     op.create_index('idx_manufactured_products_deleted', 'manufactured_products', ['is_deleted'])
     op.create_index('idx_production_journal_date', 'production_journal_entries', ['production_date'])
@@ -89,7 +106,7 @@ def upgrade() -> None:
     op.create_index('idx_production_stock_product', 'production_stock_transactions', ['product_id'])
     op.create_index('idx_production_stock_created', 'production_stock_transactions', ['created_at'])
     
-    # Создаем функцию для updated_at (отдельным вызовом)
+    # Функция для updated_at
     op.execute("""
         CREATE OR REPLACE FUNCTION update_updated_at_column()
         RETURNS TRIGGER AS $$
@@ -100,7 +117,7 @@ def upgrade() -> None:
         $$ language 'plpgsql';
     """)
     
-    # Создаем триггеры (каждый отдельным вызовом)
+    # Триггеры
     op.execute("DROP TRIGGER IF EXISTS update_manufactured_products_updated_at ON manufactured_products;")
     op.execute("""
         CREATE TRIGGER update_manufactured_products_updated_at
@@ -119,11 +136,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # Удаляем триггеры
     op.execute("DROP TRIGGER IF EXISTS update_manufactured_products_updated_at ON manufactured_products;")
     op.execute("DROP TRIGGER IF EXISTS update_production_journal_entries_updated_at ON production_journal_entries;")
     
-    # Удаляем индексы
     op.drop_index('idx_production_stock_created', table_name='production_stock_transactions')
     op.drop_index('idx_production_stock_product', table_name='production_stock_transactions')
     op.drop_index('idx_production_stock_company', table_name='production_stock_transactions')
@@ -133,14 +148,11 @@ def downgrade() -> None:
     op.drop_index('idx_manufactured_products_deleted', table_name='manufactured_products')
     op.drop_index('idx_manufactured_products_company', table_name='manufactured_products')
     
-    # Удаляем таблицы
     op.drop_table('production_stock_transactions')
     op.drop_table('production_journal_entries')
     op.drop_table('manufactured_products')
     
-    # Удаляем ENUM типы
     op.execute("DROP TYPE IF EXISTS productiontransactiontype CASCADE;")
     op.execute("DROP TYPE IF EXISTS productionorderstatus CASCADE;")
     
-    # Удаляем функцию
     op.execute("DROP FUNCTION IF EXISTS update_updated_at_column CASCADE;")
