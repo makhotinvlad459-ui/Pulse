@@ -528,3 +528,83 @@ class JournalEntry(Base):
     showcase_item: Mapped["ShowcaseItem"] = relationship()  
     attachments: Mapped[List["JournalAttachment"]] = relationship(back_populates="journal_entry", cascade="all, delete-orphan")  
 
+
+class ProductionOrderStatus(str, PyEnum):
+    PLANNED = "planned"      # Запланировано
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+
+class ProductionTransactionType(str, PyEnum):
+    PRODUCTION = "production"   # Оприходование готовой продукции
+    SALE = "sale"               # Продажа готовой продукции
+
+
+# Модель производимого товара (аналог ShowcaseItem)
+class ManufacturedProduct(Base):
+    __tablename__ = "manufactured_products"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    company_id: Mapped[int] = mapped_column(ForeignKey("companies.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(100))
+    unit: Mapped[str] = mapped_column(String(20), default="шт")  # единица измерения
+    price: Mapped[float] = mapped_column(Numeric(15, 2), default=0.0)  # цена продажи
+    recipe: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON рецепт (как в витрине)
+    current_stock: Mapped[float] = mapped_column(Numeric(15, 3), default=0.0)  # текущий остаток на складе ГП
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # relationships
+    company: Mapped["Company"] = relationship(foreign_keys=[company_id])
+    production_entries: Mapped[list["ProductionJournalEntry"]] = relationship(back_populates="product", cascade="all, delete-orphan")
+    stock_transactions: Mapped[list["ProductionStockTransaction"]] = relationship(back_populates="product", cascade="all, delete-orphan")
+
+
+# Производственный журнал (аналог JournalEntry для производства)
+class ProductionJournalEntry(Base):
+    __tablename__ = "production_journal_entries"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    company_id: Mapped[int] = mapped_column(ForeignKey("companies.id", ondelete="CASCADE"))
+    product_id: Mapped[int] = mapped_column(ForeignKey("manufactured_products.id", ondelete="CASCADE"))
+    planned_quantity: Mapped[float] = mapped_column(Numeric(15, 3), default=0.0)  # запланировано
+    actual_quantity: Mapped[float] = mapped_column(Numeric(15, 3), default=0.0)   # фактически произведено
+    production_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)    # дата производства
+    shift: Mapped[str] = mapped_column(String(20), default="day")  # смена: day/night
+    worker_name: Mapped[str | None] = mapped_column(String(100), nullable=True)    # ФИО работника
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)                 # примечания
+    status: Mapped[ProductionOrderStatus] = mapped_column(Enum(ProductionOrderStatus), default=ProductionOrderStatus.COMPLETED)
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # relationships
+    company: Mapped["Company"] = relationship()
+    product: Mapped["ManufacturedProduct"] = relationship(back_populates="production_entries")
+    creator: Mapped["User"] = relationship()
+    stock_transaction: Mapped["ProductionStockTransaction"] = relationship(back_populates="journal_entry", uselist=False)
+
+
+# Транзакции склада готовой продукции (приход/расход)
+class ProductionStockTransaction(Base):
+    __tablename__ = "production_stock_transactions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    company_id: Mapped[int] = mapped_column(ForeignKey("companies.id", ondelete="CASCADE"))
+    product_id: Mapped[int] = mapped_column(ForeignKey("manufactured_products.id", ondelete="CASCADE"))
+    type: Mapped[ProductionTransactionType] = mapped_column(Enum(ProductionTransactionType))
+    quantity: Mapped[float] = mapped_column(Numeric(15, 3))
+    price_per_unit: Mapped[float] = mapped_column(Numeric(15, 2), nullable=True)  # цена продажи
+    journal_entry_id: Mapped[int | None] = mapped_column(ForeignKey("production_journal_entries.id"), nullable=True)
+    transaction_id: Mapped[int | None] = mapped_column(ForeignKey("transactions.id"), nullable=True)  # ссылка на финансовую транзакцию при продаже
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+
+    # relationships
+    company: Mapped["Company"] = relationship()
+    product: Mapped["ManufacturedProduct"] = relationship(back_populates="stock_transactions")
+    journal_entry: Mapped["ProductionJournalEntry"] = relationship(back_populates="stock_transaction")
+    financial_transaction: Mapped["Transaction"] = relationship(foreign_keys=[transaction_id])
+    creator: Mapped["User"] = relationship()
