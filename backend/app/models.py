@@ -555,6 +555,7 @@ class ManufacturedProduct(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
+    test_column: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
     # relationships
     company: Mapped["Company"] = relationship(foreign_keys=[company_id])

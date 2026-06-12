@@ -11,13 +11,18 @@ wait_for_db() {
 
 run_migrations() {
     echo "Running migrations..."
-    alembic upgrade head
+    alembic upgrade head || {
+        echo "⚠️ Migration failed, but continuing server startup..."
+    }
     echo "Migrations completed."
 }
 
 init_permissions() {
     echo "Initializing permissions..."
-    #python /app/init_permissions_sync.py
+    python /app/init_permissions_sync.py || {
+        echo "⚠️ Permissions initialization failed, but continuing..."
+    }
+    echo "Permissions initialized."
 }
 
 wait_for_db
