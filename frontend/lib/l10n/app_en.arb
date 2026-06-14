@@ -1,6 +1,6 @@
 {
   "appTitle": "Pulse",
-  "subtitle": "of your finances",
+  "subtitle": "Managerial accounting for business",
   "loginLabel": "Login (email or phone)",
   "passwordLabel": "Password",
   "rememberMe": "Remember me",
@@ -943,6 +943,8 @@
 "markAsPaid": "Mark as paid",
 "transactionMarkedAsPaid": "Transaction marked as paid",
 "paymentStatus": "Payment status",
-"debt": "Debt"
+"debt": "Debt",
+"appTitle": "Pulse of Money",
+"appSubtitle": "Managerial accounting for business"
 
 }

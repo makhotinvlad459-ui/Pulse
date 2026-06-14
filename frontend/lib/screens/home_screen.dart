@@ -33,20 +33,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Future<void> _initWebSocket() async {
-  final authState = ref.read(authProvider);
-  final user = authState.user;
-  if (user == null) return;
-  final api = ApiClient();
-  final token = await api.getToken();
-  if (token == null) return;
-  
-  // ✅ Добавь эти две строки
-  WebSocketService().disconnectChat();
-  WebSocketService().disconnectTasks();
-  
-  WebSocketService().disconnectUser();
-  WebSocketService().connectUser(user.id, token);
-}
+    final authState = ref.read(authProvider);
+    final user = authState.user;
+    if (user == null) return;
+    final api = ApiClient();
+    final token = await api.getToken();
+    if (token == null) return;
+    
+    WebSocketService().disconnectChat();
+    WebSocketService().disconnectTasks();
+    WebSocketService().disconnectUser();
+    WebSocketService().connectUser(user.id, token);
+  }
 
   @override
   void dispose() {
@@ -72,6 +70,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final videoPath = _getVideoPath(currentTheme);
     final colorScheme = Theme.of(context).colorScheme;
     final t = AppLocalizations.of(context)!;
+    
+    // Определяем язык для выбора шрифта
+    final isRussian = Localizations.localeOf(context).languageCode == 'ru';
+    final titleFont = isRussian ? GoogleFonts.roboto : GoogleFonts.playfairDisplay;
+    final subtitleFont = GoogleFonts.inter;
 
     ref.listen(StreamProvider((ref) => WebSocketService().userStream), (previous, next) {
       next.whenData((data) {
@@ -98,14 +101,39 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Shimmer.fromColors(
-                      baseColor: colorScheme.onSurface.withOpacity(0.3),
-                      highlightColor: colorScheme.onSurface,
-                      period: const Duration(seconds: 2),
-                      child: Text(
-                        t.appTitle,
-                        style: GoogleFonts.caveat(fontSize: 32, color: colorScheme.onSurface),
-                      ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Shimmer.fromColors(
+                          baseColor: colorScheme.onSurface.withOpacity(0.3),
+                          highlightColor: colorScheme.onSurface,
+                          period: const Duration(seconds: 2),
+                          child: Text(
+                            t.appTitle,
+                            style: titleFont(
+                              fontSize: 34,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1.2,
+                              color: colorScheme.onSurface,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Shimmer.fromColors(
+                          baseColor: colorScheme.onSurface.withOpacity(0.2),
+                          highlightColor: colorScheme.onSurface.withOpacity(0.7),
+                          period: const Duration(seconds: 2),
+                          child: Text(
+                            t.appSubtitle,
+                            style: subtitleFont(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w400,
+                              letterSpacing: 0.5,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     Builder(
                       builder: (context) => Column(
@@ -122,26 +150,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ),
                     ),
                   ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 16, left: 16),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Shimmer.fromColors(
-                    baseColor: colorScheme.onSurface.withOpacity(0.3),
-                    highlightColor: colorScheme.onSurface,
-                    period: const Duration(seconds: 2),
-                    child: Text(
-                      t.subtitle,
-                      style: GoogleFonts.orbitron(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        letterSpacing: 1,
-                        color: colorScheme.onSurface,
-                      ),
-                    ),
-                  ),
                 ),
               ),
               Expanded(
@@ -370,30 +378,28 @@ class _CompanyCardState extends State<_CompanyCard> with SingleTickerProviderSta
               color: Colors.transparent,
               child: InkWell(
                 onTap: () async {
-                  // ✅ Ленивая загрузка через deferred
                   await CompanyScreen.loadLibrary();
                   
                   await Navigator.push(
-                     context,
-    MaterialPageRoute(builder: (_) => CompanyScreen.CompanyScreen(company: widget.company)),
-  );
-  
-  // ✅ Возвращаемся из компании — восстанавливаем WebSocket
-  if (context.mounted) {
-    final authState = widget.ref.read(authProvider);
-    final user = authState.user;
-    if (user != null) {
-      final api = ApiClient();
-      final token = await api.getToken();
-      if (token != null) {
-        WebSocketService().disconnectChat();
-        WebSocketService().disconnectTasks();
-        WebSocketService().connectUser(user.id, token);
-      }
-    }
-    widget.ref.invalidate(homeProvider);
-  }
-},
+                    context,
+                    MaterialPageRoute(builder: (_) => CompanyScreen.CompanyScreen(company: widget.company)),
+                  );
+                  
+                  if (context.mounted) {
+                    final authState = widget.ref.read(authProvider);
+                    final user = authState.user;
+                    if (user != null) {
+                      final api = ApiClient();
+                      final token = await api.getToken();
+                      if (token != null) {
+                        WebSocketService().disconnectChat();
+                        WebSocketService().disconnectTasks();
+                        WebSocketService().connectUser(user.id, token);
+                      }
+                    }
+                    widget.ref.invalidate(homeProvider);
+                  }
+                },
                 borderRadius: BorderRadius.circular(8),
                 splashColor: colorScheme.primary.withOpacity(0.2),
                 highlightColor: colorScheme.primary.withOpacity(0.1),
