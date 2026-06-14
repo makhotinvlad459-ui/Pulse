@@ -824,17 +824,23 @@ async def get_order_stats(
 @router.get("/counterparties")
 async def get_counterparties(
     company_id: int,
+    include_from_counterparty_table: bool = True,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     if not await _check_company_access(company_id, current_user, db):
         raise HTTPException(403, "Access denied")
     
-    # Имена из таблицы Counterparty
-    cp_result = await db.execute(select(Counterparty.name).where(Counterparty.company_id == company_id))
-    cp_names = [row[0] for row in cp_result.all()]
+    names = set()
     
-    # Имена из транзакций
+    # Из таблицы Counterparty
+    if include_from_counterparty_table:
+        cp_result = await db.execute(select(Counterparty.name).where(Counterparty.company_id == company_id))
+        for row in cp_result.all():
+            if row[0]:
+                names.add(row[0])
+    
+    # Из транзакций
     tx_result = await db.execute(
         select(Transaction.counterparty).distinct().where(
             Transaction.company_id == company_id,
@@ -842,70 +848,89 @@ async def get_counterparties(
             Transaction.counterparty != ''
         )
     )
-    tx_names = [row[0] for row in tx_result.all()]
+    for row in tx_result.all():
+        if row[0]:
+            names.add(row[0])
     
-    # Объединяем и убираем дубликаты
-    all_names = sorted(set(cp_names + tx_names))
-    return all_names
+    return sorted(names)
 
 @router.get("/counterparty-stats")
 async def get_counterparty_stats(
     company_id: int,
     counterparty: str,
+    include_transactions: bool = False,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     if not await _check_company_access(company_id, current_user, db):
         raise HTTPException(403, "Access denied")
     
-    # Ищем все транзакции с этим контрагентом без учёта регистра
-    from sqlalchemy import func
+    from sqlalchemy import func, case
     counterparty_lower = counterparty.lower()
     
-    income_result = await db.execute(
-        select(func.sum(Transaction.amount)).where(
-            Transaction.company_id == company_id,
-            func.lower(Transaction.counterparty) == counterparty_lower,
-            Transaction.type == 'income',
-            Transaction.is_deleted == False
+    # Доходы
+    income_query = select(
+        func.sum(Transaction.amount).label('total'),
+        func.sum(case((Transaction.is_paid == True, Transaction.amount), else_=0)).label('paid'),
+        func.sum(case((Transaction.is_paid == False, Transaction.amount), else_=0)).label('unpaid')
+    ).where(
+        Transaction.company_id == company_id,
+        func.lower(Transaction.counterparty) == counterparty_lower,
+        Transaction.type == 'income',
+        Transaction.is_deleted == False
+    )
+    income_result = await db.execute(income_query)
+    income_row = income_result.one()
+    
+    # Расходы
+    expense_query = select(
+        func.sum(Transaction.amount).label('total'),
+        func.sum(case((Transaction.is_paid == True, Transaction.amount), else_=0)).label('paid'),
+        func.sum(case((Transaction.is_paid == False, Transaction.amount), else_=0)).label('unpaid')
+    ).where(
+        Transaction.company_id == company_id,
+        func.lower(Transaction.counterparty) == counterparty_lower,
+        Transaction.type == 'expense',
+        Transaction.is_deleted == False
+    )
+    expense_result = await db.execute(expense_query)
+    expense_row = expense_result.one()
+    
+    result_data = {
+        "counterparty": counterparty,
+        "total_income": float(income_row.total or 0),
+        "total_expense": float(expense_row.total or 0),
+        "balance": float(income_row.total or 0) - float(expense_row.total or 0),
+        "paid_income": float(income_row.paid or 0),
+        "paid_expense": float(expense_row.paid or 0),
+        "unpaid_income": float(income_row.unpaid or 0),
+        "unpaid_expense": float(expense_row.unpaid or 0),
+        "debt": float(income_row.unpaid or 0) - float(expense_row.unpaid or 0),
+    }
+    
+    if include_transactions:
+        transactions_result = await db.execute(
+            select(Transaction).where(
+                Transaction.company_id == company_id,
+                func.lower(Transaction.counterparty) == counterparty_lower,
+                Transaction.is_deleted == False
+            ).order_by(Transaction.date.desc()).limit(50)
         )
-    )
-    total_income = income_result.scalar_one_or_none() or 0
-    
-    expense_result = await db.execute(
-        select(func.sum(Transaction.amount)).where(
-            Transaction.company_id == company_id,
-            func.lower(Transaction.counterparty) == counterparty_lower,
-            Transaction.type == 'expense',
-            Transaction.is_deleted == False
-        )
-    )
-    total_expense = expense_result.scalar_one_or_none() or 0
-    
-    transactions_result = await db.execute(
-        select(Transaction).where(
-            Transaction.company_id == company_id,
-            func.lower(Transaction.counterparty) == counterparty_lower,
-            Transaction.is_deleted == False
-        ).order_by(Transaction.date.desc()).limit(50)
-    )
-    transactions = transactions_result.scalars().all()
-    
-    return {
-        "counterparty": counterparty,  # возвращаем то, что ввели
-        "total_income": float(total_income),
-        "total_expense": float(total_expense),
-        "balance": float(total_income) - float(total_expense),
-        "transactions": [
+        transactions = transactions_result.scalars().all()
+        result_data["transactions"] = [
             {
                 "id": t.id,
                 "type": t.type,
                 "amount": float(t.amount),
                 "date": t.date.isoformat(),
-                "description": t.description
+                "description": t.description,
+                "number": t.number,
+                "is_paid": t.is_paid,
+                "paid_at": t.paid_at.isoformat() if t.paid_at else None,
             } for t in transactions
         ]
-    }
+    
+    return result_data
 
 @router.get("/counterparties-report")
 async def get_counterparties_report(
@@ -918,9 +943,20 @@ async def get_counterparties_report(
     if not await _check_company_access(company_id, current_user, db):
         raise HTTPException(403, "Access denied")
     
+    from sqlalchemy import func, case
+    
+    # Приводим даты к naive
+    if start_date.tzinfo:
+        start_date = start_date.replace(tzinfo=None)
+    if end_date.tzinfo:
+        end_date = end_date.replace(tzinfo=None)
+    
+    # Доходы по контрагентам
     income_stmt = select(
         Transaction.counterparty,
-        func.sum(Transaction.amount).label('total_income')
+        func.sum(Transaction.amount).label('total_income'),
+        func.sum(case((Transaction.is_paid == True, Transaction.amount), else_=0)).label('paid_income'),
+        func.sum(case((Transaction.is_paid == False, Transaction.amount), else_=0)).label('unpaid_income')
     ).where(
         Transaction.company_id == company_id,
         Transaction.counterparty.isnot(None),
@@ -930,9 +966,13 @@ async def get_counterparties_report(
         Transaction.date >= start_date,
         Transaction.date <= end_date
     ).group_by(Transaction.counterparty)
+    
+    # Расходы по контрагентам
     expense_stmt = select(
         Transaction.counterparty,
-        func.sum(Transaction.amount).label('total_expense')
+        func.sum(Transaction.amount).label('total_expense'),
+        func.sum(case((Transaction.is_paid == True, Transaction.amount), else_=0)).label('paid_expense'),
+        func.sum(case((Transaction.is_paid == False, Transaction.amount), else_=0)).label('unpaid_expense')
     ).where(
         Transaction.company_id == company_id,
         Transaction.counterparty.isnot(None),
@@ -942,19 +982,43 @@ async def get_counterparties_report(
         Transaction.date >= start_date,
         Transaction.date <= end_date
     ).group_by(Transaction.counterparty)
+    
     income_rows = (await db.execute(income_stmt)).all()
     expense_rows = (await db.execute(expense_stmt)).all()
+    
     data = {}
     for row in income_rows:
-        data[row.counterparty] = {"name": row.counterparty, "total_income": float(row.total_income), "total_expense": 0.0}
+        data[row.counterparty] = {
+            "name": row.counterparty,
+            "total_income": float(row.total_income),
+            "paid_income": float(row.paid_income or 0),
+            "unpaid_income": float(row.unpaid_income or 0),
+            "total_expense": 0.0,
+            "paid_expense": 0.0,
+            "unpaid_expense": 0.0,
+        }
+    
     for row in expense_rows:
         if row.counterparty in data:
             data[row.counterparty]["total_expense"] = float(row.total_expense)
+            data[row.counterparty]["paid_expense"] = float(row.paid_expense or 0)
+            data[row.counterparty]["unpaid_expense"] = float(row.unpaid_expense or 0)
         else:
-            data[row.counterparty] = {"name": row.counterparty, "total_income": 0.0, "total_expense": float(row.total_expense)}
+            data[row.counterparty] = {
+                "name": row.counterparty,
+                "total_income": 0.0,
+                "paid_income": 0.0,
+                "unpaid_income": 0.0,
+                "total_expense": float(row.total_expense),
+                "paid_expense": float(row.paid_expense or 0),
+                "unpaid_expense": float(row.unpaid_expense or 0),
+            }
+    
     result = []
     for item in data.values():
         item["balance"] = item["total_income"] - item["total_expense"]
+        item["debt"] = item["unpaid_income"] - item["unpaid_expense"]
         result.append(item)
+    
     result.sort(key=lambda x: x["name"])
     return result

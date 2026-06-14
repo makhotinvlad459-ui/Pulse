@@ -941,6 +941,8 @@
 "unpaid": "Unpaid",
 "paid": "Paid",
 "markAsPaid": "Mark as paid",
-"transactionMarkedAsPaid": "Transaction marked as paid"
+"transactionMarkedAsPaid": "Transaction marked as paid",
+"paymentStatus": "Payment status",
+"debt": "Debt"
 
 }

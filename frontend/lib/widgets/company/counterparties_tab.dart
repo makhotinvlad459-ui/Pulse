@@ -57,10 +57,31 @@ class _CounterpartiesTabState extends ConsumerState<CounterpartiesTab> {
     });
     final api = ApiClient();
     try {
+      // Загружаем контрагентов
       final res = await api.get('/counterparties', queryParameters: {'company_id': widget.companyId});
       if (!mounted) return;
+      
+      final List<Map<String, dynamic>> counterparties = List<Map<String, dynamic>>.from(res.data);
+      
+      // Для каждого контрагента загружаем статистику с учётом оплаты
+      for (var i = 0; i < counterparties.length; i++) {
+        try {
+          final stats = await api.get('/statistics/counterparty-stats', queryParameters: {
+            'company_id': widget.companyId,
+            'counterparty': counterparties[i]['name'],
+          });
+          counterparties[i]['total_income'] = stats.data['total_income'] ?? 0;
+          counterparties[i]['total_expense'] = stats.data['total_expense'] ?? 0;
+          counterparties[i]['balance'] = stats.data['balance'] ?? 0;
+          counterparties[i]['unpaid_income'] = stats.data['unpaid_income'] ?? 0;  // неоплаченные доходы
+          counterparties[i]['unpaid_expense'] = stats.data['unpaid_expense'] ?? 0;  // неоплаченные расходы
+        } catch (e) {
+          print('Error loading stats for ${counterparties[i]['name']}: $e');
+        }
+      }
+      
       setState(() {
-        _counterparties = List<Map<String, dynamic>>.from(res.data);
+        _counterparties = counterparties;
         _loading = false;
       });
     } catch (e) {
@@ -72,88 +93,6 @@ class _CounterpartiesTabState extends ConsumerState<CounterpartiesTab> {
       });
       if (mounted) {
         final t = AppLocalizations.of(context)!;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
-      }
-    }
-  }
-
-  Future<void> _showStats(Map<String, dynamic> cp) async {
-    final t = AppLocalizations.of(context)!;
-    final api = ApiClient();
-    try {
-      final res = await api.get('/statistics/counterparty-stats', queryParameters: {
-        'company_id': widget.companyId,
-        'counterparty': cp['name'],
-      });
-      final data = res.data;
-      if (!mounted) return;
-      await showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text(cp['name']),
-          content: SizedBox(
-            width: 400,
-            height: 500,
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(t.income, style: const TextStyle(fontWeight: FontWeight.bold)),
-                              Text('${data['total_income']?.toStringAsFixed(2) ?? '0.00'} ₽',
-                                  style: const TextStyle(color: Colors.green)),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(t.expense, style: const TextStyle(fontWeight: FontWeight.bold)),
-                              Text('${data['total_expense']?.toStringAsFixed(2) ?? '0.00'} ₽',
-                                  style: const TextStyle(color: Colors.red)),
-                            ],
-                          ),
-                          const Divider(),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(t.balance, style: const TextStyle(fontWeight: FontWeight.bold)),
-                              Text('${data['balance']?.toStringAsFixed(2) ?? '0.00'} ₽',
-                                  style: TextStyle(
-                                      color: (data['balance'] ?? 0) >= 0 ? Colors.green : Colors.red,
-                                      fontWeight: FontWeight.bold)),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(t.recentTransactions, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  ...(data['transactions'] as List).map((tItem) => ListTile(
-                    dense: true,
-                    title: Text('${tItem['amount']} ₽'),
-                    subtitle: Text('${tItem['type'] == 'income' ? t.income : t.expense} • ${tItem['description'] ?? ''}'),
-                    trailing: Text(DateFormat('dd.MM.yyyy').format(DateTime.parse(tItem['date']))),
-                  )),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: Text(t.close)),
-          ],
-        ),
-      );
-    } catch (e) {
-      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
       }
     }
@@ -252,6 +191,7 @@ class _CounterpartiesTabState extends ConsumerState<CounterpartiesTab> {
     ref.watch(localeProvider);
     final colorScheme = Theme.of(context).colorScheme;
     final t = AppLocalizations.of(context)!;
+    final currency = t.currencySymbol;
 
     if (!_canView) {
       return Center(child: Text(t.noPermissionToViewCounterparties));
@@ -299,23 +239,50 @@ class _CounterpartiesTabState extends ConsumerState<CounterpartiesTab> {
                       itemCount: _filteredCounterparties.length,
                       itemBuilder: (context, index) {
                         final cp = _filteredCounterparties[index];
+                        final balance = cp['balance'] ?? 0;
+                        final unpaidIncome = cp['unpaid_income'] ?? 0;
+                        final unpaidExpense = cp['unpaid_expense'] ?? 0;
+                        final totalDebt = unpaidIncome - unpaidExpense;
+                        
                         return Card(
                           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                           child: ListTile(
                             onTap: () {
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (context) => CounterpartyDetailScreen(
-        companyId: widget.companyId,
-        counterparty: cp,
-        permissions: widget.permissions,
-      ),
-    ),
-  );
-},
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => CounterpartyDetailScreen(
+                                    companyId: widget.companyId,
+                                    counterparty: cp,
+                                    permissions: widget.permissions,
+                                  ),
+                                ),
+                              );
+                            },
                             title: Text(cp['name'], style: TextStyle(color: colorScheme.onSurface)),
-                            subtitle: Text('${t.innLabel}: ${cp['inn'] ?? '—'} | ${t.phoneLabel}: ${cp['phone'] ?? '—'} | ${t.directorLabel}: ${cp['director'] ?? '—'}'),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('${t.innLabel}: ${cp['inn'] ?? '—'} | ${t.phoneLabel}: ${cp['phone'] ?? '—'} | ${t.directorLabel}: ${cp['director'] ?? '—'}'),
+                                const SizedBox(height: 4),
+                                Wrap(
+                                  spacing: 12,
+                                  children: [
+                                    Text('💰 ${t.balance}: ${balance.toStringAsFixed(2)}$currency',
+                                        style: TextStyle(
+                                          color: balance >= 0 ? Colors.green : Colors.red,
+                                          fontWeight: FontWeight.w500,
+                                        )),
+                                    if (totalDebt != 0)
+                                      Text('⚠️ ${t.debt}: ${totalDebt.abs().toStringAsFixed(2)}$currency',
+                                          style: TextStyle(
+                                            color: Colors.orange,
+                                            fontWeight: FontWeight.w500,
+                                          )),
+                                  ],
+                                ),
+                              ],
+                            ),
                             trailing: _canEdit
                                 ? Row(
                                     mainAxisSize: MainAxisSize.min,

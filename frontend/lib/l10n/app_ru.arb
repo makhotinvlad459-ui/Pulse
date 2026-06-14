@@ -941,7 +941,9 @@
 "unpaid": "Не оплачено",
 "paid": "Оплачено",
 "markAsPaid": "Отметить как оплаченное",
-"transactionMarkedAsPaid": "Транзакция отмечена как оплаченная"
+"transactionMarkedAsPaid": "Транзакция отмечена как оплаченная",
+"paymentStatus": "Статус оплаты",
+"debt": "Задолженность"
 }
 
   

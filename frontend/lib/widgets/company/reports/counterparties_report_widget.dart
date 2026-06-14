@@ -69,6 +69,7 @@ class _CounterpartiesReportWidgetState extends ConsumerState<CounterpartiesRepor
           DataColumn(label: Text('${t.income}$currency')),
           DataColumn(label: Text('${t.expense}$currency')),
           DataColumn(label: Text('${t.balance}$currency')),
+          DataColumn(label: Text('${t.debt}$currency')),
         ],
         rows: _data.map((row) {
           final balance = row['balance'] as double;
@@ -77,6 +78,8 @@ class _CounterpartiesReportWidgetState extends ConsumerState<CounterpartiesRepor
             DataCell(Text(row['total_income'].toStringAsFixed(2), style: const TextStyle(color: Colors.green))),
             DataCell(Text(row['total_expense'].toStringAsFixed(2), style: const TextStyle(color: Colors.red))),
             DataCell(Text(balance.toStringAsFixed(2), style: TextStyle(color: balance >= 0 ? Colors.green : Colors.red))),
+            DataCell(Text(row['debt'].toStringAsFixed(2), style: TextStyle(color: Colors.orange))),
+                      
           ]);
         }).toList(),
       ),

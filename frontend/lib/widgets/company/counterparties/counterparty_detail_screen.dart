@@ -66,6 +66,20 @@ class _CounterpartyDetailScreenState extends ConsumerState<CounterpartyDetailScr
     return _transactions.fold(0.0, (sum, tx) => sum + (tx['type'] == 'expense' ? (tx['amount'] as double) : 0.0));
   }
 
+  double get _unpaidIncome {
+    return _transactions.fold(0.0, (sum, tx) => 
+        sum + (tx['type'] == 'income' && tx['is_paid'] == false ? (tx['amount'] as double) : 0.0));
+  }
+
+  double get _unpaidExpense {
+    return _transactions.fold(0.0, (sum, tx) => 
+        sum + (tx['type'] == 'expense' && tx['is_paid'] == false ? (tx['amount'] as double) : 0.0));
+  }
+
+  double get _debt {
+    return _unpaidIncome - _unpaidExpense;
+  }
+
   bool get _canManage => ref.read(authProvider).user?.role == UserRole.founder ||
       widget.permissions.contains('manage_counterparties');
 
@@ -75,6 +89,7 @@ class _CounterpartyDetailScreenState extends ConsumerState<CounterpartyDetailScr
       final stats = await _api.get('/statistics/counterparty-stats', queryParameters: {
         'company_id': widget.companyId,
         'counterparty': widget.counterparty['name'],
+        'include_transactions': 'true',
       });
       setState(() {
         _transactions = stats.data['transactions'] ?? [];
@@ -124,125 +139,125 @@ class _CounterpartyDetailScreenState extends ConsumerState<CounterpartyDetailScr
   }
 
   Future<void> _pickAndUploadDocument() async {
-  final t = AppLocalizations.of(context)!;
-  final result = await FilePicker.platform.pickFiles(
-    type: FileType.custom,
-    allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt'],
-  );
-  if (result != null && mounted) {
-    final file = result.files.first;
-    Uint8List? fileBytes;
-    if (file.bytes != null) {
-      fileBytes = file.bytes;
-    } else if (!kIsWeb && file.path != null) {
-      fileBytes = await File(file.path!).readAsBytes();
-    }
-    if (fileBytes == null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.fileReadError)));
-      return;
-    }
-    String? description;
-    final descController = TextEditingController();
-    await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(t.documentDescription),
-        content: TextField(
-          controller: descController,
-          decoration: InputDecoration(hintText: t.optional),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text(t.cancel)),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(t.upload),
-          ),
-        ],
-      ),
+    final t = AppLocalizations.of(context)!;
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt'],
     );
-    description = descController.text.trim().isEmpty ? null : descController.text;
-    setState(() => _uploading = true);
-    try {
-      final ext = file.name.split('.').last.toLowerCase();
-      final isImage = ['jpg', 'jpeg', 'png', 'webp'].contains(ext);
-      final bytesToUpload = isImage ? await ImageCompression.compressImage(fileBytes) : fileBytes;
-      await _api.uploadCounterpartyDocument(
-        counterpartyId: widget.counterparty['id'],
-        companyId: widget.companyId,
-        bytes: bytesToUpload,
-        filename: file.name,
-        description: description,
+    if (result != null && mounted) {
+      final file = result.files.first;
+      Uint8List? fileBytes;
+      if (file.bytes != null) {
+        fileBytes = file.bytes;
+      } else if (!kIsWeb && file.path != null) {
+        fileBytes = await File(file.path!).readAsBytes();
+      }
+      if (fileBytes == null) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.fileReadError)));
+        return;
+      }
+      String? description;
+      final descController = TextEditingController();
+      await showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(t.documentDescription),
+          content: TextField(
+            controller: descController,
+            decoration: InputDecoration(hintText: t.optional),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: Text(t.cancel)),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(t.upload),
+            ),
+          ],
+        ),
       );
-      await _loadDocuments();
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
-    } finally {
-      if (mounted) setState(() => _uploading = false);
+      description = descController.text.trim().isEmpty ? null : descController.text;
+      setState(() => _uploading = true);
+      try {
+        final ext = file.name.split('.').last.toLowerCase();
+        final isImage = ['jpg', 'jpeg', 'png', 'webp'].contains(ext);
+        final bytesToUpload = isImage ? await ImageCompression.compressImage(fileBytes) : fileBytes;
+        await _api.uploadCounterpartyDocument(
+          counterpartyId: widget.counterparty['id'],
+          companyId: widget.companyId,
+          bytes: bytesToUpload,
+          filename: file.name,
+          description: description,
+        );
+        await _loadDocuments();
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+      } finally {
+        if (mounted) setState(() => _uploading = false);
+      }
     }
   }
-}
 
   Future<void> _viewDocument(Map<String, dynamic> doc) async {
-  final t = AppLocalizations.of(context)!;
-  final fileName = doc['file_name'];
-  final ext = fileName.split('.').last.toLowerCase();
-  final isImage = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].contains(ext);
-  try {
-    final response = await _api.getCounterpartyDocumentFile(doc['id'], widget.companyId);
-    final bytes = response.data is List<int>
-        ? Uint8List.fromList(response.data as List<int>)
-        : Uint8List.fromList((response.data as String).codeUnits);
-    if (isImage) {
-      if (mounted) {
-        showDialog(
-          context: context,
-          barrierDismissible: true,
-          builder: (context) => Dialog(
-            backgroundColor: Colors.transparent,
-            insetPadding: EdgeInsets.zero,
-            elevation: 0,
-            child: Stack(
-              children: [
-                Center(
-                  child: InteractiveViewer(
-                    child: Image.memory(bytes),
+    final t = AppLocalizations.of(context)!;
+    final fileName = doc['file_name'];
+    final ext = fileName.split('.').last.toLowerCase();
+    final isImage = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].contains(ext);
+    try {
+      final response = await _api.getCounterpartyDocumentFile(doc['id'], widget.companyId);
+      final bytes = response.data is List<int>
+          ? Uint8List.fromList(response.data as List<int>)
+          : Uint8List.fromList((response.data as String).codeUnits);
+      if (isImage) {
+        if (mounted) {
+          showDialog(
+            context: context,
+            barrierDismissible: true,
+            builder: (context) => Dialog(
+              backgroundColor: Colors.transparent,
+              insetPadding: EdgeInsets.zero,
+              elevation: 0,
+              child: Stack(
+                children: [
+                  Center(
+                    child: InteractiveViewer(
+                      child: Image.memory(bytes),
+                    ),
                   ),
-                ),
-                Positioned(
-                  top: 40,
-                  right: 20,
-                  child: IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white, size: 30),
-                    onPressed: () => Navigator.pop(context),
+                  Positioned(
+                    top: 40,
+                    right: 20,
+                    child: IconButton(
+                      icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                      onPressed: () => Navigator.pop(context),
+                    ),
                   ),
-                ),
-                Positioned(
-                  bottom: 40,
-                  right: 20,
-                  child: IconButton(
-                    icon: const Icon(Icons.download, color: Colors.white, size: 30),
-                    onPressed: () async {
-                      await FileDownloadHelper.downloadFile(bytes, fileName, context: context);
-                    },
+                  Positioned(
+                    bottom: 40,
+                    right: 20,
+                    child: IconButton(
+                      icon: const Icon(Icons.download, color: Colors.white, size: 30),
+                      onPressed: () async {
+                        await FileDownloadHelper.downloadFile(bytes, fileName, context: context);
+                      },
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        );
+          );
+        }
+      } else {
+        await FileDownloadHelper.downloadFile(bytes, fileName, context: context);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.fileSaved)));
+        }
       }
-    } else {
-      await FileDownloadHelper.downloadFile(bytes, fileName, context: context);
+    } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.fileSaved)));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
       }
-    }
-  } catch (e) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
     }
   }
-}
 
   Future<void> _deleteDocument(int docId) async {
     final t = AppLocalizations.of(context)!;
@@ -296,17 +311,20 @@ class _CounterpartyDetailScreenState extends ConsumerState<CounterpartyDetailScr
       t.typeLabel,
       t.income,
       t.expense,
+      t.paymentStatus,
       t.descriptionLabel,
     ]);
     for (var tx in _transactions) {
       final amount = tx['amount'] as double;
       final isIncome = tx['type'] == 'income';
+      final isPaid = tx['is_paid'] ?? false;
       sheet.appendRow([
         DateFormat('dd.MM.yyyy').format(DateTime.parse(tx['date'])),
-        tx['number'] ?? '—',
+        tx['number']?.toString() ?? '—',
         isIncome ? t.incomeSale : t.expensePurchase,
         isIncome ? amount : 0,
         !isIncome ? amount : 0,
+        isPaid ? t.paid : t.unpaid,
         tx['description'] ?? '',
       ]);
     }
@@ -353,65 +371,65 @@ class _CounterpartyDetailScreenState extends ConsumerState<CounterpartyDetailScr
   }
 
   Future<void> _viewJournalAttachment(int attachmentId, String fileName) async {
-  final t = AppLocalizations.of(context)!;
-  try {
-    final response = await _api.getJournalAttachmentFile(attachmentId, widget.companyId);
-    final bytes = response.data is List<int>
-        ? Uint8List.fromList(response.data as List<int>)
-        : Uint8List.fromList((response.data as String).codeUnits);
-    final ext = fileName.split('.').last.toLowerCase();
-    final isImage = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].contains(ext);
-    if (isImage) {
-      if (mounted) {
-        showDialog(
-          context: context,
-          barrierDismissible: true,
-          builder: (context) => Dialog(
-            backgroundColor: Colors.transparent,
-            insetPadding: EdgeInsets.zero,
-            elevation: 0,
-            child: Stack(
-              children: [
-                Center(
-                  child: InteractiveViewer(
-                    child: Image.memory(bytes),
+    final t = AppLocalizations.of(context)!;
+    try {
+      final response = await _api.getJournalAttachmentFile(attachmentId, widget.companyId);
+      final bytes = response.data is List<int>
+          ? Uint8List.fromList(response.data as List<int>)
+          : Uint8List.fromList((response.data as String).codeUnits);
+      final ext = fileName.split('.').last.toLowerCase();
+      final isImage = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].contains(ext);
+      if (isImage) {
+        if (mounted) {
+          showDialog(
+            context: context,
+            barrierDismissible: true,
+            builder: (context) => Dialog(
+              backgroundColor: Colors.transparent,
+              insetPadding: EdgeInsets.zero,
+              elevation: 0,
+              child: Stack(
+                children: [
+                  Center(
+                    child: InteractiveViewer(
+                      child: Image.memory(bytes),
+                    ),
                   ),
-                ),
-                Positioned(
-                  top: 40,
-                  right: 20,
-                  child: IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white, size: 30),
-                    onPressed: () => Navigator.pop(context),
+                  Positioned(
+                    top: 40,
+                    right: 20,
+                    child: IconButton(
+                      icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                      onPressed: () => Navigator.pop(context),
+                    ),
                   ),
-                ),
-                Positioned(
-                  bottom: 40,
-                  right: 20,
-                  child: IconButton(
-                    icon: const Icon(Icons.download, color: Colors.white, size: 30),
-                    onPressed: () async {
-                      await FileDownloadHelper.downloadFile(bytes, fileName, context: context);
-                    },
+                  Positioned(
+                    bottom: 40,
+                    right: 20,
+                    child: IconButton(
+                      icon: const Icon(Icons.download, color: Colors.white, size: 30),
+                      onPressed: () async {
+                        await FileDownloadHelper.downloadFile(bytes, fileName, context: context);
+                      },
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        );
+          );
+        }
+      } else {
+        await FileDownloadHelper.downloadFile(bytes, fileName, context: context);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.fileSaved)));
+        }
       }
-    } else {
-      await FileDownloadHelper.downloadFile(bytes, fileName, context: context);
+    } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.fileSaved)));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
       }
-    }
-  } catch (e) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
     }
   }
-}
 
   @override
   Widget build(BuildContext context) {
@@ -431,13 +449,11 @@ class _CounterpartyDetailScreenState extends ConsumerState<CounterpartyDetailScr
           ],
         ),
         actions: [
-          // Экспорт в Excel (всегда)
           IconButton(
             icon: const Icon(Icons.download),
             onPressed: _exportCurrentTab,
             tooltip: t.exportToExcel,
           ),
-          // Кнопка добавления документа (всегда)
           IconButton(
             icon: const Icon(Icons.upload_file),
             onPressed: _pickAndUploadDocument,
@@ -467,17 +483,27 @@ class _CounterpartyDetailScreenState extends ConsumerState<CounterpartyDetailScr
                                 DataColumn(label: Text(t.typeLabel)),
                                 DataColumn(label: Text(t.income)),
                                 DataColumn(label: Text(t.expense)),
+                                DataColumn(label: Text(t.paymentStatus)),
                                 DataColumn(label: Text(t.descriptionLabel)),
                               ],
                               rows: _transactions.map((tx) {
                                 final amount = tx['amount'] as double;
                                 final isIncome = tx['type'] == 'income';
+                                final isPaid = tx['is_paid'] ?? false;
                                 return DataRow(cells: [
                                   DataCell(Text(DateFormat('dd.MM.yyyy').format(DateTime.parse(tx['date'])))),
                                   DataCell(Text(tx['number']?.toString() ?? '—')),
                                   DataCell(Text(isIncome ? t.incomeSale : t.expensePurchase)),
                                   DataCell(Text(isIncome ? '$amount ${t.currencySymbol}' : '—')),
                                   DataCell(Text(!isIncome ? '$amount ${t.currencySymbol}' : '—')),
+                                  DataCell(Chip(
+                                    label: Text(isPaid ? t.paid : t.unpaid),
+                                    backgroundColor: isPaid ? Colors.green : Colors.orange,
+                                    labelStyle: const TextStyle(color: Colors.white, fontSize: 10),
+                                    padding: EdgeInsets.zero,
+                                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                    visualDensity: VisualDensity.compact,
+                                  )),
                                   DataCell(Text(tx['description'] ?? '')),
                                 ]);
                               }).toList(),
@@ -514,6 +540,20 @@ class _CounterpartyDetailScreenState extends ConsumerState<CounterpartyDetailScr
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
                                       color: (_totalIncome - _totalExpense) >= 0 ? Colors.green : Colors.red,
+                                    )),
+                              ],
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.all(8.0),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(t.debt, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                Text('${_debt.toStringAsFixed(2)} ${t.currencySymbol}',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.orange,
                                     )),
                               ],
                             ),
