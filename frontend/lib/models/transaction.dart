@@ -40,7 +40,10 @@ class Transaction {
   final String? updaterName;
   final int number;
   final List<TransactionItem> items;
-  final String? counterparty;  // <-- добавлено
+  final String? counterparty;
+  final bool isPaid;
+  final DateTime? paidAt;
+  final DateTime? paymentDueDate;
 
   Transaction({
     required this.id,
@@ -62,6 +65,9 @@ class Transaction {
     required this.number,
     required this.items,
     this.counterparty,
+    this.isPaid = false,
+    this.paidAt,
+    this.paymentDueDate,
   });
 
   factory Transaction.fromJson(Map<String, dynamic> json) {
@@ -85,6 +91,9 @@ class Transaction {
       number: json['number'],
       items: (json['items'] as List?)?.map((i) => TransactionItem.fromJson(i)).toList() ?? [],
       counterparty: json['counterparty'],
+      isPaid: json['is_paid'] ?? false,
+      paidAt: json['paid_at'] != null ? DateTime.parse(json['paid_at']) : null,
+      paymentDueDate: json['payment_due_date'] != null ? DateTime.parse(json['payment_due_date']) : null,
     );
   }
 }

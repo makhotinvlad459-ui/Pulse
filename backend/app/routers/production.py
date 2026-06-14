@@ -330,6 +330,7 @@ async def sell_product(
         description=f"Sale of finished product: {product.name} x{data.quantity}",
         counterparty=data.counterparty,
         created_by=current_user.id,
+        is_paid=data.is_paid,
     )
     db.add(transaction)
     await db.flush()

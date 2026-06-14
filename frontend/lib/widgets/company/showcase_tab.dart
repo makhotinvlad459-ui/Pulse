@@ -888,6 +888,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                       'category_id': si['category_id'],
                       'showcase_item_id': si['id'],
                       'quantity': qty.toInt(),
+                      'is_paid': false,
                     };
                     await _api.post('/transactions/', queryParameters: {'company_id': widget.companyId}, data: data);
                   }

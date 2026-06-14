@@ -97,6 +97,28 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
     }
   }
 
+  Future<void> _markAsPaid(int transactionId) async {
+    final t = AppLocalizations.of(context)!;
+    final api = ApiClient();
+    try {
+      await api.patch('/transactions/$transactionId/pay',
+          queryParameters: {'company_id': widget.companyId});
+      await _loadTransactions();
+      await widget.onRefresh();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(t.transactionMarkedAsPaid)),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${t.error}: $e')),
+        );
+      }
+    }
+  }
+
   String _typeName(String type, AppLocalizations t) {
     if (type == 'income') return t.incomeSale;
     if (type == 'expense') return t.expensePurchase;
@@ -118,24 +140,23 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
   }
 
   String getAccountName(int? id) {
-  if (id == null) return '';
-  try {
-    final acc = widget.accounts.cast<Map<String, dynamic>>().firstWhere((a) => a['id'] == id);
-    String icon = acc['type'] == 'cash' ? '💵' : (acc['type'] == 'bank' ? '🏦' : '📁');
-    String name = acc['name'];
-    // Перевод системных счетов
-    if (acc['type'] == 'cash') {
-      name = AppLocalizations.of(context)!.cashType; // "Наличные" -> "Cash"
-    } else if (acc['type'] == 'bank') {
-      name = AppLocalizations.of(context)!.bankType; // "Банк" -> "Bank"
-    } else if (name == 'Архив') {
-      name = AppLocalizations.of(context)!.archive;
+    if (id == null) return '';
+    try {
+      final acc = widget.accounts.cast<Map<String, dynamic>>().firstWhere((a) => a['id'] == id);
+      String icon = acc['type'] == 'cash' ? '💵' : (acc['type'] == 'bank' ? '🏦' : '📁');
+      String name = acc['name'];
+      if (acc['type'] == 'cash') {
+        name = AppLocalizations.of(context)!.cashType;
+      } else if (acc['type'] == 'bank') {
+        name = AppLocalizations.of(context)!.bankType;
+      } else if (name == 'Архив') {
+        name = AppLocalizations.of(context)!.archive;
+      }
+      return '$icon $name';
+    } catch (e) {
+      return '';
     }
-    return '$icon $name';
-  } catch (e) {
-    return '';
   }
-}
 
   String _translateCategoryName(String name, AppLocalizations t) {
     switch (name) {
@@ -159,18 +180,18 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
   }
 
   String getCategoryName(int? id, AppLocalizations t) {
-  if (id == null) return t.withoutCategory;
-  try {
-    final cat = widget.categories
-        .cast<Map<String, dynamic>>()
-        .firstWhere((c) => c['id'] == id);
-    final name = cat['name'];
-    final translatedName = _translateCategoryName(name, t);
-    return '${cat['icon'] ?? '📁'} $translatedName';
-  } catch (e) {
-    return t.withoutCategory;
+    if (id == null) return t.withoutCategory;
+    try {
+      final cat = widget.categories
+          .cast<Map<String, dynamic>>()
+          .firstWhere((c) => c['id'] == id);
+      final name = cat['name'];
+      final translatedName = _translateCategoryName(name, t);
+      return '${cat['icon'] ?? '📁'} $translatedName';
+    } catch (e) {
+      return t.withoutCategory;
+    }
   }
-}
 
   String _translateDescription(String desc, AppLocalizations t) {
     String result = desc;
@@ -266,160 +287,158 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
   }
 
   Future<Uint8List?> _getTransactionImageBytes(int transactionId) async {
-  final api = ApiClient();
-  try {
-    final response = await api.getTransactionFile(transactionId);
-    if (response.data is List<int>) {
-      return Uint8List.fromList(response.data as List<int>);
-    } else if (response.data is String) {
-      return Uint8List.fromList((response.data as String).codeUnits);
+    final api = ApiClient();
+    try {
+      final response = await api.getTransactionFile(transactionId);
+      if (response.data is List<int>) {
+        return Uint8List.fromList(response.data as List<int>);
+      } else if (response.data is String) {
+        return Uint8List.fromList((response.data as String).codeUnits);
+      }
+    } catch (e) {
+      print('Error loading transaction image $transactionId: $e');
     }
-  } catch (e) {
-    print('Error loading transaction image $transactionId: $e');
+    return null;
   }
-  return null;
-}
 
   Future<void> _showAttachment(String? url, int transactionId) async {
-  final t = AppLocalizations.of(context)!;
-  if (url == null) return;
-  
-  final isImage = url.toLowerCase().contains(RegExp(r'\.(jpg|jpeg|png|gif|webp)'));
-  
-  if (isImage) {
-    // Загружаем изображение через авторизованный API
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(child: CircularProgressIndicator()),
-    );
+    final t = AppLocalizations.of(context)!;
+    if (url == null) return;
     
-    final bytes = await _getTransactionImageBytes(transactionId);
-    if (mounted) Navigator.pop(context);
+    final isImage = url.toLowerCase().contains(RegExp(r'\.(jpg|jpeg|png|gif|webp)'));
     
-    if (bytes == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Не удалось загрузить изображение')),
-        );
+    if (isImage) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
+      );
+      
+      final bytes = await _getTransactionImageBytes(transactionId);
+      if (mounted) Navigator.pop(context);
+      
+      if (bytes == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Не удалось загрузить изображение')),
+          );
+        }
+        return;
       }
-      return;
-    }
-    
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        insetPadding: EdgeInsets.zero,
-        backgroundColor: Colors.transparent,
-        child: Stack(
-          children: [
-            PhotoView(
-              imageProvider: MemoryImage(bytes),
-              loadingBuilder: (context, event) => const Center(
-                child: CircularProgressIndicator(),
+      
+      showDialog(
+        context: context,
+        builder: (context) => Dialog(
+          insetPadding: EdgeInsets.zero,
+          backgroundColor: Colors.transparent,
+          child: Stack(
+            children: [
+              PhotoView(
+                imageProvider: MemoryImage(bytes),
+                loadingBuilder: (context, event) => const Center(
+                  child: CircularProgressIndicator(),
+                ),
+                errorBuilder: (context, error, stackTrace) => const Center(
+                  child: Text(
+                    'Не удалось загрузить изображение',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
+                backgroundDecoration: const BoxDecoration(color: Colors.black87),
+                minScale: PhotoViewComputedScale.contained * 0.8,
+                maxScale: PhotoViewComputedScale.covered * 3,
               ),
-              errorBuilder: (context, error, stackTrace) => const Center(
-                child: Text(
-                  'Не удалось загрузить изображение',
-                  style: TextStyle(color: Colors.white),
+              Positioned(
+                top: 40,
+                right: 20,
+                child: IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                  onPressed: () => Navigator.pop(context),
                 ),
               ),
-              backgroundDecoration: const BoxDecoration(color: Colors.black87),
-              minScale: PhotoViewComputedScale.contained * 0.8,
-              maxScale: PhotoViewComputedScale.covered * 3,
+            ],
+          ),
+        ),
+      );
+    } else {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Скачать файл'),
+          content: Text(t.downloadPdf),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(t.cancel),
             ),
-            Positioned(
-              top: 40,
-              right: 20,
-              child: IconButton(
-                icon: const Icon(Icons.close, color: Colors.white, size: 30),
-                onPressed: () => Navigator.pop(context),
-              ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(t.download),
             ),
           ],
         ),
-      ),
-    );
-  } else {
-    // Для документов — скачиваем через бэкенд
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Скачать файл'),
-        content: Text(t.downloadPdf),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(t.cancel),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(t.download),
-          ),
-        ],
-      ),
-    );
-    
-    if (confirm == true) {
-      await _downloadTransactionFile(transactionId, url.split('/').last);
-    }
-  }
-}
-
-Future<void> _downloadTransactionFile(int transactionId, String filename) async {
-  final api = ApiClient();
-  final t = AppLocalizations.of(context)!;
-  try {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(child: CircularProgressIndicator()),
-    );
-    
-    final response = await api.getTransactionFile(transactionId);
-    final bytes = response.data as List<int>;
-    
-    if (mounted) Navigator.pop(context);
-    
-    if (kIsWeb) {
-      final blob = html.Blob([bytes]);
-      final blobUrl = html.Url.createObjectUrlFromBlob(blob);
-      final anchor = html.AnchorElement(href: blobUrl)..download = filename;
-      anchor.click();
-      html.Url.revokeObjectUrl(blobUrl);
+      );
       
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${t.savedTo}: Загрузка начата')),
-      );
-    } else {
-      final directory = await getApplicationDocumentsDirectory();
-      final file = File('${directory.path}/$filename');
-      await file.writeAsBytes(bytes);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${t.savedTo}: ${file.path}')),
-      );
-    }
-  } catch (e) {
-    if (mounted) {
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${t.error}: $e')),
-      );
+      if (confirm == true) {
+        await _downloadTransactionFile(transactionId, url.split('/').last);
+      }
     }
   }
-}
 
-String _getAccountType(int? accountId) {
-  if (accountId == null) return '';
-  try {
-    final acc = widget.accounts
-        .cast<Map<String, dynamic>>()
-        .firstWhere((a) => a['id'] == accountId);
-    return acc['type'] ?? '';
-  } catch (e) {
-    return '';
+  Future<void> _downloadTransactionFile(int transactionId, String filename) async {
+    final api = ApiClient();
+    final t = AppLocalizations.of(context)!;
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
+      );
+      
+      final response = await api.getTransactionFile(transactionId);
+      final bytes = response.data as List<int>;
+      
+      if (mounted) Navigator.pop(context);
+      
+      if (kIsWeb) {
+        final blob = html.Blob([bytes]);
+        final blobUrl = html.Url.createObjectUrlFromBlob(blob);
+        final anchor = html.AnchorElement(href: blobUrl)..download = filename;
+        anchor.click();
+        html.Url.revokeObjectUrl(blobUrl);
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${t.savedTo}: Загрузка начата')),
+        );
+      } else {
+        final directory = await getApplicationDocumentsDirectory();
+        final file = File('${directory.path}/$filename');
+        await file.writeAsBytes(bytes);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${t.savedTo}: ${file.path}')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${t.error}: $e')),
+        );
+      }
+    }
   }
-}
+
+  String _getAccountType(int? accountId) {
+    if (accountId == null) return '';
+    try {
+      final acc = widget.accounts
+          .cast<Map<String, dynamic>>()
+          .firstWhere((a) => a['id'] == accountId);
+      return acc['type'] ?? '';
+    } catch (e) {
+      return '';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -625,6 +644,32 @@ String _getAccountType(int? accountId) {
                                                         ? colorScheme.onSurfaceVariant
                                                         : colorScheme.onSurfaceVariant),
                                               ),
+                                            // Статус оплаты
+                                            if (!isDeleted)
+                                              Padding(
+                                                padding: const EdgeInsets.only(top: 4),
+                                                child: Wrap(
+                                                  spacing: 4,
+                                                  children: [
+                                                    if (!trans.isPaid)
+                                                      Chip(
+                                                        label: Text(t.unpaid, style: const TextStyle(fontSize: 10, color: Colors.white)),
+                                                        backgroundColor: Colors.orange,
+                                                        padding: EdgeInsets.zero,
+                                                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                                        visualDensity: VisualDensity.compact,
+                                                      ),
+                                                    if (trans.isPaid)
+                                                      Chip(
+                                                        label: Text(t.paid, style: const TextStyle(fontSize: 10, color: Colors.white)),
+                                                        backgroundColor: Colors.green,
+                                                        padding: EdgeInsets.zero,
+                                                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                                        visualDensity: VisualDensity.compact,
+                                                      ),
+                                                  ],
+                                                ),
+                                              ),
                                           ],
                                         ),
                                         trailing: Row(
@@ -640,6 +685,14 @@ String _getAccountType(int? accountId) {
                                                     _showAttachment(
                                                         trans.attachmentUrl, trans.id),
                                                 tooltip: t.viewAttachment,
+                                              ),
+                                            // Кнопка оплаты
+                                            if (!trans.isPaid && !isDeleted && (widget.isFounder || widget.permissions.contains('mark_transaction_paid')))
+                                              IconButton(
+                                                icon: const Icon(Icons.payment, color: Colors.green),
+                                                onPressed: () => _markAsPaid(trans.id),
+                                                tooltip: t.markAsPaid,
+                                                iconSize: 20,
                                               ),
                                             if (isDeleted)
                                               IconButton(

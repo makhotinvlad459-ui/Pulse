@@ -317,6 +317,7 @@ class _AddTransactionDialogState extends ConsumerState<AddTransactionDialog> {
       'description': _description,
       'counterparty': _counterparty,
       'attachment_url': attachmentUrl,
+      'is_paid': false,
     };
 
     // Для income/expense добавляем category_id и items

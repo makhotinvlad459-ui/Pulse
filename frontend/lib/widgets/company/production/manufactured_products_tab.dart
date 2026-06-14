@@ -504,6 +504,7 @@ Future<void> _loadAccounts() async {
                         'amount': amount,
                         'account_id': selectedAccountId,
                         'date': date.toIso8601String(),
+                        'is_paid': false,
                         'counterparty': counterpartyController.text.isEmpty ? null : counterpartyController.text,
                       },
                     );

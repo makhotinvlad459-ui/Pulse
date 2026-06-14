@@ -937,6 +937,10 @@
 "deleteProductionEntryTitle": "Delete entry",
 "deleteProductionEntryConfirm": "Delete production entry",
 "noProductionEntries": "No entries for this day",
-"founderRole": "Founder"
+"founderRole": "Founder",
+"unpaid": "Unpaid",
+"paid": "Paid",
+"markAsPaid": "Mark as paid",
+"transactionMarkedAsPaid": "Transaction marked as paid"
 
 }

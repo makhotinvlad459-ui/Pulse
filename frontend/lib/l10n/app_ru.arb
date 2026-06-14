@@ -937,7 +937,11 @@
 "deleteProductionEntryTitle": "Удалить запись",
 "deleteProductionEntryConfirm": "Удалить запись о производстве",
 "noProductionEntries": "Нет записей за этот день",
-"founderRole": "Основатель"
+"founderRole": "Основатель",
+"unpaid": "Не оплачено",
+"paid": "Оплачено",
+"markAsPaid": "Отметить как оплаченное",
+"transactionMarkedAsPaid": "Транзакция отмечена как оплаченная"
 }
 
   

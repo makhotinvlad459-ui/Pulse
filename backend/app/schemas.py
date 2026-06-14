@@ -100,6 +100,7 @@ class TransactionCreate(BaseModel):
     counterparty: Optional[str] = None  
     showcase_item_id: Optional[int] = None
     quantity: Optional[int] = 1
+    is_paid: bool = False
     
 class TransactionItemResponse(BaseModel):
     product_id: int
@@ -130,6 +131,10 @@ class TransactionResponse(BaseModel):
     counterparty: Optional[str] = None  
     showcase_item_id: Optional[int] = None
     quantity: int = 1
+    is_paid: bool = False
+    paid_at: Optional[datetime] = None
+    payment_due_date: Optional[datetime] = None
+
     class Config:
         from_attributes = True
 
@@ -416,7 +421,8 @@ class ProductionSellRequest(BaseModel):
     amount: float
     account_id: int
     date: datetime
-    counterparty: Optional[str] = None    
+    counterparty: Optional[str] = None   
+    is_paid: bool = False 
 
 class ProductionProduceRequest(BaseModel):
     product_id: int

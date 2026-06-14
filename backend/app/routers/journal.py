@@ -306,7 +306,8 @@ async def complete_journal_entry(
         counterparty=entry.counterparty,
         showcase_item_id=None,
         quantity=1,
-        items=items_create
+        items=items_create,
+        is_paid=False,
     )
 
     created_trans = await create_transaction(

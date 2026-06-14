@@ -39,26 +39,51 @@ async def _normalize_counterparty(company_id: int, name: str | None, db: AsyncSe
     return existing if existing else name
 
 async def recalc_account_balance(account_id: int, db: AsyncSession):
+    # Считаем только ОПЛАЧЕННЫЕ транзакции
     income = await db.execute(
         select(func.coalesce(func.sum(Transaction.amount), 0))
-        .where(Transaction.account_id == account_id, Transaction.type == 'income', Transaction.is_deleted == False)
+        .where(
+            Transaction.account_id == account_id,
+            Transaction.type == 'income',
+            Transaction.is_deleted == False,
+            Transaction.is_paid == True
+        )
     )
     total_income = float(income.scalar())
+    
     expense = await db.execute(
         select(func.coalesce(func.sum(Transaction.amount), 0))
-        .where(Transaction.account_id == account_id, Transaction.type == 'expense', Transaction.is_deleted == False)
+        .where(
+            Transaction.account_id == account_id,
+            Transaction.type == 'expense',
+            Transaction.is_deleted == False,
+            Transaction.is_paid == True
+        )
     )
     total_expense = float(expense.scalar())
+    
     transfer_out = await db.execute(
         select(func.coalesce(func.sum(Transaction.amount), 0))
-        .where(Transaction.account_id == account_id, Transaction.type == 'transfer', Transaction.is_deleted == False)
+        .where(
+            Transaction.account_id == account_id,
+            Transaction.type == 'transfer',
+            Transaction.is_deleted == False,
+            Transaction.is_paid == True
+        )
     )
     total_transfer_out = float(transfer_out.scalar())
+    
     transfer_in = await db.execute(
         select(func.coalesce(func.sum(Transaction.amount), 0))
-        .where(Transaction.transfer_to_account_id == account_id, Transaction.type == 'transfer', Transaction.is_deleted == False)
+        .where(
+            Transaction.transfer_to_account_id == account_id,
+            Transaction.type == 'transfer',
+            Transaction.is_deleted == False,
+            Transaction.is_paid == True
+        )
     )
     total_transfer_in = float(transfer_in.scalar())
+    
     balance = total_income - total_expense - total_transfer_out + total_transfer_in
     await db.execute(update(Account).where(Account.id == account_id).values(balance=balance))
 
@@ -195,7 +220,8 @@ async def create_transaction(
         number=new_number,
         counterparty=normalized_counterparty,
         showcase_item_id=trans_data.showcase_item_id,
-        quantity=trans_data.quantity
+        quantity=trans_data.quantity,
+        is_paid=trans_data.is_paid,
     )
     db.add(new_trans)
     await db.flush()
@@ -219,9 +245,11 @@ async def create_transaction(
             )
             db.add(trans_item)
     
-    await recalc_account_balance(new_trans.account_id, db)
-    if is_transfer and new_trans.transfer_to_account_id is not None:
-        await recalc_account_balance(new_trans.transfer_to_account_id, db)
+    # ========== ОБНОВЛЯЕМ БАЛАНС ТОЛЬКО ДЛЯ ОПЛАЧЕННЫХ ТРАНЗАКЦИЙ ==========
+    if new_trans.is_paid:
+        await recalc_account_balance(new_trans.account_id, db)
+        if is_transfer and new_trans.transfer_to_account_id is not None:
+            await recalc_account_balance(new_trans.transfer_to_account_id, db)
     
     await db.commit()
     await db.refresh(new_trans)
@@ -343,7 +371,11 @@ async def get_transactions(
             number=t.number,
             items=items_response,
             counterparty=t.counterparty,
-            showcase_item_id=t.showcase_item_id
+            showcase_item_id=t.showcase_item_id,
+            is_paid=t.is_paid,
+            paid_at=t.paid_at,
+            payment_due_date=t.payment_due_date
+
         ))
     return response
 
@@ -402,7 +434,10 @@ async def get_transaction(
         number=t.number,
         items=items_response,
         counterparty=t.counterparty,
-        showcase_item_id=t.showcase_item_id
+        showcase_item_id=t.showcase_item_id,
+        is_paid=t.is_paid,
+        paid_at=t.paid_at,
+        payment_due_date=t.payment_due_date
     )
 
 @router.patch("/{transaction_id}", response_model=TransactionResponse)
@@ -569,7 +604,10 @@ async def update_transaction(
         number=transaction.number,
         items=items_response,
         counterparty=transaction.counterparty,
-        showcase_item_id=transaction.showcase_item_id
+        showcase_item_id=transaction.showcase_item_id,
+        is_paid=transaction.is_paid,          
+        paid_at=transaction.paid_at,          
+        payment_due_date=transaction.payment_due_date  
     )
 
 @router.delete("/{transaction_id}")
@@ -805,4 +843,116 @@ async def get_transaction_file(
         async with session.get(transaction.attachment_url) as resp:
             content = await resp.read()
     
-    return Response(content=content, media_type="application/octet-stream")        
+    return Response(content=content, media_type="application/octet-stream")   
+
+@router.patch("/{transaction_id}/pay")
+async def mark_transaction_paid(
+    transaction_id: int,
+    company_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Отметить транзакцию как оплаченную
+    Применяется для всех типов транзакций: продажи с витрины, производства, журнала
+    """
+    # Проверка доступа к компании
+    if current_user.role == UserRole.FOUNDER:
+        result = await db.execute(select(Company).where(Company.id == company_id, Company.founder_id == current_user.id))
+    else:
+        result = await db.execute(select(Company).join(CompanyMember).where(Company.id == company_id, CompanyMember.user_id == current_user.id))
+    company = result.scalar_one_or_none()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found or access denied")
+    
+    # Находим транзакцию
+    result = await db.execute(
+        select(Transaction).where(
+            Transaction.id == transaction_id,
+            Transaction.company_id == company_id
+        )
+    )
+    transaction = result.scalar_one_or_none()
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    
+    if transaction.is_paid:
+        raise HTTPException(status_code=400, detail="Transaction already paid")
+    
+    # Отмечаем как оплаченную
+    transaction.is_paid = True
+    transaction.paid_at = datetime.utcnow()
+    
+    # Обновляем баланс счета (только если это не перевод)
+    if transaction.type != 'transfer':
+        account = await db.get(Account, transaction.account_id)
+        if account:
+            account.balance += transaction.amount
+    
+    await db.commit()
+    await db.refresh(transaction)
+    
+    return {
+        "message": "Transaction marked as paid",
+        "transaction_id": transaction.id,
+        "is_paid": transaction.is_paid,
+        "paid_at": transaction.paid_at
+    }
+
+
+@router.patch("/{transaction_id}/unpay")
+async def mark_transaction_unpaid(
+    transaction_id: int,
+    company_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Снять отметку об оплате (только для учредителя)
+    """
+    # Проверка доступа к компании
+    if current_user.role == UserRole.FOUNDER:
+        result = await db.execute(select(Company).where(Company.id == company_id, Company.founder_id == current_user.id))
+    else:
+        result = await db.execute(select(Company).join(CompanyMember).where(Company.id == company_id, CompanyMember.user_id == current_user.id))
+    company = result.scalar_one_or_none()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found or access denied")
+    
+    # Только учредитель может снимать отметку об оплате
+    if current_user.role != UserRole.FOUNDER:
+        raise HTTPException(status_code=403, detail="Only founder can unpay transactions")
+    
+    # Находим транзакцию
+    result = await db.execute(
+        select(Transaction).where(
+            Transaction.id == transaction_id,
+            Transaction.company_id == company_id
+        )
+    )
+    transaction = result.scalar_one_or_none()
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    
+    if not transaction.is_paid:
+        raise HTTPException(status_code=400, detail="Transaction is not paid")
+    
+    # Снимаем отметку об оплате
+    transaction.is_paid = False
+    transaction.paid_at = None
+    
+    # Возвращаем баланс счета
+    if transaction.type != 'transfer':
+        account = await db.get(Account, transaction.account_id)
+        if account:
+            account.balance -= transaction.amount
+    
+    await db.commit()
+    await db.refresh(transaction)
+    
+    return {
+        "message": "Transaction marked as unpaid",
+        "transaction_id": transaction.id,
+        "is_paid": transaction.is_paid,
+        "paid_at": transaction.paid_at
+    }     
