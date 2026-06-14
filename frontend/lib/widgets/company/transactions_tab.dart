@@ -146,6 +146,7 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
   }
 
   String getAccountName(int? id) {
+    print('🔍 getAccountName called with id=$id, accounts length=${widget.accounts.length}');
     if (id == null) return '';
     if (widget.accounts.isEmpty) return '';
     try {
@@ -161,6 +162,7 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
       }
       return '$icon $name';
     } catch (e) {
+      print('❌ Error in getAccountName: $e');
       return '';
     }
   }
@@ -187,6 +189,7 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
   }
 
   String getCategoryName(int? id, AppLocalizations t) {
+    print('🔍 getCategoryName called with id=$id, categories length=${widget.categories.length}');
     if (id == null) return t.withoutCategory;
     if (widget.categories.isEmpty) return t.withoutCategory;
     try {
@@ -520,22 +523,24 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
                       : RefreshIndicator(
                           onRefresh: _loadTransactions,
                           child: ListView.builder(
-                            itemCount: sortedDates.length,
-                            itemBuilder: (context, index) {
-                              final date = sortedDates[index];
-                              final dayTransactions = grouped[date]!;
-                              double turnover = 0;
-                              double cashIncome = 0;
-                              double nonCashIncome = 0;
-                              for (var trans in dayTransactions) {
-                                if (trans.type == 'income' && !trans.isDeleted) {
-                                  turnover += trans.amount;
-                                  String accType = _getAccountType(trans.accountId);
-                                  if (accType == 'cash') {
-                                    cashIncome += trans.amount;
-                                  } else if (accType == 'bank') {
-                                    nonCashIncome += trans.amount;
-                                  }
+  itemCount: sortedDates.length,
+  itemBuilder: (context, index) {
+    final date = sortedDates[index];
+    final dayTransactions = grouped[date];
+    if (dayTransactions == null) return const SizedBox.shrink();
+    
+    double turnover = 0;
+    double cashIncome = 0;
+    double nonCashIncome = 0;
+    for (var trans in dayTransactions) {
+      if (trans.type == 'income' && !trans.isDeleted) {
+        turnover += trans.amount;
+        String accType = _getAccountType(trans.accountId);
+        if (accType == 'cash') {
+          cashIncome += trans.amount;
+        } else if (accType == 'bank') {
+          nonCashIncome += trans.amount;
+        }
                                 }
                               }
                               return Column(
