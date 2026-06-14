@@ -50,7 +50,13 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
     _loadTransactions();
   }
 
+  @override
+  void dispose() {
+    super.dispose();
+  }
+
   Future<void> _loadTransactions() async {
+    if (!mounted) return;
     setState(() => _loading = true);
     final api = ApiClient();
     try {
@@ -61,17 +67,17 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
         'include_deleted': 'true',
       });
       final List<dynamic> data = res.data;
+      if (!mounted) return;
       setState(() {
         _transactions = data.map((json) => Transaction.fromJson(json)).toList();
         _loading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => _loading = false);
-      if (mounted) {
-        final t = AppLocalizations.of(context)!;
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('${t.error}: $e')));
-      }
+      final t = AppLocalizations.of(context)!;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('${t.error}: $e')));
     }
   }
 
@@ -87,6 +93,7 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
       locale: Localizations.localeOf(context),
     );
     if (picked != null) {
+      if (!mounted) return;
       setState(() {
         _startDate = picked.start;
         _endDate = picked.end
@@ -103,19 +110,18 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
     try {
       await api.patch('/transactions/$transactionId/pay',
           queryParameters: {'company_id': widget.companyId});
+      if (!mounted) return;
       await _loadTransactions();
       await widget.onRefresh();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(t.transactionMarkedAsPaid)),
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(t.transactionMarkedAsPaid)),
+      );
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${t.error}: $e')),
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${t.error}: $e')),
+      );
     }
   }
 
@@ -141,6 +147,7 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
 
   String getAccountName(int? id) {
     if (id == null) return '';
+    if (widget.accounts.isEmpty) return '';
     try {
       final acc = widget.accounts.cast<Map<String, dynamic>>().firstWhere((a) => a['id'] == id);
       String icon = acc['type'] == 'cash' ? '💵' : (acc['type'] == 'bank' ? '🏦' : '📁');
@@ -181,6 +188,7 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
 
   String getCategoryName(int? id, AppLocalizations t) {
     if (id == null) return t.withoutCategory;
+    if (widget.categories.isEmpty) return t.withoutCategory;
     try {
       final cat = widget.categories
           .cast<Map<String, dynamic>>()
@@ -207,11 +215,14 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
     try {
       await api.post('/transactions/$id/restore',
           queryParameters: {'company_id': widget.companyId});
+      if (!mounted) return;
       await _loadTransactions();
       await widget.onRefresh();
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(t.transactionRestored)));
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text('${t.error}: $e')));
     }
@@ -235,17 +246,30 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
       ),
     );
     if (confirm != true) return;
+    
     final api = ApiClient();
     try {
       await api.delete('/transactions/$id',
           queryParameters: {'company_id': widget.companyId});
+      
+      if (!mounted) return;
+      
       await widget.onRefresh();
+      
+      if (!mounted) return;
+      
       await _loadTransactions();
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(t.transactionDeleted)));
+      
+      if (!mounted) return;
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(t.transactionDeleted)),
+      );
     } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${t.error}: $e')),
+      );
     }
   }
 
@@ -278,6 +302,7 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
         accounts: widget.accounts,
         categories: widget.categories,
         onSuccess: () async {
+          if (!mounted) return;
           await _loadTransactions();
           await widget.onRefresh();
         },
@@ -407,16 +432,20 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
         anchor.click();
         html.Url.revokeObjectUrl(blobUrl);
         
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${t.savedTo}: Загрузка начата')),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('${t.savedTo}: Загрузка начата')),
+          );
+        }
       } else {
         final directory = await getApplicationDocumentsDirectory();
         final file = File('${directory.path}/$filename');
         await file.writeAsBytes(bytes);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${t.savedTo}: ${file.path}')),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('${t.savedTo}: ${file.path}')),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -430,6 +459,7 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
 
   String _getAccountType(int? accountId) {
     if (accountId == null) return '';
+    if (widget.accounts.isEmpty) return '';
     try {
       final acc = widget.accounts
           .cast<Map<String, dynamic>>()
@@ -442,6 +472,8 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
 
   @override
   Widget build(BuildContext context) {
+    if (!mounted) return const SizedBox.shrink();
+    
     ref.watch(localeProvider);
     final colorScheme = Theme.of(context).colorScheme;
     final t = AppLocalizations.of(context)!;
@@ -548,6 +580,7 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
                                     final isDeleted = trans.isDeleted;
                                     final description = _translateDescription(trans.description ?? '', t);
                                     final displayCreatorName = trans.creatorName == 'Основатель' ? t.founderRole : trans.creatorName;
+                                    final isPaid = trans.isPaid ?? false;
                                     return Card(
                                       margin: const EdgeInsets.symmetric(
                                           vertical: 4, horizontal: 8),
@@ -651,7 +684,7 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
                                                 child: Wrap(
                                                   spacing: 4,
                                                   children: [
-                                                    if (!trans.isPaid)
+                                                    if (!isPaid)
                                                       Chip(
                                                         label: Text(t.unpaid, style: const TextStyle(fontSize: 10, color: Colors.white)),
                                                         backgroundColor: Colors.orange,
@@ -659,7 +692,7 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
                                                         materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                                         visualDensity: VisualDensity.compact,
                                                       ),
-                                                    if (trans.isPaid)
+                                                    if (isPaid)
                                                       Chip(
                                                         label: Text(t.paid, style: const TextStyle(fontSize: 10, color: Colors.white)),
                                                         backgroundColor: Colors.green,
@@ -687,7 +720,7 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
                                                 tooltip: t.viewAttachment,
                                               ),
                                             // Кнопка оплаты
-                                            if (!trans.isPaid && !isDeleted && (widget.isFounder || widget.permissions.contains('mark_transaction_paid')))
+                                            if (!isPaid && !isDeleted && (widget.isFounder || widget.permissions.contains('mark_transaction_paid')))
                                               IconButton(
                                                 icon: const Icon(Icons.payment, color: Colors.green),
                                                 onPressed: () => _markAsPaid(trans.id),
@@ -747,6 +780,7 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
                   builder: (_) => AddTransactionDialog(
                     companyId: widget.companyId,
                     onSuccess: () async {
+                      if (!mounted) return;
                       await _loadTransactions();
                       await widget.onRefresh();
                     },
