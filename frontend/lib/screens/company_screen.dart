@@ -97,8 +97,6 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
     'reports',
     'orders',
     'counterparties',
-    
-    
   ];
 
   List<String> _tabOrder = [];
@@ -118,7 +116,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
       case 'journal':
         return t.tabJournal;
       case 'production':
-        return t.tabProduction;    
+        return t.tabProduction;
       case 'reports':
         return t.tabReports;
       case 'orders':
@@ -272,26 +270,25 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
           }
           break;
         case 'production':
-  if (effectivePermissions.contains('view_production')) {
-    newTabs.add(Tab(icon: const Icon(Icons.factory), text: t.tabProduction));
-    newWidgets.add(ProductionTab(
-      companyId: _company.id,
-      permissions: effectivePermissions,
-      onRefresh: _refresh,
-    ));
-  }
-  break;  
-
+          if (effectivePermissions.contains('view_production')) {
+            newTabs.add(Tab(icon: const Icon(Icons.factory), text: t.tabProduction));
+            newWidgets.add(ProductionTab(
+              companyId: _company.id,
+              permissions: effectivePermissions,
+              onRefresh: _refresh,
+            ));
+          }
+          break;
         case 'journal':
-        if (effectivePermissions.contains('view_journal')) {
-           newTabs.add(Tab(icon: const Icon(Icons.calendar_month), text: t.tabJournal));
+          if (effectivePermissions.contains('view_journal')) {
+            newTabs.add(Tab(icon: const Icon(Icons.calendar_month), text: t.tabJournal));
             newWidgets.add(JournalTab(
               companyId: _company.id,
               permissions: effectivePermissions,
               onRefresh: _refresh,
-                ));
-                  }
-              break;  
+            ));
+          }
+          break;
         case 'chat_tasks':
           if (effectivePermissions.contains('view_chat') ||
               effectivePermissions.contains('view_tasks')) {
@@ -360,41 +357,40 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
       }
     });
   }
-  // -------------------------------------------------------------
 
   @override
-void initState() {
-  super.initState();
-  _company = widget.company;
-  initializeDateFormatting('ru_RU', null);
-  _tabController = TabController(length: 0, vsync: this);
-  _loadData();
-  _initWebSocket();
-  _loadTabOrder();
-}
+  void initState() {
+    super.initState();
+    _company = widget.company;
+    initializeDateFormatting('ru_RU', null);
+    _tabController = TabController(length: 0, vsync: this);
+    _loadData();
+    _initWebSocket();
+    _loadTabOrder();
+  }
 
-@override
-void dispose() {
-  _tabController.dispose();
-  WebSocketService().disconnectChat();
-  WebSocketService().disconnectTasks();
-  if (_hasChanges) Navigator.pop(context, true);
-  super.dispose();
-}
+  @override
+  void dispose() {
+    _tabController.dispose();
+    WebSocketService().disconnectChat();
+    WebSocketService().disconnectTasks();
+    // ❌ УДАЛЯЕМ ОШИБОЧНЫЙ Navigator.pop
+    // if (_hasChanges) Navigator.pop(context, true);
+    super.dispose();
+  }
 
   Future<void> _initWebSocket() async {
-  final authState = ref.read(authProvider);
-  final user = authState.user;
-  if (user == null) return;
-  final api = ApiClient();
-  final token = await api.getToken();
-  if (token == null) return;
-  
-  WebSocketService().connectUser(user.id, token);
-  WebSocketService().connectChat(_company.id, token);
-  WebSocketService().connectTasks(_company.id, token);
-}
-
+    final authState = ref.read(authProvider);
+    final user = authState.user;
+    if (user == null) return;
+    final api = ApiClient();
+    final token = await api.getToken();
+    if (token == null) return;
+    
+    WebSocketService().connectUser(user.id, token);
+    WebSocketService().connectChat(_company.id, token);
+    WebSocketService().connectTasks(_company.id, token);
+  }
 
   Future<void> _refreshCounters() async {
     final api = ApiClient();
@@ -428,60 +424,60 @@ void dispose() {
   }
 
   Future<void> _loadData() async {
-  setState(() => _loading = true);
-  final api = ApiClient();
-  try {
-    final updatedCompany = await api.getCompany(_company.id);
-    
-    final accountsRes = await api
-        .get('/accounts', queryParameters: {'company_id': _company.id});
-    final transactionsRes = await api.get('/transactions',
-        queryParameters: {'company_id': _company.id});
-    final categoriesRes = await api.get('/categories',
-        queryParameters: {'company_id': _company.id});
-    
-    setState(() {
-      _company = updatedCompany;
+    setState(() => _loading = true);
+    final api = ApiClient();
+    try {
+      final updatedCompany = await api.getCompany(_company.id);
       
-      final accountsList =
-          (accountsRes.data as List).cast<Map<String, dynamic>>();
-      accountsList.sort((a, b) {
-        int orderA = a['type'] == 'cash' ? 0 : (a['type'] == 'bank' ? 1 : 2);
-        int orderB = b['type'] == 'cash' ? 0 : (b['type'] == 'bank' ? 1 : 2);
-        if (orderA != orderB) return orderA.compareTo(orderB);
-        return a['id'].compareTo(b['id']);
+      final accountsRes = await api
+          .get('/accounts', queryParameters: {'company_id': _company.id});
+      final transactionsRes = await api.get('/transactions',
+          queryParameters: {'company_id': _company.id});
+      final categoriesRes = await api.get('/categories',
+          queryParameters: {'company_id': _company.id});
+      
+      setState(() {
+        _company = updatedCompany;
+        
+        final accountsList =
+            (accountsRes.data as List).cast<Map<String, dynamic>>();
+        accountsList.sort((a, b) {
+          int orderA = a['type'] == 'cash' ? 0 : (a['type'] == 'bank' ? 1 : 2);
+          int orderB = b['type'] == 'cash' ? 0 : (b['type'] == 'bank' ? 1 : 2);
+          if (orderA != orderB) return orderA.compareTo(orderB);
+          return a['id'].compareTo(b['id']);
+        });
+        
+        Map<String, dynamic>? archive;
+        for (var acc in accountsList) {
+          if (acc['name'] == 'Архив') {
+            archive = acc;
+            break;
+          }
+        }
+        
+        _archiveAccountId = archive?['id'];
+        _accounts = accountsList.where((a) => a['name'] != 'Архив').toList();
+        
+        _transactions = transactionsRes.data;
+        _categories = categoriesRes.data;
+        
+        _loading = false;
       });
       
-      Map<String, dynamic>? archive;
-      for (var acc in accountsList) {
-        if (acc['name'] == 'Архив') {
-          archive = acc;
-          break;
-        }
+      await _refreshCounters();
+      await _loadMyPermissions();
+    } catch (e) {
+      setState(() => _loading = false);
+      if (mounted) {
+        await ErrorHandler.showErrorDialog(
+          context,
+          e,
+          onRetry: _loadData, 
+        );
       }
-      
-      _archiveAccountId = archive?['id'];
-      _accounts = accountsList.where((a) => a['name'] != 'Архив').toList();
-      
-      _transactions = transactionsRes.data;
-      _categories = categoriesRes.data;
-      
-      _loading = false;
-    });
-    
-    await _refreshCounters();
-    await _loadMyPermissions();
-  } catch (e) {
-    setState(() => _loading = false);
-    if (mounted) {
-      await ErrorHandler.showErrorDialog(
-        context,
-        e,
-        onRetry: _loadData, 
-      );
     }
   }
-}
 
   Future<void> _loadMyPermissions() async {
     final api = ApiClient();
@@ -547,7 +543,6 @@ void dispose() {
     final rain = getRainTheme(currentTheme);
     const double rainHeight = 260;
 
-    // Подписка на userStream для обновления счетчиков
     ref.listen(StreamProvider((ref) => WebSocketService().userStream), (previous, next) {
       next.whenData((data) {
         if (data['type'] == 'update_counters' && data['company_id'] == _company.id) {
@@ -604,258 +599,265 @@ void dispose() {
       _rebuildTabs();
     }
 
-    return Scaffold(
-      backgroundColor: colorScheme.surface,
-      body: Stack(
-        children: [
-          Container(
-            color: colorScheme.surface,
-            child: CustomPaint(
-              painter: _LightGridPainter(color: gridColor),
-              size: Size.infinite,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        Navigator.pop(context, _hasChanges);
+      },
+      child: Scaffold(
+        backgroundColor: colorScheme.surface,
+        body: Stack(
+          children: [
+            Container(
+              color: colorScheme.surface,
+              child: CustomPaint(
+                painter: _LightGridPainter(color: gridColor),
+                size: Size.infinite,
+              ),
             ),
-          ),
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            height: rainHeight,
-            child: MatrixRain(
-              color: rain.color,
-              opacity: rain.opacity,
-              speedFactor: rain.speed,
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              height: rainHeight,
+              child: MatrixRain(
+                color: rain.color,
+                opacity: rain.opacity,
+                speedFactor: rain.speed,
+              ),
             ),
-          ),
-          SafeArea(
-            child: Column(
-              children: [
-                Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  child: Row(
-                    children: [
-                      IconButton(
-                        icon: Icon(Icons.arrow_back,
-                            color: colorScheme.onSurface),
-                        onPressed: () => Navigator.pop(context, _hasChanges),
-                      ),
-                      const Spacer(),
-                      if (showMenu)
-                        PopupMenuButton<String>(
-  onSelected: (value) async {
-    if (value == 'edit' && showEditCompany) {
-      await showDialog(
-        context: context,
-        builder: (_) => EditCompanyDialog(
-          company: _company,
-          onSuccess: () {
-            _loadData();
-          },
-        ),
-      );
-    }
-                            if (value == 'add_account' && showAddAccount) {
-                              await showDialog(
+            SafeArea(
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    child: Row(
+                      children: [
+                        IconButton(
+                          icon: Icon(Icons.arrow_back, color: colorScheme.onSurface),
+                          onPressed: () => Navigator.pop(context, _hasChanges),
+                        ),
+                        const Spacer(),
+                        if (showMenu)
+                          PopupMenuButton<String>(
+                            onSelected: (value) async {
+                              if (value == 'edit' && showEditCompany) {
+                                await showDialog(
+                                  context: context,
+                                  builder: (_) => EditCompanyDialog(
+                                    company: _company,
+                                    onSuccess: () {
+                                      _loadData();
+                                    },
+                                  ),
+                                );
+                              }
+                              if (value == 'add_account' && showAddAccount) {
+                                await showDialog(
                                   context: context,
                                   builder: (_) => AddAccountDialog(
-                                      companyId: _company.id,
-                                      onSuccess: _refresh));
-                            }
-                            if (value == 'manage_categories' &&
-                                showManageCategories) {
-                              await showDialog(
+                                    companyId: _company.id,
+                                    onSuccess: _refresh
+                                  ),
+                                );
+                              }
+                              if (value == 'manage_categories' && showManageCategories) {
+                                await showDialog(
                                   context: context,
                                   builder: (_) => ManageCategoriesDialog(
-                                      companyId: _company.id,
-                                      onSuccess: _refresh,
-                                      categories: _categories));
-                            }
-                            if (value == 'manage_employees' &&
-                                showManageEmployees) {
-                              await showDialog(
+                                    companyId: _company.id,
+                                    onSuccess: _refresh,
+                                    categories: _categories
+                                  ),
+                                );
+                              }
+                              if (value == 'manage_employees' && showManageEmployees) {
+                                await showDialog(
                                   context: context,
                                   builder: (_) => ManageEmployeesDialog(
-                                      companyId: _company.id,
-                                      onSuccess: _refresh));
-                            }
-                            if (value == 'archive' && showArchive) {
-                              _openArchive();
-                            }
-                            if (value == 'delete' && showDeleteCompany) {
-                              await _confirmDeleteCompany();
-                            }
-                            if (value == 'reorder_tabs' && showReorderTabs) {
-                              await _openReorderTabsDialog();
-                            }
-                          },
-                          itemBuilder: (context) {
-                            final items = <PopupMenuItem<String>>[];
-                            if (showEditCompany) {
-                              items.add(PopupMenuItem(
-                                  value: 'edit', child: Text(t.editCompany)));
-                            }
-                            if (showAddAccount) {
-                              items.add(PopupMenuItem(
-                                  value: 'add_account',
-                                  child: Text(t.addAccount)));
-                            }
-                            if (showManageCategories) {
-                              items.add(PopupMenuItem(
-                                  value: 'manage_categories',
-                                  child: Text(t.manageCategories)));
-                            }
-                            if (showManageEmployees) {
-                              items.add(PopupMenuItem(
-                                  value: 'manage_employees',
-                                  child: Text(t.manageEmployees)));
-                            }
-                            if (showArchive) {
-                              items.add(PopupMenuItem(
-                                  value: 'archive', child: Text(t.archive)));
-                            }
-                            if (showReorderTabs) {
-                              items.add(PopupMenuItem(
-                                  value: 'reorder_tabs',
-                                  child: Text(t.reorderTabs)));
-                            }
-                            if (showDeleteCompany) {
-                              items.add(PopupMenuItem(
-                                  value: 'delete',
-                                  child: Text(t.deleteCompany,
-                                      style: TextStyle(
-                                          color: colorScheme.error))));
-                            }
-                            return items;
-                          },
-                          icon: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: colorScheme.primary.withOpacity(0.2),
-                              shape: BoxShape.circle,
-                            ),
-                            child:
-                                Icon(Icons.menu, color: colorScheme.onSurface),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  child: Text(
-                    _company.name,
-                    style: GoogleFonts.orbitron(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w600,
-                      color: colorScheme.onSurface,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-                if (_unreadMessagesCount > 0 || _pendingTasksCount > 0)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        if (_unreadMessagesCount > 0)
-                          Container(
-                            margin: const EdgeInsets.only(right: 8),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.red,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              '${t.messages}: $_unreadMessagesCount',
-                              style: const TextStyle(
-                                  color: Colors.white, fontSize: 12),
-                            ),
-                          ),
-                        if (_pendingTasksCount > 0)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.orange,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              '${t.tasks}: $_pendingTasksCount',
-                              style: const TextStyle(
-                                  color: Colors.white, fontSize: 12),
+                                    companyId: _company.id,
+                                    onSuccess: _refresh
+                                  ),
+                                );
+                              }
+                              if (value == 'archive' && showArchive) {
+                                _openArchive();
+                              }
+                              if (value == 'delete' && showDeleteCompany) {
+                                await _confirmDeleteCompany();
+                              }
+                              if (value == 'reorder_tabs' && showReorderTabs) {
+                                await _openReorderTabsDialog();
+                              }
+                            },
+                            itemBuilder: (context) {
+                              final items = <PopupMenuItem<String>>[];
+                              if (showEditCompany) {
+                                items.add(PopupMenuItem(
+                                    value: 'edit', child: Text(t.editCompany)));
+                              }
+                              if (showAddAccount) {
+                                items.add(PopupMenuItem(
+                                    value: 'add_account',
+                                    child: Text(t.addAccount)));
+                              }
+                              if (showManageCategories) {
+                                items.add(PopupMenuItem(
+                                    value: 'manage_categories',
+                                    child: Text(t.manageCategories)));
+                              }
+                              if (showManageEmployees) {
+                                items.add(PopupMenuItem(
+                                    value: 'manage_employees',
+                                    child: Text(t.manageEmployees)));
+                              }
+                              if (showArchive) {
+                                items.add(PopupMenuItem(
+                                    value: 'archive', child: Text(t.archive)));
+                              }
+                              if (showReorderTabs) {
+                                items.add(PopupMenuItem(
+                                    value: 'reorder_tabs',
+                                    child: Text(t.reorderTabs)));
+                              }
+                              if (showDeleteCompany) {
+                                items.add(PopupMenuItem(
+                                    value: 'delete',
+                                    child: Text(t.deleteCompany,
+                                        style: TextStyle(
+                                            color: colorScheme.error))));
+                              }
+                              return items;
+                            },
+                            icon: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: colorScheme.primary.withOpacity(0.2),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(Icons.menu, color: colorScheme.onSurface),
                             ),
                           ),
                       ],
                     ),
                   ),
-                if (effectivePermissions.contains('view_accounts'))
-                  SizedBox(
-                    height: 100,
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Row(
-                        children: _accounts
-                            .map((acc) => Padding(
-                                  padding: const EdgeInsets.only(right: 12),
-                                  child: AccountCard(
-                                    account: acc,
-                                    onDelete: () async {
-                                      final api = ApiClient();
-                                      try {
-                                        await api.delete(
-                                            '/accounts/${acc['id']}',
-                                            queryParameters: {
-                                              'company_id': _company.id
-                                            });
-                                        await _refresh();
-                                      } catch (e) {
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(SnackBar(
-                                                content:
-                                                    Text('${t.error}: $e')));
-                                      }
-                                    },
-                                    isFounder: isFounder,
-                                  ),
-                                ))
-                            .toList(),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    child: Text(
+                      _company.name,
+                      style: GoogleFonts.orbitron(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w600,
+                        color: colorScheme.onSurface,
                       ),
+                      textAlign: TextAlign.center,
                     ),
                   ),
-                Expanded(
-                  child: Column(
-                    children: [
-                      if (_tabs.isNotEmpty)
-                        TabBar(
-                          controller: _tabController,
-                          isScrollable: true,
-                          indicatorColor: colorScheme.primary,
-                          labelColor: colorScheme.primary,
-                          unselectedLabelColor: colorScheme.onSurfaceVariant,
-                          labelStyle: const TextStyle(
-                              fontSize: 16, fontWeight: FontWeight.w600),
-                          unselectedLabelStyle: const TextStyle(fontSize: 14),
-                          tabs: _tabs,
-                        ),
-                      Expanded(
-                        child: _tabWidgets.isEmpty
-                            ? const Center(child: CircularProgressIndicator())
-                            : TabBarView(
-                                controller: _tabController,
-                                children: _tabWidgets,
+                  if (_unreadMessagesCount > 0 || _pendingTasksCount > 0)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          if (_unreadMessagesCount > 0)
+                            Container(
+                              margin: const EdgeInsets.only(right: 8),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.red,
+                                borderRadius: BorderRadius.circular(12),
                               ),
+                              child: Text(
+                                '${t.messages}: $_unreadMessagesCount',
+                                style: const TextStyle(
+                                    color: Colors.white, fontSize: 12),
+                              ),
+                            ),
+                          if (_pendingTasksCount > 0)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.orange,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                '${t.tasks}: $_pendingTasksCount',
+                                style: const TextStyle(
+                                    color: Colors.white, fontSize: 12),
+                              ),
+                            ),
+                        ],
                       ),
-                    ],
+                    ),
+                  if (effectivePermissions.contains('view_accounts'))
+                    SizedBox(
+                      height: 100,
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Row(
+                          children: _accounts
+                              .map((acc) => Padding(
+                                    padding: const EdgeInsets.only(right: 12),
+                                    child: AccountCard(
+                                      account: acc,
+                                      onDelete: () async {
+                                        final api = ApiClient();
+                                        try {
+                                          await api.delete(
+                                              '/accounts/${acc['id']}',
+                                              queryParameters: {
+                                                'company_id': _company.id
+                                              });
+                                          await _refresh();
+                                        } catch (e) {
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(SnackBar(
+                                                  content:
+                                                      Text('${t.error}: $e')));
+                                        }
+                                      },
+                                      isFounder: isFounder,
+                                    ),
+                                  ))
+                              .toList(),
+                        ),
+                      ),
+                    ),
+                  Expanded(
+                    child: Column(
+                      children: [
+                        if (_tabs.isNotEmpty)
+                          TabBar(
+                            controller: _tabController,
+                            isScrollable: true,
+                            indicatorColor: colorScheme.primary,
+                            labelColor: colorScheme.primary,
+                            unselectedLabelColor: colorScheme.onSurfaceVariant,
+                            labelStyle: const TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.w600),
+                            unselectedLabelStyle: const TextStyle(fontSize: 14),
+                            tabs: _tabs,
+                          ),
+                        Expanded(
+                          child: _tabWidgets.isEmpty
+                              ? const Center(child: CircularProgressIndicator())
+                              : TabBarView(
+                                  controller: _tabController,
+                                  children: _tabWidgets,
+                                ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
