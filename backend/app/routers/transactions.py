@@ -592,6 +592,32 @@ async def delete_transaction(
     if not transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
     
+    # 👇 ДОБАВИТЬ ПРОВЕРКУ НА ПРОИЗВОДСТВЕННУЮ ТРАНЗАКЦИЮ 👇
+    from app.models import ProductionStockTransaction, ManufacturedProduct, Account
+    
+    # Проверяем, является ли транзакция продажей готовой продукции
+    stock_tx_result = await db.execute(
+        select(ProductionStockTransaction).where(
+            ProductionStockTransaction.transaction_id == transaction_id,
+            ProductionStockTransaction.type == "SALE"
+        )
+    )
+    stock_tx = stock_tx_result.scalar_one_or_none()
+    
+    if stock_tx:
+        # Это производственная транзакция, возвращаем товар на склад
+        product_result = await db.execute(
+            select(ManufacturedProduct).where(ManufacturedProduct.id == stock_tx.product_id)
+        )
+        product = product_result.scalar_one_or_none()
+        if product:
+            # stock_tx.quantity отрицательное, так что вычитаем = прибавляем
+            product.current_stock -= stock_tx.quantity
+        
+        # Удаляем запись из production_stock_transactions
+        await db.delete(stock_tx)
+    
+    # 👇 ОСТАЛЬНОЙ КОД БЕЗ ИЗМЕНЕНИЙ 👇
     items_result = await db.execute(
         select(TransactionItem).where(TransactionItem.transaction_id == transaction_id)
         .options(selectinload(TransactionItem.product))
@@ -605,7 +631,7 @@ async def delete_transaction(
     if order_payment:
         order_id = order_payment.order_id
     
-    # ----- ДОБАВЛЯЕМ УДАЛЕНИЕ ЗАПИСИ ЖУРНАЛА -----
+    # Удаление записи журнала
     from app.models import JournalEntry
     journal_entry = await db.execute(
         select(JournalEntry).where(JournalEntry.transaction_id == transaction_id)
@@ -613,7 +639,6 @@ async def delete_transaction(
     journal_entry = journal_entry.scalar_one_or_none()
     if journal_entry:
         await db.delete(journal_entry)
-    # ------------------------------------------
     
     if current_user.role == UserRole.FOUNDER:
         if order_payment:

@@ -322,3 +322,106 @@ class JournalEntryResponse(BaseModel):
 
     class Config:
         from_attributes = True        
+
+# --- PRODUCTION ---
+
+class ManufacturedProductBase(BaseModel):
+    name: str
+    unit: str = "шт"
+    price: float = 0.0
+    recipe: Optional[str] = None
+    sort_order: int = 0
+
+class ManufacturedProductCreate(ManufacturedProductBase):
+    pass
+
+class ManufacturedProductUpdate(BaseModel):
+    name: Optional[str] = None
+    unit: Optional[str] = None
+    price: Optional[float] = None
+    recipe: Optional[str] = None
+    sort_order: Optional[int] = None
+
+class ManufacturedProductResponse(ManufacturedProductBase):
+    id: int
+    company_id: int
+    current_stock: float
+    created_at: datetime
+    updated_at: datetime
+    is_deleted: bool
+
+    class Config:
+        from_attributes = True
+
+class ProductionJournalEntryBase(BaseModel):
+    product_id: int
+    planned_quantity: float = 0.0
+    actual_quantity: float = 0.0
+    production_date: datetime
+    shift: str = "day"
+    worker_name: Optional[str] = None
+    notes: Optional[str] = None
+    status: str = "completed"
+
+class ProductionJournalEntryCreate(ProductionJournalEntryBase):
+    pass
+
+class ProductionJournalEntryUpdate(BaseModel):
+    planned_quantity: Optional[float] = None
+    actual_quantity: Optional[float] = None
+    production_date: Optional[datetime] = None
+    shift: Optional[str] = None
+    worker_name: Optional[str] = None
+    notes: Optional[str] = None
+    status: Optional[str] = None
+
+class ProductionJournalEntryResponse(ProductionJournalEntryBase):
+    id: int
+    company_id: int
+    created_by: int
+    created_at: datetime
+    updated_at: datetime
+    creator_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+class ProductionStockTransactionResponse(BaseModel):
+    id: int
+    company_id: int
+    product_id: int
+    type: str
+    quantity: float
+    price_per_unit: Optional[float] = None
+    journal_entry_id: Optional[int] = None
+    transaction_id: Optional[int] = None
+    created_at: datetime
+    created_by: int
+
+    class Config:
+        from_attributes = True
+
+class RecipeItem(BaseModel):
+    product_id: int
+    product_name: Optional[str] = None
+    quantity: float
+
+class ProductionProductWithRecipe(BaseModel):
+    product: ManufacturedProductResponse
+    recipe_items: List[RecipeItem] = []        
+
+class ProductionSellRequest(BaseModel):
+    product_id: int
+    quantity: float
+    amount: float
+    account_id: int
+    date: datetime
+    counterparty: Optional[str] = None    
+
+class ProductionProduceRequest(BaseModel):
+    product_id: int
+    quantity: float
+    production_date: datetime
+    shift: str = "day"
+    worker_name: Optional[str] = None
+    notes: Optional[str] = None    

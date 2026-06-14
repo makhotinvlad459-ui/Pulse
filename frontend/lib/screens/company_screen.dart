@@ -27,6 +27,7 @@ import '../services/websocket_service.dart';
 import 'package:frontend/l10n/app_localizations.dart';
 import '../widgets/company/journal/journal_tab.dart';
 import '../services/error/error_handler.dart';
+import '../widgets/company/production/production_tab.dart';
 
 class RainTheme {
   final Color color;
@@ -92,9 +93,11 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
     'showcase',
     'chat_tasks',
     'stock',
+    'production',
     'reports',
     'orders',
     'counterparties',
+    
     
   ];
 
@@ -113,7 +116,9 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
       case 'stock':
         return t.tabStock;
       case 'journal':
-        return t.tabJournal;  
+        return t.tabJournal;
+      case 'production':
+        return t.tabProduction;    
       case 'reports':
         return t.tabReports;
       case 'orders':
@@ -226,6 +231,11 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
         'edit_journal',
         'delete_journal',
         'complete_journal',
+        'view_production',
+        'create_production',
+        'edit_production',
+        'delete_production',
+        'manage_manufactured_products',
       };
     } else {
       effectivePermissions = _myPermissions;
@@ -261,6 +271,16 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
             ));
           }
           break;
+        case 'production':
+  if (effectivePermissions.contains('view_production')) {
+    newTabs.add(Tab(icon: const Icon(Icons.factory), text: t.tabProduction));
+    newWidgets.add(ProductionTab(
+      companyId: _company.id,
+      permissions: effectivePermissions,
+      onRefresh: _refresh,
+    ));
+  }
+  break;  
 
         case 'journal':
         if (effectivePermissions.contains('view_journal')) {

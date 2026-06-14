@@ -44,6 +44,7 @@ class _MemberPermissionsDialogState extends ConsumerState<MemberPermissionsDialo
     'counterparties': ['view_counterparties', 'edit_counterparties'],
     'orders': ['view_orders', 'edit_orders'],
     'journal': ['view_journal', 'create_journal', 'edit_journal', 'delete_journal', 'complete_journal'],
+    'production': ['view_production', 'create_production', 'edit_production', 'delete_production', 'manage_manufactured_products'],
   };
 
   @override
@@ -84,64 +85,70 @@ class _MemberPermissionsDialogState extends ConsumerState<MemberPermissionsDialo
   }
 
   String _translatePermissionName(String name, AppLocalizations t) {
-    switch (name) {
-      case 'view_operations': return t.permViewOperations;
-      case 'create_transaction': return t.permCreateTransaction;
-      case 'edit_transaction': return t.permEditTransaction;
-      case 'view_counterparties': return t.permViewCounterparties;
-      case 'edit_counterparties': return t.permEditCounterparties;
-      case 'view_showcase': return t.permViewShowcase;
-      case 'edit_showcase': return t.permEditShowcase;
-      case 'sell_from_showcase': return t.permSellFromShowcase;
-      case 'view_chat': return t.permViewChat;
-      case 'send_messages': return t.permSendMessages;
-      case 'view_tasks': return t.permViewTasks;
-      case 'create_task': return t.permCreateTask;
-      case 'edit_task': return t.permEditTask;
-      case 'view_products': return t.permViewProducts;
-      case 'create_product': return t.permCreateProduct;
-      case 'edit_product': return t.permEditProduct;
-      case 'view_materials': return t.permViewMaterials;
-      case 'create_material': return t.permCreateMaterial;
-      case 'edit_material': return t.permEditMaterial;
-      case 'view_reports': return t.permViewReports;
-      case 'manage_employees': return t.permManageEmployees;
-      case 'manage_permissions': return t.permManagePermissions;
-      case 'view_accounts': return t.permViewAccounts;
-      case 'create_account': return t.permCreateAccount;
-      case 'manage_categories': return t.permManageCategories;
-      case 'edit_company': return t.permEditCompany;
-      case 'view_archive': return t.permViewArchive;
-      case 'view_documents': return t.permViewDocuments;
-      case 'create_documents': return t.permCreateDocuments;
-      case 'edit_documents': return t.permEditDocuments;
-      case 'view_orders': return t.permViewOrders;
-      case 'edit_orders': return t.permEditOrders;
-      // Journal permissions
-      case 'view_journal': return t.permViewJournal;
-      case 'create_journal': return t.permCreateJournal;
-      case 'edit_journal': return t.permEditJournal;
-      case 'delete_journal': return t.permDeleteJournal;
-      case 'complete_journal': return t.permCompleteJournal;
-      default: return name;
-    }
+  switch (name) {
+    case 'view_operations': return t.permViewOperations;
+    case 'create_transaction': return t.permCreateTransaction;
+    case 'edit_transaction': return t.permEditTransaction;
+    case 'view_counterparties': return t.permViewCounterparties;
+    case 'edit_counterparties': return t.permEditCounterparties;
+    case 'view_showcase': return t.permViewShowcase;
+    case 'edit_showcase': return t.permEditShowcase;
+    case 'sell_from_showcase': return t.permSellFromShowcase;
+    case 'view_chat': return t.permViewChat;
+    case 'send_messages': return t.permSendMessages;
+    case 'view_tasks': return t.permViewTasks;
+    case 'create_task': return t.permCreateTask;
+    case 'edit_task': return t.permEditTask;
+    case 'view_products': return t.permViewProducts;
+    case 'create_product': return t.permCreateProduct;
+    case 'edit_product': return t.permEditProduct;
+    case 'view_materials': return t.permViewMaterials;
+    case 'create_material': return t.permCreateMaterial;
+    case 'edit_material': return t.permEditMaterial;
+    case 'view_reports': return t.permViewReports;
+    case 'manage_employees': return t.permManageEmployees;
+    case 'manage_permissions': return t.permManagePermissions;
+    case 'view_accounts': return t.permViewAccounts;
+    case 'create_account': return t.permCreateAccount;
+    case 'manage_categories': return t.permManageCategories;
+    case 'edit_company': return t.permEditCompany;
+    case 'view_archive': return t.permViewArchive;
+    case 'view_documents': return t.permViewDocuments;
+    case 'create_documents': return t.permCreateDocuments;
+    case 'edit_documents': return t.permEditDocuments;
+    case 'view_orders': return t.permViewOrders;
+    case 'edit_orders': return t.permEditOrders;
+    case 'view_journal': return t.permViewJournal;
+    case 'create_journal': return t.permCreateJournal;
+    case 'edit_journal': return t.permEditJournal;
+    case 'delete_journal': return t.permDeleteJournal;
+    case 'complete_journal': return t.permCompleteJournal;
+    // 👇 НОВЫЕ ПРАВА - ПЕРЕД default
+    case 'view_production': return t.permViewProduction;
+    case 'create_production': return t.permCreateProduction;
+    case 'edit_production': return t.permEditProduction;
+    case 'delete_production': return t.permDeleteProduction;
+    case 'manage_manufactured_products': return t.permManageManufacturedProducts;
+    default: return name;
   }
+}
 
   String _getGroupTitle(String groupKey, AppLocalizations t) {
-    switch (groupKey) {
-      case 'operations': return t.groupOperations;
-      case 'showcase': return t.groupShowcase;
-      case 'chat_tasks': return t.groupChatTasks;
-      case 'stock': return t.groupStock;
-      case 'reports': return t.groupReports;
-      case 'management': return t.groupManagement;
-      case 'documents': return t.groupDocuments;
-      case 'counterparties': return t.groupCounterparties;
-      case 'orders': return t.groupOrders;
-      case 'journal': return t.groupJournal;
-      default: return groupKey;
-    }
+  switch (groupKey) {
+    case 'operations': return t.groupOperations;
+    case 'showcase': return t.groupShowcase;
+    case 'chat_tasks': return t.groupChatTasks;
+    case 'stock': return t.groupStock;
+    case 'reports': return t.groupReports;
+    case 'management': return t.groupManagement;
+    case 'documents': return t.groupDocuments;
+    case 'counterparties': return t.groupCounterparties;
+    case 'orders': return t.groupOrders;
+    case 'journal': return t.groupJournal;
+    case 'production': return t.groupProduction;  // 👈 ДОБАВИТЬ
+    default: return groupKey;
   }
+}
 
   @override
   Widget build(BuildContext context) {

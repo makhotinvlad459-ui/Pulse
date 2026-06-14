@@ -1,31 +1,45 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, and_
+from sqlalchemy import select, update, delete, and_
 from typing import List, Optional
 from decimal import Decimal
+import json
+from datetime import datetime
+from sqlalchemy.orm import selectinload
+from app.models import Counterparty
+from app.routers.transactions import delete_transaction as base_delete_transaction
 
 from app.database import get_db
-from app.models import Company, ManufacturedProduct, ProductionJournalEntry, ProductionStockTransaction, ProductionTransactionType, Transaction, TransactionType, Account
-from app.schemas.production import (
-    ManufacturedProduct as ManufacturedProductSchema,
+from app.models import Company, ManufacturedProduct, ProductionJournalEntry, ProductionStockTransaction, ProductionTransactionType, Transaction, TransactionType, Account, Product, StockWriteOff, User
+from app.schemas import (
+    ManufacturedProductResponse,
     ManufacturedProductCreate,
     ManufacturedProductUpdate,
-    ProductionJournalEntry as ProductionJournalEntrySchema,
+    ProductionJournalEntryResponse,
     ProductionJournalEntryCreate,
     ProductionJournalEntryUpdate,
-    ProductionStockTransaction as ProductionStockTransactionSchema,
-    ProductionProductWithRecipe,
+    ProductionStockTransactionResponse,
     RecipeItem,
+    ProductionProductWithRecipe,
+    ProductionSellRequest,
+    ProductionProduceRequest,
 )
 from app.auth import get_current_user
-from app.models import User
-import json
 
 router = APIRouter(prefix="/production", tags=["production"])
 
 
-# ---------- Управление производимыми товарами ----------
-@router.get("/products", response_model=List[ManufacturedProductSchema])
+# ========== ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ КОНВЕРТАЦИИ ДАТ ==========
+def _to_naive(dt: datetime | None) -> datetime | None:
+    if dt is None:
+        return None
+    if dt.tzinfo is not None:
+        return dt.replace(tzinfo=None)
+    return dt
+
+
+# ========== УПРАВЛЕНИЕ ПРОИЗВОДИМЫМИ ТОВАРАМИ ==========
+@router.get("/products", response_model=List[ManufacturedProductResponse])
 async def get_manufactured_products(
     company_id: int = Query(...),
     db: AsyncSession = Depends(get_db),
@@ -42,7 +56,7 @@ async def get_manufactured_products(
     return products
 
 
-@router.post("/products", response_model=ManufacturedProductSchema)
+@router.post("/products", response_model=ManufacturedProductResponse)
 async def create_manufactured_product(
     product: ManufacturedProductCreate,
     company_id: int = Query(...),
@@ -50,9 +64,6 @@ async def create_manufactured_product(
     current_user: User = Depends(get_current_user),
 ):
     """Создать производимый товар"""
-    # Проверяем права доступа к компании
-    # ... (проверка членства)
-    
     new_product = ManufacturedProduct(
         company_id=company_id,
         name=product.name,
@@ -67,7 +78,7 @@ async def create_manufactured_product(
     return new_product
 
 
-@router.patch("/products/{product_id}", response_model=ManufacturedProductSchema)
+@router.patch("/products/{product_id}", response_model=ManufacturedProductResponse)
 async def update_manufactured_product(
     product_id: int,
     product: ManufacturedProductUpdate,
@@ -153,8 +164,6 @@ async def get_product_recipe(
     
     try:
         recipe_data = json.loads(product.recipe)
-        # Получаем названия продуктов
-        from app.models import Product
         result_items = []
         for item in recipe_data:
             prod_result = await db.execute(
@@ -171,15 +180,10 @@ async def get_product_recipe(
         return []
 
 
-# ---------- Производство (создание записи и списание со склада сырья) ----------
+# ========== ПРОИЗВОДСТВО ==========
 @router.post("/produce")
 async def produce_product(
-    product_id: int,
-    quantity: float,
-    production_date: str,
-    shift: str = "day",
-    worker_name: str = None,
-    notes: str = None,
+    data: ProductionProduceRequest,
     company_id: int = Query(...),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -192,9 +196,12 @@ async def produce_product(
     """
     from app.models import Product, StockWriteOff
     
+    # Конвертируем дату в naive
+    production_date = _to_naive(data.production_date)
+    
     # Получаем товар и его рецепт
     result = await db.execute(
-        select(ManufacturedProduct).where(ManufacturedProduct.id == product_id)
+        select(ManufacturedProduct).where(ManufacturedProduct.id == data.product_id)
     )
     product = result.scalar_one_or_none()
     if not product:
@@ -203,13 +210,13 @@ async def produce_product(
     # Создаем запись в журнале
     journal_entry = ProductionJournalEntry(
         company_id=company_id,
-        product_id=product_id,
-        planned_quantity=quantity,
-        actual_quantity=quantity,
+        product_id=data.product_id,
+        planned_quantity=data.quantity,
+        actual_quantity=data.quantity,
         production_date=production_date,
-        shift=shift,
-        worker_name=worker_name,
-        notes=notes,
+        shift=data.shift,
+        worker_name=data.worker_name,
+        notes=data.notes,
         status="completed",
         created_by=current_user.id,
     )
@@ -222,58 +229,50 @@ async def produce_product(
             recipe = json.loads(product.recipe)
             for item in recipe:
                 mat_product_id = item.get('product_id')
-                mat_quantity = float(item.get('quantity', 0)) * quantity
+                mat_quantity = Decimal(str(float(item.get('quantity', 0)) * data.quantity))
                 
-                # Получаем сырьевой товар
                 mat_result = await db.execute(
                     select(Product).where(Product.id == mat_product_id)
                 )
                 mat_product = mat_result.scalar_one_or_none()
                 if mat_product:
-                    # Списываем со склада
                     write_off = StockWriteOff(
                         company_id=company_id,
                         product_id=mat_product_id,
                         quantity=mat_quantity,
-                        reason=f"Производство: {product.name} x{quantity}",
+                        reason=f"Производство: {product.name} x{data.quantity}",
                         date=production_date,
                         created_by=current_user.id,
                     )
                     db.add(write_off)
-                    
-                    # Обновляем остаток
                     mat_product.current_quantity -= mat_quantity
         except json.JSONDecodeError:
             pass
     
     # Создаем транзакцию прихода на склад ГП
+    quantity_decimal = Decimal(str(data.quantity))
     stock_transaction = ProductionStockTransaction(
         company_id=company_id,
-        product_id=product_id,
+        product_id=data.product_id,
         type=ProductionTransactionType.PRODUCTION,
-        quantity=quantity,
+        quantity=quantity_decimal,
         journal_entry_id=journal_entry.id,
         created_by=current_user.id,
     )
     db.add(stock_transaction)
     
     # Обновляем остаток готовой продукции
-    product.current_stock += quantity
+    product.current_stock += quantity_decimal
     
     await db.commit()
     
-    return {"message": f"Produced {quantity} of {product.name}", "journal_entry_id": journal_entry.id}
+    return {"message": f"Produced {data.quantity} of {product.name}", "journal_entry_id": journal_entry.id}
 
 
-# ---------- Продажа готовой продукции ----------
+# ========== ПРОДАЖА ГОТОВОЙ ПРОДУКЦИИ ==========
 @router.post("/sell")
 async def sell_product(
-    product_id: int,
-    quantity: float,
-    amount: float,
-    account_id: int,
-    date: str,
-    counterparty: str = None,
+    data: ProductionSellRequest,
     company_id: int = Query(...),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -284,27 +283,52 @@ async def sell_product(
     2. Уменьшить остаток готовой продукции
     3. Создать финансовую транзакцию (доход)
     4. Создать запись в stock_transactions
+    5. Добавить контрагента в справочник (если указан и не существует)
     """
     # Получаем товар
     result = await db.execute(
-        select(ManufacturedProduct).where(ManufacturedProduct.id == product_id)
+        select(ManufacturedProduct).where(ManufacturedProduct.id == data.product_id)
     )
     product = result.scalar_one_or_none()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
     
-    if product.current_stock < quantity:
+    # Конвертируем дату в naive
+    date_naive = _to_naive(data.date)
+    
+    quantity_decimal = Decimal(str(data.quantity))
+    amount_decimal = Decimal(str(data.amount))
+    
+    if product.current_stock < quantity_decimal:
         raise HTTPException(status_code=400, detail="Not enough stock")
+    
+    # 👇 ДОБАВЛЯЕМ СОЗДАНИЕ КОНТРАГЕНТА 👇
+    if data.counterparty:
+        # Проверяем, существует ли уже такой контрагент
+        existing_cp = await db.execute(
+            select(Counterparty).where(
+                Counterparty.company_id == company_id,
+                Counterparty.name == data.counterparty
+            )
+        )
+        if not existing_cp.scalar_one_or_none():
+            new_counterparty = Counterparty(
+                company_id=company_id,
+                name=data.counterparty,
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow()
+            )
+            db.add(new_counterparty)
     
     # Создаем финансовую транзакцию
     transaction = Transaction(
         company_id=company_id,
-        account_id=account_id,
+        account_id=data.account_id,
         type="income",
-        amount=amount,
-        date=date,
-        description=f"Продажа готовой продукции: {product.name} x{quantity}",
-        counterparty=counterparty,
+        amount=amount_decimal,
+        date=date_naive,
+        description=f"Sale of finished product: {product.name} x{data.quantity}",
+        counterparty=data.counterparty,
         created_by=current_user.id,
     )
     db.add(transaction)
@@ -313,43 +337,46 @@ async def sell_product(
     # Создаем транзакцию расхода со склада ГП
     stock_transaction = ProductionStockTransaction(
         company_id=company_id,
-        product_id=product_id,
+        product_id=data.product_id,
         type=ProductionTransactionType.SALE,
-        quantity=-quantity,  # отрицательное количество для расхода
-        price_per_unit=amount / quantity if quantity > 0 else 0,
+        quantity=-quantity_decimal,
+        price_per_unit=amount_decimal / quantity_decimal if quantity_decimal > 0 else 0,
         transaction_id=transaction.id,
         created_by=current_user.id,
     )
     db.add(stock_transaction)
     
     # Обновляем остаток
-    product.current_stock -= quantity
+    product.current_stock -= quantity_decimal
     
     await db.commit()
     
     return {
-        "message": f"Sold {quantity} of {product.name}",
+        "message": f"Sold {data.quantity} of {product.name}",
         "transaction_id": transaction.id
     }
 
+# ========== ПРОИЗВОДСТВЕННЫЙ ЖУРНАЛ ==========
+from sqlalchemy.orm import selectinload
 
-# ---------- Производственный журнал ----------
-@router.get("/journal", response_model=List[ProductionJournalEntrySchema])
+@router.get("/journal", response_model=List[ProductionJournalEntryResponse])
 async def get_production_journal(
     company_id: int = Query(...),
-    start_date: Optional[str] = Query(None),
-    end_date: Optional[str] = Query(None),
+    start_date: Optional[datetime] = Query(None),
+    end_date: Optional[datetime] = Query(None),
     product_id: Optional[int] = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Получить записи производственного журнала"""
-    query = select(ProductionJournalEntry).where(ProductionJournalEntry.company_id == company_id)
+    query = select(ProductionJournalEntry).where(ProductionJournalEntry.company_id == company_id).options(selectinload(ProductionJournalEntry.creator))
     
-    if start_date:
-        query = query.where(ProductionJournalEntry.production_date >= start_date)
-    if end_date:
-        query = query.where(ProductionJournalEntry.production_date <= end_date)
+    start_naive = _to_naive(start_date)
+    end_naive = _to_naive(end_date)
+    
+    if start_naive:
+        query = query.where(ProductionJournalEntry.production_date >= start_naive)
+    if end_naive:
+        query = query.where(ProductionJournalEntry.production_date <= end_naive)
     if product_id:
         query = query.where(ProductionJournalEntry.product_id == product_id)
     
@@ -357,10 +384,14 @@ async def get_production_journal(
     
     result = await db.execute(query)
     entries = result.scalars().all()
+    
+    # Добавляем имя создателя
+    for entry in entries:
+        entry.creator_name = entry.creator.display_name if entry.creator else None
+    
     return entries
 
-
-@router.get("/journal/{entry_id}", response_model=ProductionJournalEntrySchema)
+@router.get("/journal/{entry_id}", response_model=ProductionJournalEntryResponse)
 async def get_production_journal_entry(
     entry_id: int,
     company_id: int = Query(...),
@@ -379,7 +410,7 @@ async def get_production_journal_entry(
     return entry
 
 
-@router.put("/journal/{entry_id}", response_model=ProductionJournalEntrySchema)
+@router.put("/journal/{entry_id}", response_model=ProductionJournalEntryResponse)
 async def update_production_journal_entry(
     entry_id: int,
     entry_data: ProductionJournalEntryUpdate,
@@ -387,7 +418,7 @@ async def update_production_journal_entry(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Обновить запись (только если не завершена)"""
+    """Обновить запись"""
     result = await db.execute(
         select(ProductionJournalEntry).where(
             ProductionJournalEntry.id == entry_id,
@@ -398,10 +429,12 @@ async def update_production_journal_entry(
     if not entry:
         raise HTTPException(status_code=404, detail="Entry not found")
     
-    # Нельзя редактировать завершенные записи? Или можно, но с пересчетом остатков?
-    # Пока просто обновляем
-    
     update_data = entry_data.model_dump(exclude_unset=True)
+    
+    # Конвертируем дату если есть
+    if 'production_date' in update_data and update_data['production_date']:
+        update_data['production_date'] = _to_naive(update_data['production_date'])
+    
     for key, value in update_data.items():
         setattr(entry, key, value)
     
@@ -443,19 +476,17 @@ async def delete_production_journal_entry(
         )
         product = product_result.scalar_one_or_none()
         if product:
-            product.current_stock -= entry.actual_quantity  # откатываем приход
+            product.current_stock -= entry.actual_quantity
         
-        # Удаляем stock_transaction
         await db.delete(stock_tx)
     
-    # Удаляем запись
     await db.delete(entry)
     await db.commit()
     
     return {"message": "Entry deleted"}
 
 
-# ---------- Статистика и остатки ----------
+# ========== СТАТИСТИКА И ОСТАТКИ ==========
 @router.get("/stock")
 async def get_production_stock(
     company_id: int = Query(...),
@@ -482,7 +513,7 @@ async def get_production_stock(
     ]
 
 
-@router.get("/stock/transactions", response_model=List[ProductionStockTransactionSchema])
+@router.get("/stock/transactions", response_model=List[ProductionStockTransactionResponse])
 async def get_stock_transactions(
     company_id: int = Query(...),
     product_id: Optional[int] = Query(None),
@@ -506,3 +537,60 @@ async def get_stock_transactions(
     result = await db.execute(query)
     transactions = result.scalars().all()
     return transactions
+
+@router.delete("/transaction/{transaction_id}")
+async def delete_production_transaction(
+    transaction_id: int,
+    company_id: int = Query(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Удаление транзакции продажи готовой продукции:
+    1. Найти связанную запись в production_stock_transactions
+    2. Вернуть товар на склад ГП
+    3. Обновить баланс счета
+    4. Удалить production_stock_transactions
+    5. Удалить транзакцию
+    """
+    # Находим транзакцию
+    trans_result = await db.execute(
+        select(Transaction).where(
+            Transaction.id == transaction_id,
+            Transaction.company_id == company_id,
+        )
+    )
+    transaction = trans_result.scalar_one_or_none()
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    
+    # Находим связанную запись в production_stock_transactions
+    stock_result = await db.execute(
+        select(ProductionStockTransaction).where(
+            ProductionStockTransaction.transaction_id == transaction_id
+        )
+    )
+    stock_tx = stock_result.scalar_one_or_none()
+    
+    if stock_tx and stock_tx.type == ProductionTransactionType.SALE:
+        # Возвращаем товар на склад ГП (quantity отрицательное, так что вычитаем = прибавляем)
+        product_result = await db.execute(
+            select(ManufacturedProduct).where(ManufacturedProduct.id == stock_tx.product_id)
+        )
+        product = product_result.scalar_one_or_none()
+        if product:
+            product.current_stock -= stock_tx.quantity  # было -1, вычитаем -1 = +1
+        
+        # Удаляем запись production_stock_transactions
+        await db.delete(stock_tx)
+    
+    # Обновляем баланс счета (уменьшаем на сумму транзакции)
+    account = await db.get(Account, transaction.account_id)
+    if account:
+        account.balance -= transaction.amount
+    
+    # Удаляем транзакцию
+    await db.delete(transaction)
+    await db.commit()
+    
+    return {"message": "Transaction deleted, stock returned"}
