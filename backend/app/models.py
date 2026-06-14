@@ -203,6 +203,10 @@ class Transaction(Base):
     counterparty: Mapped[str | None] = mapped_column(String(200), nullable=True)
     showcase_item_id: Mapped[int | None] = mapped_column(ForeignKey("showcase_items.id"), nullable=True)
     quantity: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    is_paid: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    payment_due_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    
     # relationships
     company: Mapped["Company"] = relationship(back_populates="transactions")
     account: Mapped["Account"] = relationship(foreign_keys=[account_id], back_populates="transactions_from")
