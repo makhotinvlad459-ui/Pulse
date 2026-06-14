@@ -8,6 +8,7 @@ from datetime import datetime
 from sqlalchemy.orm import selectinload
 from app.models import Counterparty
 from app.routers.transactions import delete_transaction as base_delete_transaction
+from app.routers.transactions import get_next_transaction_number
 
 from app.database import get_db
 from app.models import Company, ManufacturedProduct, ProductionJournalEntry, ProductionStockTransaction, ProductionTransactionType, Transaction, TransactionType, Account, Product, StockWriteOff, User
@@ -302,9 +303,8 @@ async def sell_product(
     if product.current_stock < quantity_decimal:
         raise HTTPException(status_code=400, detail="Not enough stock")
     
-    # 👇 ДОБАВЛЯЕМ СОЗДАНИЕ КОНТРАГЕНТА 👇
+    # Добавляем контрагента в справочник
     if data.counterparty:
-        # Проверяем, существует ли уже такой контрагент
         existing_cp = await db.execute(
             select(Counterparty).where(
                 Counterparty.company_id == company_id,
@@ -320,6 +320,9 @@ async def sell_product(
             )
             db.add(new_counterparty)
     
+    # Генерация номера операции (используем общую функцию)
+    new_number = await get_next_transaction_number(company_id, db)
+    
     # Создаем финансовую транзакцию
     transaction = Transaction(
         company_id=company_id,
@@ -331,6 +334,7 @@ async def sell_product(
         counterparty=data.counterparty,
         created_by=current_user.id,
         is_paid=data.is_paid,
+        number=new_number,  # 👈 ИСПОЛЬЗУЕМ СГЕНЕРИРОВАННЫЙ НОМЕР
     )
     db.add(transaction)
     await db.flush()

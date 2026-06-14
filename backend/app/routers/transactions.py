@@ -22,6 +22,16 @@ router = APIRouter(prefix="/transactions", tags=["transactions"], redirect_slash
 MAX_FILE_SIZE = 10 * 1024 * 1024
 ALLOWED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.txt'}
 
+
+
+async def get_next_transaction_number(company_id: int, db: AsyncSession) -> int:
+    last_num_result = await db.execute(
+        select(func.max(Transaction.number)).where(Transaction.company_id == company_id)
+    )
+    last_num = last_num_result.scalar() or 0
+    return last_num + 1
+
+
 async def _normalize_counterparty(company_id: int, name: str | None, db: AsyncSession) -> str | None:
     """Приводит имя контрагента к существующему в БД написанию (без учёта регистра).
        Если контрагент не найден, возвращает исходное имя."""
@@ -197,9 +207,7 @@ async def create_transaction(
             await db.flush()
     
     # Генерация номера операции
-    last_num_result = await db.execute(select(func.max(Transaction.number)).where(Transaction.company_id == company_id))
-    last_num = last_num_result.scalar() or 0
-    new_number = last_num + 1
+    new_number = await get_next_transaction_number(company_id, db)
     
     # Приводим дату
     if trans_data.date.tzinfo is not None:
