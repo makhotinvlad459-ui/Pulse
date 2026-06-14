@@ -393,27 +393,25 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
   }
 
   Future<void> _refreshCounters() async {
-    final api = ApiClient();
-    try {
-      final countsRes = await api.get('/notifications/unread-counts/');
-      final counts = countsRes.data as Map<String, dynamic>;
-      final companyIdStr = _company.id.toString();
-      if (counts.containsKey(companyIdStr)) {
-        final companyCounts = counts[companyIdStr] as Map<String, dynamic>;
-        setState(() {
-          _unreadMessagesCount = companyCounts['unread_messages'] ?? 0;
-          _pendingTasksCount = companyCounts['pending_tasks'] ?? 0;
-        });
-      } else {
-        setState(() {
-          _unreadMessagesCount = 0;
-          _pendingTasksCount = 0;
-        });
-      }
-    } catch (e) {
-      print('Error refreshing counters: $e');
+  final api = ApiClient();
+  try {
+    final countsRes = await api.get('/notifications/unread-counts/');
+    final counts = countsRes.data as Map<String, dynamic>?;
+    if (counts == null) return;
+    
+    final companyIdStr = _company.id.toString();
+    final companyCounts = counts[companyIdStr] as Map<String, dynamic>?;
+    
+    if (mounted) {
+      setState(() {
+        _unreadMessagesCount = companyCounts?['unread_messages'] ?? 0;
+        _pendingTasksCount = companyCounts?['pending_tasks'] ?? 0;
+      });
     }
+  } catch (e) {
+    print('Error refreshing counters: $e');
   }
+}
 
   void _onPendingTasksChanged(int pending) {
     if (mounted) setState(() => _pendingTasksCount = pending);
@@ -480,22 +478,26 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
   }
 
   Future<void> _loadMyPermissions() async {
-    final api = ApiClient();
-    try {
-      final res = await api.getMyPermissions(_company.id);
-      final perms = res['permissions'] as List?;
-      setState(() {
-        _myPermissions = (perms ?? []).cast<String>().toSet();
-        _permissionsLoaded = true;
-      });
-    } catch (e) {
-      print('Error loading permissions: $e');
+  final api = ApiClient();
+  try {
+    final res = await api.getMyPermissions(_company.id);
+    if (!mounted) return;
+    
+    final perms = res['permissions'] as List?;
+    setState(() {
+      _myPermissions = (perms ?? []).cast<String>().toSet();
+      _permissionsLoaded = true;
+    });
+  } catch (e) {
+    print('Error loading permissions: $e');
+    if (mounted) {
       setState(() {
         _myPermissions = {};
         _permissionsLoaded = true;
       });
     }
   }
+}
 
   Future<void> _refresh() async {
     await _loadData();
