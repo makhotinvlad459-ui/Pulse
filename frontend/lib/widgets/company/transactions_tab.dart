@@ -146,7 +146,6 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
   }
 
   String getAccountName(int? id) {
-    print('🔍 getAccountName called with id=$id, accounts length=${widget.accounts.length}');
     if (id == null) return '';
     if (widget.accounts.isEmpty) return '';
     try {
@@ -162,7 +161,6 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
       }
       return '$icon $name';
     } catch (e) {
-      print('❌ Error in getAccountName: $e');
       return '';
     }
   }
@@ -189,7 +187,6 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
   }
 
   String getCategoryName(int? id, AppLocalizations t) {
-    print('🔍 getCategoryName called with id=$id, categories length=${widget.categories.length}');
     if (id == null) return t.withoutCategory;
     if (widget.categories.isEmpty) return t.withoutCategory;
     try {
@@ -232,50 +229,41 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
   }
 
   Future<void> _permanentDeleteTransaction(int id) async {
-    final t = AppLocalizations.of(context)!;
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(t.permanentDeleteTitle),
-        content: Text(t.permanentDeleteContent),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: Text(t.cancel)),
-          TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: Text(t.delete, style: const TextStyle(color: Colors.red))),
-        ],
-      ),
-    );
-    if (confirm != true) return;
+  final t = AppLocalizations.of(context)!;
+  final confirm = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text(t.permanentDeleteTitle),
+      content: Text(t.permanentDeleteContent),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context, false), child: Text(t.cancel)),
+        TextButton(onPressed: () => Navigator.pop(context, true), child: Text(t.delete, style: const TextStyle(color: Colors.red))),
+      ],
+    ),
+  );
+  if (confirm != true) return;
+  
+  final api = ApiClient();
+  try {
+    await api.delete('/transactions/$id',
+        queryParameters: {'company_id': widget.companyId});
     
-    final api = ApiClient();
-    try {
-      await api.delete('/transactions/$id',
-          queryParameters: {'company_id': widget.companyId});
-      
-      if (!mounted) return;
-      
-      await widget.onRefresh();
-      
-      if (!mounted) return;
-      
-      await _loadTransactions();
-      
-      if (!mounted) return;
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(t.transactionDeleted)),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${t.error}: $e')),
-      );
-    }
+    if (!mounted) return;
+    await widget.onRefresh();
+    if (!mounted) return;
+    await _loadTransactions();
+    if (!mounted) return;
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(t.transactionDeleted)),
+    );
+  } catch (e) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('${t.error}: $e')),
+    );
   }
-
+}
   Future<void> _editTransaction(Transaction transaction) async {
     final t = AppLocalizations.of(context)!;
     if (!widget.isFounder && !widget.permissions.contains('edit_transaction')) return;
@@ -486,7 +474,10 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
     for (var trans in _transactions) {
       DateTime date = trans.date.toLocal();
       DateTime key = DateTime(date.year, date.month, date.day);
-      grouped.putIfAbsent(key, () => []).add(trans);
+      if (!grouped.containsKey(key)) {
+        grouped[key] = [];
+      }
+      grouped[key]!.add(trans);
     }
     var sortedDates = grouped.keys.toList()..sort((a, b) => b.compareTo(a));
 
@@ -523,24 +514,24 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
                       : RefreshIndicator(
                           onRefresh: _loadTransactions,
                           child: ListView.builder(
-  itemCount: sortedDates.length,
-  itemBuilder: (context, index) {
-    final date = sortedDates[index];
-    final dayTransactions = grouped[date];
-    if (dayTransactions == null) return const SizedBox.shrink();
-    
-    double turnover = 0;
-    double cashIncome = 0;
-    double nonCashIncome = 0;
-    for (var trans in dayTransactions) {
-      if (trans.type == 'income' && !trans.isDeleted) {
-        turnover += trans.amount;
-        String accType = _getAccountType(trans.accountId);
-        if (accType == 'cash') {
-          cashIncome += trans.amount;
-        } else if (accType == 'bank') {
-          nonCashIncome += trans.amount;
-        }
+                            itemCount: sortedDates.length,
+                            itemBuilder: (context, index) {
+                              final date = sortedDates[index];
+                              final dayTransactions = grouped[date];
+                              if (dayTransactions == null) return const SizedBox.shrink();
+                              
+                              double turnover = 0;
+                              double cashIncome = 0;
+                              double nonCashIncome = 0;
+                              for (var trans in dayTransactions) {
+                                if (trans.type == 'income' && !trans.isDeleted) {
+                                  turnover += trans.amount;
+                                  String accType = _getAccountType(trans.accountId);
+                                  if (accType == 'cash') {
+                                    cashIncome += trans.amount;
+                                  } else if (accType == 'bank') {
+                                    nonCashIncome += trans.amount;
+                                  }
                                 }
                               }
                               return Column(
@@ -586,6 +577,7 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
                                     final description = _translateDescription(trans.description ?? '', t);
                                     final displayCreatorName = trans.creatorName == 'Основатель' ? t.founderRole : trans.creatorName;
                                     final isPaid = trans.isPaid ?? false;
+                                    
                                     return Card(
                                       margin: const EdgeInsets.symmetric(
                                           vertical: 4, horizontal: 8),
