@@ -29,8 +29,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   void initState() {
     super.initState();
+    _clearInvalidTokens(); 
     _loadSavedCredentials();
   }
+
+Future<void> _clearInvalidTokens() async {
+  final storage = SecureStorage();
+  await storage.delete(key: 'access_token');
+  await storage.delete(key: 'refresh_token');
+  // Также обновляем заголовки Dio
+  final api = ApiClient();
+  api.clearAuth();
+  api.dio.options.headers.remove('Authorization');
+}
 
   Future<void> _loadSavedCredentials() async {
     final savedLogin = await _storage.read(key: 'saved_login');

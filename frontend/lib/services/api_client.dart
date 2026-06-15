@@ -115,11 +115,18 @@ class ApiClient {
 _dio.interceptors.add(LogInterceptor(responseBody: true, requestBody: true));
   }
 
-  void _redirectToLogin() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      navigatorKey.currentState?.pushNamedAndRemoveUntil('/login', (route) => false);
-    });
-  }
+  void clearAuth() {
+  _dio.options.headers.remove('Authorization');
+}
+
+  void _redirectToLogin() async {
+  await _storage.delete(key: 'access_token');
+  await _storage.delete(key: 'refresh_token');
+  _dio.options.headers.remove('Authorization'); // 👈 добавить
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    navigatorKey.currentState?.pushNamedAndRemoveUntil('/login', (route) => false);
+  });
+}
 
   String _getLocalizedErrorMessage(DioException e) {
   // Получаем локализацию

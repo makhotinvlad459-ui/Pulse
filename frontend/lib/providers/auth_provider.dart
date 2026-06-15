@@ -150,6 +150,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> logout() async {
     await _api.clearToken();
     await _storage.clearTokens(); // очищаем и refresh token
+    _api.clearAuth();
     WebSocketService().disconnectAll();
     state = AuthState();
   }
