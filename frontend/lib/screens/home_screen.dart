@@ -71,10 +71,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final colorScheme = Theme.of(context).colorScheme;
     final t = AppLocalizations.of(context)!;
     
-    // Определяем язык для выбора шрифта
     final isRussian = Localizations.localeOf(context).languageCode == 'ru';
-    final titleFont = isRussian ? GoogleFonts.roboto : GoogleFonts.playfairDisplay;
-    final subtitleFont = GoogleFonts.inter;
 
     ref.listen(StreamProvider((ref) => WebSocketService().userStream), (previous, next) {
       next.whenData((data) {
@@ -110,23 +107,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           period: const Duration(seconds: 2),
                           child: Text(
                             t.appTitle,
-                            style: titleFont(
-                              fontSize: 34,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 1.2,
+                            style: GoogleFonts.playfairDisplay(
+                              fontSize: 28,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.8,
                               color: colorScheme.onSurface,
                             ),
                           ),
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 3),
                         Shimmer.fromColors(
                           baseColor: colorScheme.onSurface.withOpacity(0.2),
                           highlightColor: colorScheme.onSurface.withOpacity(0.7),
                           period: const Duration(seconds: 2),
                           child: Text(
                             t.appSubtitle,
-                            style: subtitleFont(
-                              fontSize: 12,
+                            style: GoogleFonts.inter(
+                              fontSize: 10,
                               fontWeight: FontWeight.w400,
                               letterSpacing: 0.5,
                               color: colorScheme.onSurfaceVariant,

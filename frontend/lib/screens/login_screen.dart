@@ -53,7 +53,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (!mounted) return;
 
     if (success) {
-      // Сохранение учетных данных
       if (_rememberMe) {
         await _storage.write(key: 'saved_login', value: login);
         await _storage.write(key: 'saved_password', value: password);
@@ -64,7 +63,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         await _storage.write(key: 'remember_me', value: 'false');
       }
 
-      // Отправка FCM-токена
       try {
         final fcmToken = await FirebaseMessaging.instance.getToken();
         if (fcmToken != null) {
@@ -74,7 +72,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         print('Error sending FCM token: $e');
       }
 
-      // Синхронизация языка
       try {
         await authNotifier.syncLanguage(currentLocale.languageCode);
         print('Language synced: ${currentLocale.languageCode}');
@@ -172,24 +169,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           children: [
                             Text(
                               t?.appTitle ?? 'Pulse',
-                              style: GoogleFonts.orbitron(
-                                fontSize: 52,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 2,
+                              style: GoogleFonts.playfairDisplay(
+                                fontSize: 38,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 1,
                                 color: Colors.grey.shade800,
                               ),
                             ),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 6),
                             Shimmer.fromColors(
                               baseColor: Colors.grey.shade400,
                               highlightColor: Colors.grey.shade700,
                               period: const Duration(seconds: 2),
                               child: Text(
-                                t?.subtitle ?? 'Управляйте своим бизнесом',
-                                style: GoogleFonts.orbitron(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w500,
-                                  letterSpacing: 1.5,
+                                t?.subtitle ?? 'Managerial accounting for business',
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w400,
+                                  letterSpacing: 0.8,
                                   color: Colors.grey.shade600,
                                 ),
                               ),
@@ -206,8 +203,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   color: Colors.white.withOpacity(0.5),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
-                    side: BorderSide(
-                        color: Colors.white.withOpacity(0.3), width: 1),
+                    side: BorderSide(color: Colors.white.withOpacity(0.3), width: 1),
                   ),
                   child: Padding(
                     padding: const EdgeInsets.all(24.0),
@@ -219,21 +215,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           decoration: InputDecoration(
                             labelText: t?.loginLabel ?? 'Email или телефон',
                             labelStyle: TextStyle(color: Colors.grey.shade600),
-                            prefixIcon:
-                                Icon(Icons.person, color: Colors.grey.shade700),
+                            prefixIcon: Icon(Icons.person, color: Colors.grey.shade700),
                             filled: true,
                             fillColor: Colors.white.withOpacity(0.9),
                             border: const OutlineInputBorder(
-                              borderRadius:
-                                  BorderRadius.all(Radius.circular(8)),
+                              borderRadius: BorderRadius.all(Radius.circular(8)),
                             ),
                             enabledBorder: OutlineInputBorder(
-                              borderSide:
-                                  BorderSide(color: Colors.grey.shade400),
+                              borderSide: BorderSide(color: Colors.grey.shade400),
                             ),
                             focusedBorder: OutlineInputBorder(
-                              borderSide: BorderSide(
-                                  color: Colors.grey.shade700, width: 2),
+                              borderSide: BorderSide(color: Colors.grey.shade700, width: 2),
                             ),
                           ),
                         ),
@@ -245,12 +237,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           decoration: InputDecoration(
                             labelText: t?.passwordLabel ?? 'Пароль',
                             labelStyle: TextStyle(color: Colors.grey.shade600),
-                            prefixIcon:
-                                Icon(Icons.lock, color: Colors.grey.shade700),
+                            prefixIcon: Icon(Icons.lock, color: Colors.grey.shade700),
                             suffixIcon: IconButton(
-                              icon: Icon(_obscurePassword
-                                  ? Icons.visibility_off
-                                  : Icons.visibility),
+                              icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
                               onPressed: () {
                                 setState(() {
                                   _obscurePassword = !_obscurePassword;
@@ -260,16 +249,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             filled: true,
                             fillColor: Colors.white.withOpacity(0.9),
                             border: const OutlineInputBorder(
-                              borderRadius:
-                                  BorderRadius.all(Radius.circular(8)),
+                              borderRadius: BorderRadius.all(Radius.circular(8)),
                             ),
                             enabledBorder: OutlineInputBorder(
-                              borderSide:
-                                  BorderSide(color: Colors.grey.shade400),
+                              borderSide: BorderSide(color: Colors.grey.shade400),
                             ),
                             focusedBorder: OutlineInputBorder(
-                              borderSide: BorderSide(
-                                  color: Colors.grey.shade700, width: 2),
+                              borderSide: BorderSide(color: Colors.grey.shade700, width: 2),
                             ),
                           ),
                         ),
@@ -298,8 +284,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                   );
                                 },
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor:
-                                      Colors.grey.shade800.withOpacity(0.8),
+                                  backgroundColor: Colors.grey.shade800.withOpacity(0.8),
                                   foregroundColor: Colors.white,
                                   minimumSize: const Size(double.infinity, 48),
                                   shape: RoundedRectangleBorder(
@@ -310,8 +295,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               ),
                         const SizedBox(height: 16),
                         TextButton(
-                          onPressed: () =>
-                              Navigator.pushNamed(context, '/register'),
+                          onPressed: () => Navigator.pushNamed(context, '/register'),
                           style: TextButton.styleFrom(
                             foregroundColor: Colors.grey.shade900,
                           ),
@@ -324,8 +308,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ),
                         ),
                         TextButton(
-                          onPressed: () =>
-                              Navigator.pushNamed(context, '/forgot-password'),
+                          onPressed: () => Navigator.pushNamed(context, '/forgot-password'),
                           style: TextButton.styleFrom(
                             foregroundColor: Colors.grey.shade900,
                           ),
