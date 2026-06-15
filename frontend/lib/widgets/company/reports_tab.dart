@@ -23,6 +23,7 @@ import 'reports/operations_export_widget.dart';
 import 'reports/counterparty_movement_report.dart';
 import 'reports/cash_movement_report.dart';
 import 'reports/bank_movement_report.dart';
+import 'production_reports/production_reports_tab.dart';
 
 class ReportsTab extends ConsumerStatefulWidget {
   final int companyId;
@@ -440,202 +441,212 @@ class ReportsTabState extends ConsumerState<ReportsTab> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    ref.watch(localeProvider);
-    final t = AppLocalizations.of(context)!;
-    if (_loading) return const Center(child: CircularProgressIndicator());
-    final colorScheme = Theme.of(context).colorScheme;
+Widget build(BuildContext context) {
+  ref.watch(localeProvider);
+  final t = AppLocalizations.of(context)!;
+  if (_loading) return const Center(child: CircularProgressIndicator());
+  final colorScheme = Theme.of(context).colorScheme;
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          PeriodSelector(
-            periodMode: _periodMode,
-            onDay: () => _setPeriodForMode('day'),
-            onWeek: () => _setPeriodForMode('week'),
-            onMonth: () => _setPeriodForMode('month'),
-            onYear: () => _setPeriodForMode('year'),
-            onCustom: _selectCustomPeriod,
-            onPrevious: () => _shiftPeriod(-1),
-            onNext: () => _shiftPeriod(1),
-            showArrows: _periodMode != 'custom',
-          ),
-          const SizedBox(height: 16),
-          SummaryCards(income: _totalIncome, expense: _totalExpense, profit: _totalProfit),
-          const SizedBox(height: 24),
+  return SingleChildScrollView(
+    padding: const EdgeInsets.all(16),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        PeriodSelector(
+          periodMode: _periodMode,
+          onDay: () => _setPeriodForMode('day'),
+          onWeek: () => _setPeriodForMode('week'),
+          onMonth: () => _setPeriodForMode('month'),
+          onYear: () => _setPeriodForMode('year'),
+          onCustom: _selectCustomPeriod,
+          onPrevious: () => _shiftPeriod(-1),
+          onNext: () => _shiftPeriod(1),
+          showArrows: _periodMode != 'custom',
+        ),
+        const SizedBox(height: 16),
+        SummaryCards(income: _totalIncome, expense: _totalExpense, profit: _totalProfit),
+        const SizedBox(height: 24),
 
-          Text(t.dynamics, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          DynamicsChart(
-            incomeSpots: _incomeSpots,
-            expenseSpots: _expenseSpots,
-            xLabels: _xLabels,
-            onSpotTapped: _onSpotTapped,
-          ),
-          const SizedBox(height: 24),
+        Text(t.dynamics, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        DynamicsChart(
+          incomeSpots: _incomeSpots,
+          expenseSpots: _expenseSpots,
+          xLabels: _xLabels,
+          onSpotTapped: _onSpotTapped,
+        ),
+        const SizedBox(height: 24),
 
-          Text(t.cashVsNoncash, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          CashVsNoncashBar(cash: _cashVsNoncash['cash']!, noncash: _cashVsNoncash['noncash']!),
-          const SizedBox(height: 24),
+        Text(t.cashVsNoncash, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        CashVsNoncashBar(cash: _cashVsNoncash['cash']!, noncash: _cashVsNoncash['noncash']!),
+        const SizedBox(height: 24),
 
-          // Доходы по категориям
-          if (_incomeByCategory.isNotEmpty)
-            ExpansionTile(
-              title: Row(
-                children: [
-                  Text(t.incomeByCategory, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.download),
-                    onPressed: _exportIncomeCategories,
-                    tooltip: t.exportToExcel,
-                  ),
-                ],
-              ),
-              initiallyExpanded: false,
+        // Доходы по категориям
+        if (_incomeByCategory.isNotEmpty)
+          ExpansionTile(
+            title: Row(
               children: [
-                CategoriesColumn(
-                  data: _incomeByCategory,
-                  total: _totalIncome,
-                  color: Colors.green,
-                  companyId: widget.companyId,
-                  startDate: _startDate,
-                  endDate: _endDate,
-                  type: 'income',
-                  categories: widget.categories,
+                Text(t.incomeByCategory, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.download),
+                  onPressed: _exportIncomeCategories,
+                  tooltip: t.exportToExcel,
                 ),
               ],
             ),
-
-          // Расходы по категориям
-          if (_expenseByCategory.isNotEmpty)
-            ExpansionTile(
-              title: Row(
-                children: [
-                  Text(t.expenseByCategory, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.download),
-                    onPressed: _exportExpenseCategories,
-                    tooltip: t.exportToExcel,
-                  ),
-                ],
+            initiallyExpanded: false,
+            children: [
+              CategoriesColumn(
+                data: _incomeByCategory,
+                total: _totalIncome,
+                color: Colors.green,
+                companyId: widget.companyId,
+                startDate: _startDate,
+                endDate: _endDate,
+                type: 'income',
+                categories: widget.categories,
               ),
-              initiallyExpanded: false,
+            ],
+          ),
+
+        // Расходы по категориям
+        if (_expenseByCategory.isNotEmpty)
+          ExpansionTile(
+            title: Row(
               children: [
-                CategoriesColumn(
-                  data: _expenseByCategory,
-                  total: _totalExpense,
-                  color: Colors.red,
-                  companyId: widget.companyId,
-                  startDate: _startDate,
-                  endDate: _endDate,
-                  type: 'expense',
-                  categories: widget.categories,
+                Text(t.expenseByCategory, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.download),
+                  onPressed: _exportExpenseCategories,
+                  tooltip: t.exportToExcel,
                 ),
               ],
             ),
-
-          // Доходы и расходы по товарам
-          ExpansionTile(
-            title: Text(t.productIncomeExpense, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             initiallyExpanded: false,
             children: [
-              ProductTables(productIncome: _productIncome, productConsumption: _productConsumption),
-            ],
-          ),
-
-          // Продажи
-          ExpansionTile(
-            title: Text(t.sales, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            initiallyExpanded: false,
-            children: [
-              SalesTables(
-                productSales: _productSales,
-                showcaseSales: _showcaseSales,
-                activeTab: _activeSalesTab,
-                onTabChanged: (value) => setState(() => _activeSalesTab = value),
-              ),
-            ],
-          ),
-
-          // Расход материалов в заказах
-          ExpansionTile(
-            title: Text(t.materialConsumptionInOrders, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            initiallyExpanded: false,
-            children: [
-              MaterialConsumptionWidget(
+              CategoriesColumn(
+                data: _expenseByCategory,
+                total: _totalExpense,
+                color: Colors.red,
                 companyId: widget.companyId,
                 startDate: _startDate,
                 endDate: _endDate,
+                type: 'expense',
+                categories: widget.categories,
               ),
             ],
           ),
 
-          // Статистика по заказам
-          ExpansionTile(
-            title: Text(t.orderStatistics, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            initiallyExpanded: false,
-            children: [
-              OrderStatsWidget(
-                companyId: widget.companyId,
-                startDate: _startDate,
-                endDate: _endDate,
-              ),
-            ],
-          ),
+        // Доходы и расходы по товарам
+        ExpansionTile(
+          title: Text(t.productIncomeExpense, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          initiallyExpanded: false,
+          children: [
+            ProductTables(productIncome: _productIncome, productConsumption: _productConsumption),
+          ],
+        ),
 
-          // Контрагенты
-          ExpansionTile(
-            title: Text(t.counterparties, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            initiallyExpanded: false,
-            children: [
-              CounterpartiesReportWidget(
-                companyId: widget.companyId,
-                startDate: _startDate,
-                endDate: _endDate,
-              ),
-            ],
-          ),
+        // Продажи
+        ExpansionTile(
+          title: Text(t.sales, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          initiallyExpanded: false,
+          children: [
+            SalesTables(
+              productSales: _productSales,
+              showcaseSales: _showcaseSales,
+              activeTab: _activeSalesTab,
+              onTabChanged: (value) => setState(() => _activeSalesTab = value),
+            ),
+          ],
+        ),
 
-          // ДОПОЛНИТЕЛЬНЫЕ ОТЧЕТЫ
-          ExpansionTile(
-            title: Text(t.additionalReports),
-            leading: const Icon(Icons.more_horiz),
-            initiallyExpanded: false,
-            children: [
-              ExpansionTile(
-                leading: const Icon(Icons.receipt),
-                title: Text(t.operationsExportTitle),
-                children: [OperationsExportWidget(companyId: widget.companyId)],
-              ),
-              ExpansionTile(
-                leading: const Icon(Icons.inventory),
-                title: Text(t.productMovementTitle),
-                children: [ProductMovementReport(companyId: widget.companyId)],
-              ),
-              ExpansionTile(
-                leading: const Icon(Icons.people),
-                title: Text(t.counterpartyMovementTitle),
-                children: [CounterpartyMovementReport(companyId: widget.companyId)],
-              ),
-              ExpansionTile(
-                leading: const Icon(Icons.money),
-                title: Text(t.cashMovementTitle),
-                children: [CashAccountMovementReport(companyId: widget.companyId)],
-              ),
-              ExpansionTile(
-                leading: const Icon(Icons.account_balance),
-                title: Text(t.bankMovementTitle),
-                children: [BankAccountMovementReport(companyId: widget.companyId)],
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+        // Расход материалов в заказах
+        ExpansionTile(
+          title: Text(t.materialConsumptionInOrders, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          initiallyExpanded: false,
+          children: [
+            MaterialConsumptionWidget(
+              companyId: widget.companyId,
+              startDate: _startDate,
+              endDate: _endDate,
+            ),
+          ],
+        ),
+
+        // Статистика по заказам
+        ExpansionTile(
+          title: Text(t.orderStatistics, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          initiallyExpanded: false,
+          children: [
+            OrderStatsWidget(
+              companyId: widget.companyId,
+              startDate: _startDate,
+              endDate: _endDate,
+            ),
+          ],
+        ),
+
+        // Контрагенты
+        ExpansionTile(
+          title: Text(t.counterparties, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          initiallyExpanded: false,
+          children: [
+            CounterpartiesReportWidget(
+              companyId: widget.companyId,
+              startDate: _startDate,
+              endDate: _endDate,
+            ),
+          ],
+        ),
+
+        // ========== ПРОИЗВОДСТВЕННЫЕ ОТЧЕТЫ (НОВЫЕ) ==========
+        ExpansionTile(
+          title: Text(t.productionReports, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          leading: const Icon(Icons.factory),
+          initiallyExpanded: false,
+          children: [
+            ProductionReportsTab(companyId: widget.companyId),
+          ],
+        ),
+
+        // ДОПОЛНИТЕЛЬНЫЕ ОТЧЕТЫ
+        ExpansionTile(
+          title: Text(t.additionalReports),
+          leading: const Icon(Icons.more_horiz),
+          initiallyExpanded: false,
+          children: [
+            ExpansionTile(
+              leading: const Icon(Icons.receipt),
+              title: Text(t.operationsExportTitle),
+              children: [OperationsExportWidget(companyId: widget.companyId)],
+            ),
+            ExpansionTile(
+              leading: const Icon(Icons.inventory),
+              title: Text(t.productMovementTitle),
+              children: [ProductMovementReport(companyId: widget.companyId)],
+            ),
+            ExpansionTile(
+              leading: const Icon(Icons.people),
+              title: Text(t.counterpartyMovementTitle),
+              children: [CounterpartyMovementReport(companyId: widget.companyId)],
+            ),
+            ExpansionTile(
+              leading: const Icon(Icons.money),
+              title: Text(t.cashMovementTitle),
+              children: [CashAccountMovementReport(companyId: widget.companyId)],
+            ),
+            ExpansionTile(
+              leading: const Icon(Icons.account_balance),
+              title: Text(t.bankMovementTitle),
+              children: [BankAccountMovementReport(companyId: widget.companyId)],
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+}
 }

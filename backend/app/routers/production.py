@@ -11,7 +11,7 @@ from app.routers.transactions import delete_transaction as base_delete_transacti
 from app.routers.transactions import get_next_transaction_number
 
 from app.database import get_db
-from app.models import Company, ManufacturedProduct, ProductionJournalEntry, ProductionStockTransaction, ProductionTransactionType, Transaction, TransactionType, Account, Product, StockWriteOff, User
+from app.models import Company, ManufacturedProduct, ProductionJournalEntry, ProductionStockTransaction, ProductionTransactionType, Transaction, TransactionType, Account, Product, StockWriteOff, User,Counterparty
 from app.schemas import (
     ManufacturedProductResponse,
     ManufacturedProductCreate,
@@ -599,3 +599,264 @@ async def delete_production_transaction(
     await db.commit()
     
     return {"message": "Transaction deleted, stock returned"}
+
+@router.get("/sales-report")
+async def get_production_sales_report(
+    company_id: int = Query(...),
+    start_date: Optional[datetime] = Query(None),
+    end_date: Optional[datetime] = Query(None),
+    only_unpaid: bool = Query(False),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Отчет по продажам готовой продукции
+    Возвращает список продаж с информацией о продукте, сумме, счете, контрагенте и статусе оплаты
+    """
+    from sqlalchemy import and_, select, func
+    
+    # Конвертируем даты в naive
+    start_naive = _to_naive(start_date)
+    end_naive = _to_naive(end_date)
+    
+    # Запрос: связываем ProductionStockTransaction (SALE) с Transaction и ManufacturedProduct
+    query = (
+        select(
+            Transaction.id.label("transaction_id"),
+            Transaction.date,
+            Transaction.amount,
+            Transaction.is_paid,
+            Transaction.paid_at,
+            Transaction.counterparty,
+            Transaction.description,
+            Account.name.label("account_name"),
+            ManufacturedProduct.name.label("product_name"),
+            ManufacturedProduct.unit,
+            ProductionStockTransaction.quantity,
+            ProductionStockTransaction.price_per_unit,
+        )
+        .join(
+            ProductionStockTransaction,
+            ProductionStockTransaction.transaction_id == Transaction.id,
+        )
+        .join(
+            ManufacturedProduct,
+            ManufacturedProduct.id == ProductionStockTransaction.product_id,
+        )
+        .join(
+            Account,
+            Account.id == Transaction.account_id,
+        )
+        .where(
+            ProductionStockTransaction.type == ProductionTransactionType.SALE,
+            ProductionStockTransaction.company_id == company_id,
+            Transaction.company_id == company_id,
+            Transaction.is_deleted == False,
+        )
+    )
+    
+    # Фильтр по дате (по дате транзакции, а не создания)
+    if start_naive:
+        query = query.where(Transaction.date >= start_naive)
+    if end_naive:
+        query = query.where(Transaction.date <= end_naive)
+    
+    # Фильтр по оплате
+    if only_unpaid:
+        query = query.where(Transaction.is_paid == False)
+    
+    # Сортировка по дате (сначала новые)
+    query = query.order_by(Transaction.date.desc())
+    
+    result = await db.execute(query)
+    rows = result.all()
+    
+    # Формируем ответ
+    sales = []
+    for row in rows:
+        # quantity в ProductionStockTransaction хранится отрицательной для продаж
+        quantity = abs(row.quantity) if row.quantity else 0
+        amount = float(row.amount) if row.amount else 0
+        
+        sales.append({
+            "transaction_id": row.transaction_id,
+            "date": row.date.isoformat() if row.date else None,
+            "product_name": row.product_name,
+            "unit": row.unit or "шт",
+            "quantity": float(quantity),
+            "price_per_unit": float(row.price_per_unit) if row.price_per_unit else (amount / quantity if quantity > 0 else 0),
+            "amount": amount,
+            "account_name": row.account_name,
+            "counterparty": row.counterparty,
+            "is_paid": row.is_paid,
+            "paid_at": row.paid_at.isoformat() if row.paid_at else None,
+            "description": row.description,
+        })
+    
+    return sales
+
+@router.get("/sell-through-report")
+async def get_sell_through_report(
+    company_id: int = Query(...),
+    start_date: Optional[datetime] = Query(None),
+    end_date: Optional[datetime] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Отчет по продаваемости товаров
+    Показывает ВСЕ товары, у которых есть продажи или производство за период
+    """
+    start_naive = _to_naive(start_date)
+    end_naive = _to_naive(end_date)
+    
+    # Получаем ID товаров, которые продавались за период
+    sold_query = (
+        select(ManufacturedProduct.id, ManufacturedProduct.name, ManufacturedProduct.unit, ManufacturedProduct.current_stock)
+        .join(ProductionStockTransaction, ProductionStockTransaction.product_id == ManufacturedProduct.id)
+        .where(
+            ProductionStockTransaction.company_id == company_id,
+            ProductionStockTransaction.type == ProductionTransactionType.SALE,
+            ManufacturedProduct.is_deleted == False,
+        )
+    )
+    if start_naive:
+        sold_query = sold_query.where(ProductionStockTransaction.created_at >= start_naive)
+    if end_naive:
+        sold_query = sold_query.where(ProductionStockTransaction.created_at <= end_naive)
+    
+    sold_result = await db.execute(sold_query)
+    sold_products = {row.id: {'name': row.name, 'unit': row.unit or 'шт', 'stock': float(row.current_stock)} 
+                     for row in sold_result.all()}
+    
+    # Получаем ID товаров, которые производились за период
+    produced_query = (
+        select(ManufacturedProduct.id, ManufacturedProduct.name, ManufacturedProduct.unit, ManufacturedProduct.current_stock)
+        .join(ProductionJournalEntry, ProductionJournalEntry.product_id == ManufacturedProduct.id)
+        .where(
+            ProductionJournalEntry.company_id == company_id,
+            ManufacturedProduct.is_deleted == False,
+        )
+    )
+    if start_naive:
+        produced_query = produced_query.where(ProductionJournalEntry.production_date >= start_naive)
+    if end_naive:
+        produced_query = produced_query.where(ProductionJournalEntry.production_date <= end_naive)
+    
+    produced_result = await db.execute(produced_query)
+    produced_products = {row.id: {'name': row.name, 'unit': row.unit or 'шт', 'stock': float(row.current_stock)} 
+                         for row in produced_result.all()}
+    
+    # Объединяем уникальные ID из обоих источников
+    all_product_ids = set(sold_products.keys()) | set(produced_products.keys())
+    
+    report = []
+    for product_id in all_product_ids:
+        product_info = sold_products.get(product_id) or produced_products.get(product_id)
+        if not product_info:
+            continue
+        
+        # Считаем произведенное количество
+        produced_query = select(func.sum(ProductionJournalEntry.actual_quantity)).where(
+            ProductionJournalEntry.product_id == product_id,
+            ProductionJournalEntry.company_id == company_id,
+        )
+        if start_naive:
+            produced_query = produced_query.where(ProductionJournalEntry.production_date >= start_naive)
+        if end_naive:
+            produced_query = produced_query.where(ProductionJournalEntry.production_date <= end_naive)
+        produced_result = await db.execute(produced_query)
+        produced_quantity = float(produced_result.scalar() or 0)
+        
+        # Считаем проданное количество
+        sold_query = (
+            select(func.sum(func.abs(ProductionStockTransaction.quantity)))
+            .where(
+                ProductionStockTransaction.product_id == product_id,
+                ProductionStockTransaction.company_id == company_id,
+                ProductionStockTransaction.type == ProductionTransactionType.SALE,
+            )
+        )
+        if start_naive or end_naive:
+            sold_query = sold_query.join(Transaction, ProductionStockTransaction.transaction_id == Transaction.id)
+            if start_naive:
+                sold_query = sold_query.where(Transaction.date >= start_naive)
+            if end_naive:
+                sold_query = sold_query.where(Transaction.date <= end_naive)
+        sold_result = await db.execute(sold_query)
+        sold_quantity = float(sold_result.scalar() or 0)
+        
+        # Процент продаж (ограничиваем 100)
+        if produced_quantity > 0:
+            sell_through_percent = min((sold_quantity / produced_quantity * 100), 100)
+        else:
+            sell_through_percent = 0
+        
+        report.append({
+            "product_id": product_id,
+            "product_name": product_info['name'],
+            "unit": product_info['unit'],
+            "produced_quantity": round(produced_quantity, 3),
+            "sold_quantity": round(sold_quantity, 3),
+            "current_stock": round(product_info['stock'], 3),
+            "sell_through_percent": round(sell_through_percent, 1),
+        })
+    
+    # Сортируем по убыванию процента
+    report.sort(key=lambda x: x["sell_through_percent"], reverse=True)
+    
+    return report
+
+@router.patch("/sales/{transaction_id}/mark-paid")
+async def mark_sale_as_paid(
+    transaction_id: int,
+    company_id: int = Query(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Отметить продажу готовой продукции как оплаченную
+    """
+    # Проверяем, что транзакция существует и относится к компании
+    result = await db.execute(
+        select(Transaction).where(
+            Transaction.id == transaction_id,
+            Transaction.company_id == company_id,
+            Transaction.is_deleted == False,
+        )
+    )
+    transaction = result.scalar_one_or_none()
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    
+    if transaction.is_paid:
+        raise HTTPException(status_code=400, detail="Transaction already paid")
+    
+    # Проверяем, что это продажа готовой продукции
+    stock_result = await db.execute(
+        select(ProductionStockTransaction).where(
+            ProductionStockTransaction.transaction_id == transaction_id,
+            ProductionStockTransaction.type == ProductionTransactionType.SALE,
+        )
+    )
+    stock_tx = stock_result.scalar_one_or_none()
+    if not stock_tx:
+        raise HTTPException(status_code=400, detail="This transaction is not a production sale")
+    
+    # Отмечаем как оплаченную
+    transaction.is_paid = True
+    transaction.paid_at = datetime.utcnow()
+    
+    # Обновляем баланс счета
+    account = await db.get(Account, transaction.account_id)
+    if account:
+        account.balance += transaction.amount
+    
+    await db.commit()
+    
+    return {
+        "message": "Sale marked as paid",
+        "transaction_id": transaction.id,
+        "is_paid": transaction.is_paid,
+        "paid_at": transaction.paid_at.isoformat() if transaction.paid_at else None,
+    }
