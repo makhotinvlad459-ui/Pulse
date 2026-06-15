@@ -26,6 +26,8 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
+  bool _isLoading = false;
+
   @override
   void initState() {
     super.initState();
@@ -40,15 +42,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final token = await api.getToken();
     if (token == null) return;
     
-    WebSocketService().disconnectChat();
-    WebSocketService().disconnectTasks();
-    WebSocketService().disconnectUser();
-    WebSocketService().connectUser(user.id, token);
+    // Безопасное отключение старых соединений
+    try {
+      WebSocketService().disconnectChat();
+      WebSocketService().disconnectTasks();
+      WebSocketService().disconnectUser();
+    } catch (e) {
+      debugPrint('Error disconnecting WebSockets: $e');
+    }
+    
+    // Небольшая задержка перед подключением
+    await Future.delayed(const Duration(milliseconds: 100));
+    
+    try {
+      WebSocketService().connectUser(user.id, token);
+    } catch (e) {
+      debugPrint('Error connecting user WebSocket: $e');
+    }
   }
 
   @override
   void dispose() {
-    WebSocketService().disconnectUser();
+    try {
+      WebSocketService().disconnectUser();
+    } catch (e) {
+      debugPrint('Error disconnecting user WebSocket: $e');
+    }
     super.dispose();
   }
 
@@ -70,8 +89,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final videoPath = _getVideoPath(currentTheme);
     final colorScheme = Theme.of(context).colorScheme;
     final t = AppLocalizations.of(context)!;
-    
-    final isRussian = Localizations.localeOf(context).languageCode == 'ru';
 
     ref.listen(StreamProvider((ref) => WebSocketService().userStream), (previous, next) {
       next.whenData((data) {
@@ -330,13 +347,60 @@ class _CompanyCardState extends State<_CompanyCard> with SingleTickerProviderSta
     super.dispose();
   }
 
+  Future<void> _openCompany() async {
+    // Закрываем текущие WebSocket соединения перед переходом
+    try {
+      WebSocketService().disconnectChat();
+      WebSocketService().disconnectTasks();
+      WebSocketService().disconnectUser();
+    } catch (e) {
+      debugPrint('Error disconnecting WebSockets before navigation: $e');
+    }
+    
+    try {
+      await CompanyScreen.loadLibrary();
+      
+      if (!mounted) return;
+      
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => CompanyScreen.CompanyScreen(company: widget.company)),
+      );
+      
+      if (!mounted) return;
+      
+      // После возврата переподключаем WebSocket для HomeScreen
+      final authState = widget.ref.read(authProvider);
+      final user = authState.user;
+      if (user != null) {
+        final api = ApiClient();
+        final token = await api.getToken();
+        if (token != null) {
+          try {
+            WebSocketService().connectUser(user.id, token);
+          } catch (e) {
+            debugPrint('Error reconnecting user WebSocket: $e');
+          }
+        }
+      }
+      
+      widget.ref.invalidate(homeProvider);
+    } catch (e) {
+      debugPrint('Error loading company screen: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка загрузки: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final isDark = colorScheme.brightness == Brightness.dark;
     final borderBase = isDark ? Colors.grey.shade600 : Colors.grey.shade400;
     final borderLight = isDark ? Colors.grey.shade500 : Colors.grey.shade300;
-    final highlight = isDark ? Colors.white.withOpacity(0.6) : Colors.white.withOpacity(0.8);
     final t = AppLocalizations.of(context)!;
     final currency = t.currencySymbol;
 
@@ -350,7 +414,7 @@ class _CompanyCardState extends State<_CompanyCard> with SingleTickerProviderSta
         final gradient = LinearGradient(
           begin: start,
           end: end,
-          colors: [borderBase, highlight, borderLight],
+          colors: [borderBase, Colors.white.withOpacity(0.8), borderLight],
           stops: const [0.0, 0.5, 1.0],
         );
 
@@ -374,29 +438,7 @@ class _CompanyCardState extends State<_CompanyCard> with SingleTickerProviderSta
             child: Material(
               color: Colors.transparent,
               child: InkWell(
-                onTap: () async {
-                  await CompanyScreen.loadLibrary();
-                  
-                  await Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => CompanyScreen.CompanyScreen(company: widget.company)),
-                  );
-                  
-                  if (context.mounted) {
-                    final authState = widget.ref.read(authProvider);
-                    final user = authState.user;
-                    if (user != null) {
-                      final api = ApiClient();
-                      final token = await api.getToken();
-                      if (token != null) {
-                        WebSocketService().disconnectChat();
-                        WebSocketService().disconnectTasks();
-                        WebSocketService().connectUser(user.id, token);
-                      }
-                    }
-                    widget.ref.invalidate(homeProvider);
-                  }
-                },
+                onTap: _openCompany,
                 borderRadius: BorderRadius.circular(8),
                 splashColor: colorScheme.primary.withOpacity(0.2),
                 highlightColor: colorScheme.primary.withOpacity(0.1),
@@ -571,7 +613,11 @@ class SettingsDrawer extends StatelessWidget {
       await api.deleteMyAccount(passwordController.text);
       final ref = ProviderScope.containerOf(context).read(authProvider.notifier);
       await ref.logout();
-      WebSocketService().disconnectAll();
+      try {
+        WebSocketService().disconnectAll();
+      } catch (e) {
+        debugPrint('Error disconnecting WebSockets: $e');
+      }
       if (context.mounted) {
         Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -725,7 +771,11 @@ class SettingsDrawer extends StatelessWidget {
             title: Text(t.logout, style: const TextStyle(color: Colors.red)),
             onTap: () async {
               Navigator.pop(context);
-              WebSocketService().disconnectAll();
+              try {
+                WebSocketService().disconnectAll();
+              } catch (e) {
+                debugPrint('Error disconnecting WebSockets: $e');
+              }
               await ref.logout();
               if (context.mounted) {
                 Navigator.pushReplacementNamed(context, '/login');
