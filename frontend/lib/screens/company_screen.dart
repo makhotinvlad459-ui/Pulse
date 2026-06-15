@@ -128,6 +128,41 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
     }
   }
 
+  // ==================== ЕДИНЫЙ МЕТОД ДЛЯ ПРАВ ДОСТУПА ====================
+  Set<String> _getEffectivePermissions() {
+    final authState = ref.read(authProvider);
+    final isFounder = authState.user?.role == UserRole.founder;
+    
+    if (isFounder) {
+      return {
+        'view_operations',
+        'view_showcase',
+        'view_chat',
+        'view_tasks',
+        'view_products',
+        'view_reports',
+        'view_documents',
+        'view_requests',
+        'view_orders',
+        'edit_orders',
+        'view_accounts',
+        'view_counterparties',
+        'edit_counterparties',
+        'view_journal',
+        'create_journal',
+        'edit_journal',
+        'delete_journal',
+        'complete_journal',
+        'view_production',
+        'create_production',
+        'edit_production',
+        'delete_production',
+        'manage_manufactured_products',
+      };
+    }
+    return _myPermissions;
+  }
+
   Future<void> _loadTabOrder() async {
     final prefs = await SharedPreferences.getInstance();
     final saved = prefs.getStringList('tab_order_${_company.id}');
@@ -137,13 +172,9 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
       for (var key in _allTabKeys) {
         if (!validKeys.contains(key)) validKeys.add(key);
       }
-      setState(() {
-        _tabOrder = validKeys;
-      });
+      _tabOrder = validKeys;
     } else {
-      setState(() {
-        _tabOrder = List.from(_allTabKeys);
-      });
+      _tabOrder = List.from(_allTabKeys);
     }
     _rebuildTabs();
   }
@@ -151,9 +182,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
   Future<void> _saveTabOrder(List<String> newOrder) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList('tab_order_${_company.id}', newOrder);
-    setState(() {
-      _tabOrder = newOrder;
-    });
+    _tabOrder = newOrder;
     _rebuildTabs();
   }
 
@@ -206,38 +235,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
 
   void _rebuildTabs() {
     final t = AppLocalizations.of(context)!;
-    final authState = ref.read(authProvider);
-    final isFounder = authState.user?.role == UserRole.founder;
-    Set<String> effectivePermissions;
-    if (isFounder) {
-      effectivePermissions = {
-        'view_operations',
-        'view_showcase',
-        'view_chat',
-        'view_tasks',
-        'view_products',
-        'view_reports',
-        'view_documents',
-        'view_requests',
-        'view_orders',
-        'edit_orders',
-        'view_accounts',
-        'view_counterparties',
-        'edit_counterparties',
-        'view_journal',
-        'create_journal',
-        'edit_journal',
-        'delete_journal',
-        'complete_journal',
-        'view_production',
-        'create_production',
-        'edit_production',
-        'delete_production',
-        'manage_manufactured_products',
-      };
-    } else {
-      effectivePermissions = _myPermissions;
-    }
+    final effectivePermissions = _getEffectivePermissions();
 
     final List<Tab> newTabs = [];
     final List<Widget> newWidgets = [];
@@ -253,7 +251,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
               onRefresh: _refresh,
               accounts: _accounts,
               categories: _categories,
-              isFounder: isFounder,
+              isFounder: ref.read(authProvider).user?.role == UserRole.founder,
               permissions: effectivePermissions,
             ));
           }
@@ -330,7 +328,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
             newWidgets.add(OrdersTab(
               companyId: _company.id,
               permissions: effectivePermissions,
-              isFounder: isFounder,
+              isFounder: ref.read(authProvider).user?.role == UserRole.founder,
               onDataChanged: _updateAll,
             ));
           }
@@ -348,14 +346,19 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
       }
     }
 
-    setState(() {
-      _tabs = newTabs;
-      _tabWidgets = newWidgets;
-      if (_tabController.length != _tabs.length) {
+    // Обновляем состояние только если есть изменения
+    if (_tabs.length != newTabs.length || _tabs != newTabs) {
+      // Удаляем старый контроллер перед созданием нового
+      if (_tabController.length != newTabs.length) {
         _tabController.dispose();
-        _tabController = TabController(length: _tabs.length, vsync: this);
+        _tabController = TabController(length: newTabs.length, vsync: this);
       }
-    });
+      
+      setState(() {
+        _tabs = newTabs;
+        _tabWidgets = newWidgets;
+      });
+    }
   }
 
   @override
@@ -371,11 +374,19 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
 
   @override
   void dispose() {
+    // Закрываем WebSocket соединения с try-catch
+    try {
+      WebSocketService().disconnectChat();
+    } catch (e) {
+      debugPrint('Error disconnecting chat: $e');
+    }
+    try {
+      WebSocketService().disconnectTasks();
+    } catch (e) {
+      debugPrint('Error disconnecting tasks: $e');
+    }
+    
     _tabController.dispose();
-    WebSocketService().disconnectChat();
-    WebSocketService().disconnectTasks();
-    // ❌ УДАЛЯЕМ ОШИБОЧНЫЙ Navigator.pop
-    // if (_hasChanges) Navigator.pop(context, true);
     super.dispose();
   }
 
@@ -386,32 +397,47 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
     final api = ApiClient();
     final token = await api.getToken();
     if (token == null) return;
-    
-    WebSocketService().connectUser(user.id, token);
-    WebSocketService().connectChat(_company.id, token);
-    WebSocketService().connectTasks(_company.id, token);
+
+    // Каждое подключение в отдельном try-catch
+    try {
+      WebSocketService().connectUser(user.id, token);
+    } catch (e) {
+      debugPrint('WS User error: $e');
+    }
+
+    try {
+      WebSocketService().connectChat(_company.id, token);
+    } catch (e) {
+      debugPrint('WS Chat error: $e');
+    }
+
+    try {
+      WebSocketService().connectTasks(_company.id, token);
+    } catch (e) {
+      debugPrint('WS Tasks error: $e');
+    }
   }
 
   Future<void> _refreshCounters() async {
-  final api = ApiClient();
-  try {
-    final countsRes = await api.get('/notifications/unread-counts/');
-    final counts = countsRes.data as Map<String, dynamic>?;
-    if (counts == null) return;
-    
-    final companyIdStr = _company.id.toString();
-    final companyCounts = counts[companyIdStr] as Map<String, dynamic>?;
-    
-    if (mounted) {
-      setState(() {
-        _unreadMessagesCount = companyCounts?['unread_messages'] ?? 0;
-        _pendingTasksCount = companyCounts?['pending_tasks'] ?? 0;
-      });
+    final api = ApiClient();
+    try {
+      final countsRes = await api.get('/notifications/unread-counts/');
+      final counts = countsRes.data as Map<String, dynamic>?;
+      if (counts == null) return;
+      
+      final companyIdStr = _company.id.toString();
+      final companyCounts = counts[companyIdStr] as Map<String, dynamic>?;
+      
+      if (mounted) {
+        setState(() {
+          _unreadMessagesCount = companyCounts?['unread_messages'] ?? 0;
+          _pendingTasksCount = companyCounts?['pending_tasks'] ?? 0;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error refreshing counters: $e');
     }
-  } catch (e) {
-    print('Error refreshing counters: $e');
   }
-}
 
   void _onPendingTasksChanged(int pending) {
     if (mounted) setState(() => _pendingTasksCount = pending);
@@ -465,6 +491,9 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
       
       await _refreshCounters();
       await _loadMyPermissions();
+      
+      // Перестраиваем вкладки после загрузки данных
+      _rebuildTabs();
     } catch (e) {
       setState(() => _loading = false);
       if (mounted) {
@@ -478,26 +507,29 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
   }
 
   Future<void> _loadMyPermissions() async {
-  final api = ApiClient();
-  try {
-    final res = await api.getMyPermissions(_company.id);
-    if (!mounted) return;
-    
-    final perms = res['permissions'] as List?;
-    setState(() {
-      _myPermissions = (perms ?? []).cast<String>().toSet();
-      _permissionsLoaded = true;
-    });
-  } catch (e) {
-    print('Error loading permissions: $e');
-    if (mounted) {
+    final api = ApiClient();
+    try {
+      final res = await api.getMyPermissions(_company.id);
+      if (!mounted) return;
+      
+      final perms = res['permissions'] as List?;
       setState(() {
-        _myPermissions = {};
+        _myPermissions = (perms ?? []).cast<String>().toSet();
         _permissionsLoaded = true;
       });
+      
+      // Перестраиваем вкладки после загрузки прав
+      _rebuildTabs();
+    } catch (e) {
+      debugPrint('Error loading permissions: $e');
+      if (mounted) {
+        setState(() {
+          _myPermissions = {};
+          _permissionsLoaded = true;
+        });
+      }
     }
   }
-}
 
   Future<void> _refresh() async {
     await _loadData();
@@ -529,6 +561,41 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
     setState(() {});
   }
 
+  Future<void> _confirmDeleteCompany() async {
+    final t = AppLocalizations.of(context)!;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(t.deleteCompanyConfirmTitle),
+        content: Text(t.deleteCompanyConfirmContent),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(t.cancel)),
+          TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(t.delete, style: const TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      final api = ApiClient();
+      try {
+        await api.delete('/companies/${_company.id}');
+        if (mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text(t.companyDeleted)));
+          Navigator.pop(context, true);
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     ref.watch(localeProvider);
@@ -538,8 +605,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
     final t = AppLocalizations.of(context)!;
 
     final isFounder = authState.user?.role == UserRole.founder;
-    final currentUserRole = _company.currentUserRole;
-    final isManager = currentUserRole == 'manager';
+    final effectivePermissions = _getEffectivePermissions();
 
     final gridColor = getGridColor(currentTheme, colorScheme);
     final rain = getRainTheme(currentTheme);
@@ -560,25 +626,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
       );
     }
 
-    Set<String> effectivePermissions = _myPermissions;
-    if (isFounder) {
-      effectivePermissions = {
-        'view_operations',
-        'view_showcase',
-        'view_chat',
-        'view_tasks',
-        'view_products',
-        'view_reports',
-        'view_documents',
-        'view_requests',
-        'view_orders',
-        'edit_orders',
-        'view_accounts',
-        'view_counterparties',
-        'edit_counterparties'
-      };
-    }
-
+    // Определяем видимость кнопок меню
     final showMenu = isFounder ||
         effectivePermissions.contains('manage_employees') ||
         effectivePermissions.contains('manage_permissions');
@@ -596,10 +644,6 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
         (isFounder || effectivePermissions.contains('view_archive')) &&
             _archiveAccountId != null;
     final showDeleteCompany = isFounder;
-
-    if (_tabOrder.isNotEmpty) {
-      _rebuildTabs();
-    }
 
     return PopScope(
       canPop: false,
@@ -862,41 +906,6 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
         ),
       ),
     );
-  }
-
-  Future<void> _confirmDeleteCompany() async {
-    final t = AppLocalizations.of(context)!;
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(t.deleteCompanyConfirmTitle),
-        content: Text(t.deleteCompanyConfirmContent),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: Text(t.cancel)),
-          TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: Text(t.delete, style: const TextStyle(color: Colors.red))),
-        ],
-      ),
-    );
-    if (confirm == true) {
-      final api = ApiClient();
-      try {
-        await api.delete('/companies/${_company.id}');
-        if (mounted) {
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text(t.companyDeleted)));
-          Navigator.pop(context, true);
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text('${t.error}: $e')));
-        }
-      }
-    }
   }
 }
 
