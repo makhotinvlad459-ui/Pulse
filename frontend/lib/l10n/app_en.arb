@@ -945,6 +945,19 @@
 "paymentStatus": "Payment status",
 "debt": "Debt",
 "appTitle": "Pulse of Money",
-"appSubtitle": "Managerial accounting for business"
+"appSubtitle": "Managerial accounting for business",
+ "appTitle": "Pulse",
+  "subtitle": "Managerial accounting for business",
+  "loginLabel": "Email or phone",
+  "passwordLabel": "Password",
+  "rememberMe": "Remember me",
+  "signIn": "Sign In",
+  "noAccount": "Don't have an account? Sign up",
+  "forgotPassword": "Forgot password?",
+  "developerInfo": "App developed by Individual Entrepreneur Makhotin V.A.",
+  "appPurpose": "For managerial accounting of any number of enterprises",
+  "contactLabel": "All questions and suggestions send to:",
+  "contactEmail": "finance.pulsemoney@gmail.com",
+  "emailCopied": "Email copied"
 
 }

@@ -10,6 +10,7 @@ import '../widgets/video_background.dart';
 import 'package:frontend/l10n/app_localizations.dart';
 import '../services/api_client.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/services.dart'; 
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -318,6 +319,135 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                   ),
                 ),
+                
+                // ==================== КОНТАКТНАЯ ИНФОРМАЦИЯ ====================
+                const SizedBox(height: 32),
+
+Container(
+  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+  decoration: BoxDecoration(
+    color: Colors.black.withOpacity(0.35),
+    borderRadius: BorderRadius.circular(12),
+    border: Border.all(
+      color: Colors.white.withOpacity(0.2),
+      width: 0.8,
+    ),
+  ),
+  child: Column(
+    children: [
+      // Строка: разработчик
+      Text(
+        t?.developerInfo ?? 'Приложение разработано Индивидуальным предпринимателем Махотиным В.А',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: 10,
+          color: Colors.white.withOpacity(0.85),
+          fontWeight: FontWeight.w500,
+          letterSpacing: 0.3,
+        ),
+      ),
+      
+      const SizedBox(height: 6),
+      
+      // Строка: назначение приложения
+      Text(
+        t?.appPurpose ?? 'для ведения управленческого учета любого количества предприятий',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: 9,
+          color: Colors.white.withOpacity(0.65),
+          fontWeight: FontWeight.w400,
+          fontStyle: FontStyle.italic,
+        ),
+      ),
+      
+      const SizedBox(height: 12),
+      
+      // Разделитель
+      Container(
+        height: 0.5,
+        width: 60,
+        color: Colors.white.withOpacity(0.25),
+      ),
+      
+      const SizedBox(height: 10),
+      
+      // Лейбл: вопросы и предложения
+      Text(
+        t?.contactLabel ?? 'Все вопросы и предложения отправляйте:',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: 9,
+          color: Colors.white.withOpacity(0.7),
+          fontWeight: FontWeight.w400,
+        ),
+      ),
+      
+      const SizedBox(height: 6),
+      
+      // Email (кликабельный с копированием)
+      GestureDetector(
+        onTap: () {
+          // Копирование email в буфер обмена
+          Clipboard.setData(
+            const ClipboardData(text: 'finance.pulsemoney@gmail.com'),
+          );
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                t?.emailCopied ?? 'Email скопирован',
+                style: const TextStyle(fontSize: 13),
+              ),
+              duration: const Duration(seconds: 2),
+              backgroundColor: Colors.black87,
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.all(16),
+            ),
+          );
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.email_outlined,
+                size: 14,
+                color: Colors.white.withOpacity(0.9),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                t?.contactEmail ?? 'finance.pulsemoney@gmail.com',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.white.withOpacity(0.95),
+                  fontWeight: FontWeight.w500,
+                  decoration: TextDecoration.underline,
+                  decorationColor: Colors.white.withOpacity(0.5),
+                  letterSpacing: 0.3,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Icon(
+                Icons.copy,
+                size: 12,
+                color: Colors.white.withOpacity(0.6),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ],
+  ),
+),
+                // ==============================================================
+                
+                const SizedBox(height: 16),
               ],
             ),
           ),

@@ -945,7 +945,20 @@
 "paymentStatus": "Статус оплаты",
 "debt": "Задолженность",
 "appTitle": "ПУЛЬС БИЗНЕСА",
-"appSubtitle": "Управленческий учет для бизнеса"
+"appSubtitle": "Управленческий учет для бизнеса",
+ "appTitle": "Pulse",
+  "subtitle": "Управленческий учет для бизнеса",
+  "loginLabel": "Email или телефон",
+  "passwordLabel": "Пароль",
+  "rememberMe": "Запомнить меня",
+  "signIn": "Войти",
+  "noAccount": "Нет аккаунта? Зарегистрируйтесь",
+  "forgotPassword": "Забыли пароль?",
+  "developerInfo": "Приложение разработано Индивидуальным предпринимателем Махотиным В.А",
+  "appPurpose": "для ведения управленческого учета любого количества предприятий",
+  "contactLabel": "Все вопросы и предложения отправляйте:",
+  "contactEmail": "finance.pulsemoney@gmail.com",
+  "emailCopied": "Email скопирован"
 }
 
   
