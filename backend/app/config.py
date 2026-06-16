@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     DB_VOLUME: str = "postgres_data"
     REDIS_URL: str = "redis://redis:6379/0"
 
+     # ========== YOOKASSA ==========
+    YOOKASSA_SHOP_ID: str = ""
+    YOOKASSA_SECRET_KEY: str = ""
+
+
     # ========== FIREBASE STORAGE ==========
     FIREBASE_KEY_PATH: str = "firebase-key.json"
     FIREBASE_STORAGE_BUCKET: str = ""
