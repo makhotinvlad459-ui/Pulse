@@ -1002,6 +1002,10 @@
 "unknown": "Unknown",
 "perShift": "shift",
 "shiftsCount": "Shifts",
-"avgPerShift": "Avg per shift"
+"avgPerShift": "Avg per shift",
+"halfYearTitle": "6 months",
+"halfYearSubtitle": "Save 300 ",
+"months": "months",
+"halfYearDescription": "Save 300 "
 
 }

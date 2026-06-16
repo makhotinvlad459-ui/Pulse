@@ -1001,7 +1001,11 @@
 "unknown": "Неизвестно",
 "perShift": "смену",
 "shiftsCount": "Смен",
-"avgPerShift": "Средняя за смену"
+"avgPerShift": "Средняя за смену",
+"halfYearTitle": "6 месяцев",
+"halfYearSubtitle": "Экономия 300 ",
+"months": "месяцев",
+"halfYearDescription": "Экономия 300 ₽"
 }
 
   
