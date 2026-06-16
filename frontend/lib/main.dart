@@ -1,3 +1,4 @@
+import 'dart:async'; 
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -66,18 +67,13 @@ void _initFirebaseInBackground() {
             
         if (token != null && token.isNotEmpty) {
           print('✅ [FCM] Токен получен: $token');
-          // Можно сохранить токен на сервер, если нужно
         } else {
           print('⚠️ [FCM] Токен не получен (пустой)');
         }
-      } on TimeoutException {
-        print('⏱️ [FCM] Таймаут при получении токена (пропускаем)');
       } catch (e) {
         print('⚠️ [FCM] Ошибка при получении токена: $e');
       }
 
-    } on TimeoutException {
-      print('⏱️ [FCM] Таймаут инициализации Firebase (пропускаем)');
     } catch (e, stack) {
       print('❌ [FCM] Ошибка инициализации Firebase: $e');
       print('Stack: $stack');
@@ -96,12 +92,10 @@ class _MyAppState extends ConsumerState<MyApp> {
   @override
   void initState() {
     super.initState();
-    // Инициализация уведомлений (тоже неблокирующая)
     _initNotifications();
   }
 
   void _initNotifications() {
-    // Запускаем без ожидания
     Future.microtask(() async {
       try {
         await PushNotificationsService.init();
