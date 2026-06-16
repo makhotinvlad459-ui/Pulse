@@ -4,7 +4,7 @@ import '../providers/locale_provider.dart';
 import 'package:frontend/l10n/app_localizations.dart';
 import '../services/error/error_handler.dart';
 import '../payment/payment.dart';
-import '../services/api_client.dart';  // ← ДОБАВЛЕНО
+import '../services/api_client.dart';
 
 class SubscriptionScreen extends ConsumerStatefulWidget {
   const SubscriptionScreen({super.key});
@@ -25,7 +25,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
   }
 
   Future<void> _loadStatus() async {
-    final api = ApiClient();  // ← Теперь работает
+    final api = ApiClient();
     try {
       final res = await api.get('/subscription/status');
       if (mounted) {
@@ -46,14 +46,10 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
     }
   }
 
-  // НОВЫЙ метод - единая точка входа для всех покупок
   Future<void> _handlePurchase(String plan) async {
     final t = AppLocalizations.of(context)!;
-    
     try {
       await paymentService.purchase(plan);
-      
-      // После успешной оплаты обновляем статус подписки
       if (mounted) {
         _showSnackBar(t.paymentSuccess);
         await _loadStatus();
@@ -113,7 +109,6 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
           children: [
             // ========== СТАТУС ПОДПИСКИ ==========
             Card(
-              color: hasActive ? Colors.green.shade50 : null,
               elevation: 2,
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -236,6 +231,22 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
               onPress: () => _handlePurchase('monthly'),
               isRecommended: true,
               t: t,
+              colorScheme: colorScheme,
+            ),
+
+            // Полугодовая подписка (новый тариф)
+            _buildTariffCard(
+              title: '6 ${t.months}',
+              subtitle: t.halfYearDescription ?? 'Экономия 300 ₽',
+              price: '2700 ${t.currencySymbol}',
+              priceNote:
+                  extraCompanies > 0
+                      ? '${t.extraCompaniesInfo(extraCompanies, extraCompanies * 1500)}'
+                      : null,
+              onPress: () => _handlePurchase('half_year'),
+              isRecommended: false,
+              t: t,
+              colorScheme: colorScheme,
             ),
 
             // Дополнительная компания
@@ -247,6 +258,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
               onPress: () => _handlePurchase('extra_company'),
               isRecommended: false,
               t: t,
+              colorScheme: colorScheme,
             ),
 
             const SizedBox(height: 16),
@@ -329,6 +341,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
     required VoidCallback onPress,
     required bool isRecommended,
     required AppLocalizations t,
+    required ColorScheme colorScheme,
   }) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -337,7 +350,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
         borderRadius: BorderRadius.circular(12),
         side:
             isRecommended
-                ? const BorderSide(color: Colors.green, width: 2)
+                ? BorderSide(color: colorScheme.primary, width: 2)
                 : BorderSide.none,
       ),
       child: ListTile(
@@ -349,7 +362,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                 padding: const EdgeInsets.only(left: 8),
                 child: Chip(
                   label: Text(t.recommended, style: const TextStyle(fontSize: 10)),
-                  backgroundColor: Colors.green.shade100,
+                  backgroundColor: colorScheme.primaryContainer,
                   padding: EdgeInsets.zero,
                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
@@ -363,7 +376,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
             if (priceNote != null)
               Text(
                 priceNote,
-                style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant),
               ),
           ],
         ),
@@ -380,7 +393,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
             if (priceNote != t.forever)
               Text(
                 t.perMonth,
-                style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
+                style: TextStyle(fontSize: 10, color: colorScheme.onSurfaceVariant),
               ),
           ],
         ),

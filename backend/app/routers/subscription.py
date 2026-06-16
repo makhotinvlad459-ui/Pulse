@@ -17,12 +17,13 @@ router = APIRouter(prefix="/subscription", tags=["subscription"], redirect_slash
 
 # Новая структура цен
 SUBSCRIPTION_PRICES = {
-    "monthly": 500,      # базовая подписка (2 компании)
-    "extra_company": 250  # каждая доп. компания
+    "monthly": 500,
+    "half_year": 2700,
+    "extra_company": 250
 }
 
 class PaymentCreateRequest(BaseModel):
-    plan: str  # "monthly", "extra_company"
+    plan: str  # "monthly", "half_year", "extra_company"
 
 @router.get("/status")
 async def get_subscription_status(
@@ -31,16 +32,13 @@ async def get_subscription_status(
 ):
     from app.services.subscription_limits import get_company_limit_info
     
-    # Получаем количество компаний пользователя
     result = await db.execute(
         select(func.count(Company.id))
         .where(Company.founder_id == current_user.id)
     )
     companies_count = result.scalar() or 0
     
-    # Получаем общую информацию о лимитах
     limits = await get_company_limit_info(db, current_user)
-    
     has_active = current_user.subscription_until and current_user.subscription_until > datetime.utcnow()
     
     return {
@@ -70,16 +68,15 @@ async def create_payment(
     current_user: User = Depends(get_current_user)
 ):
     plan = req.plan
-    
-    # Проверяем активность подписки
     has_active_subscription = current_user.subscription_until and current_user.subscription_until > datetime.utcnow()
     
     if plan == "monthly":
-        # Расчёт суммы с учётом extra_companies
         extra_count = current_user.extra_companies or 0
         amount = SUBSCRIPTION_PRICES["monthly"] + (extra_count * SUBSCRIPTION_PRICES["extra_company"])
+    elif plan == "half_year":
+        extra_count = current_user.extra_companies or 0
+        amount = 2700 + (extra_count * 250 * 6)   # 250 в месяц × 6 месяцев
     elif plan == "extra_company":
-        # Нельзя купить дополнительную компанию без активной базовой подписки
         if not has_active_subscription:
             raise HTTPException(
                 status_code=400,
@@ -102,7 +99,6 @@ async def create_payment(
     await db.flush()
     order_db_id = payment_order.id
 
-    # Генерируем уникальный ключ идемпотентности
     idempotence_key = str(uuid.uuid4())
 
     async with httpx.AsyncClient() as client:
@@ -123,7 +119,7 @@ async def create_payment(
                 }
             },
             auth=(settings.YOOKASSA_SHOP_ID, settings.YOOKASSA_SECRET_KEY),
-            headers={"Idempotence-Key": idempotence_key}   # <-- добавлен заголовок
+            headers={"Idempotence-Key": idempotence_key}
         )
         data = response.json()
         if response.status_code != 200:
@@ -172,17 +168,21 @@ async def yookassa_webhook(request: Request, db: AsyncSession = Depends(get_db))
     now = datetime.utcnow()
     
     if plan == "extra_company":
-        # Добавляем дополнительную компанию навсегда
         user.extra_companies = (user.extra_companies or 0) + 1
     elif plan == "monthly":
-        # Продление базовой подписки на месяц
         delta = timedelta(days=30)
         if user.subscription_until and user.subscription_until > now:
             user.subscription_until = user.subscription_until + delta
         else:
             user.subscription_until = now + delta
         user.subscription_plan = "monthly"
-        # extra_companies НЕ сбрасываются!
+    elif plan == "half_year":
+        delta = timedelta(days=180)
+        if user.subscription_until and user.subscription_until > now:
+            user.subscription_until = user.subscription_until + delta
+        else:
+            user.subscription_until = now + delta
+        user.subscription_plan = "half_year"
 
     await db.commit()
     return {"status": "ok"}
