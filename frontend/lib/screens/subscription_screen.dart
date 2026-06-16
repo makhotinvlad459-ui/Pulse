@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import '../providers/locale_provider.dart';
 import 'package:frontend/l10n/app_localizations.dart';
 import '../services/error/error_handler.dart';
@@ -100,6 +101,19 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
             remainingMessages <= 0 ||
             remainingCompanies <= 0);
 
+    // Форматируем дату, если она есть
+    String? formattedExpiry;
+    if (expiresAt != null && expiresAt.toString().isNotEmpty) {
+      try {
+        final dateTime = DateTime.parse(expiresAt.toString());
+        final locale = Localizations.localeOf(context);
+        final formatter = DateFormat.yMMMMd(locale.toString());
+        formattedExpiry = formatter.format(dateTime);
+      } catch (_) {
+        formattedExpiry = expiresAt.toString();
+      }
+    }
+
     return Scaffold(
       appBar: AppBar(title: Text(t.subscription)),
       body: SingleChildScrollView(
@@ -134,10 +148,10 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                         ),
                       ],
                     ),
-                    if (expiresAt != null && expiresAt.toString().isNotEmpty)
+                    if (formattedExpiry != null)
                       Padding(
                         padding: const EdgeInsets.only(top: 8),
-                        child: Text('${t.expiresAt}: $expiresAt'),
+                        child: Text('${t.expiresAt}: $formattedExpiry'),
                       ),
                   ],
                 ),
@@ -234,14 +248,14 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
               colorScheme: colorScheme,
             ),
 
-            // Полугодовая подписка (новый тариф)
+            // Полугодовая подписка (явные строки без геттеров)
             _buildTariffCard(
-              title: '6 ${t.months}',
-              subtitle: t.halfYearDescription ?? 'Экономия 300 ₽',
+              title: '6 месяцев',
+              subtitle: 'Экономия 300 ₽',
               price: '2700 ${t.currencySymbol}',
               priceNote:
                   extraCompanies > 0
-                      ? '${t.extraCompaniesInfo(extraCompanies, extraCompanies * 1500)}'
+                      ? t.extraCompaniesInfo(extraCompanies, extraCompanies * 1500)
                       : null,
               onPress: () => _handlePurchase('half_year'),
               isRecommended: false,
