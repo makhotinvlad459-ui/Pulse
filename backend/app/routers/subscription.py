@@ -102,6 +102,9 @@ async def create_payment(
     await db.flush()
     order_db_id = payment_order.id
 
+    # Генерируем уникальный ключ идемпотентности
+    idempotence_key = str(uuid.uuid4())
+
     async with httpx.AsyncClient() as client:
         response = await client.post(
             "https://api.yookassa.ru/v3/payments",
@@ -119,7 +122,8 @@ async def create_payment(
                     "order_id": order_db_id,
                 }
             },
-            auth=(settings.YOOKASSA_SHOP_ID, settings.YOOKASSA_SECRET_KEY)
+            auth=(settings.YOOKASSA_SHOP_ID, settings.YOOKASSA_SECRET_KEY),
+            headers={"Idempotence-Key": idempotence_key}   # <-- добавлен заголовок
         )
         data = response.json()
         if response.status_code != 200:
