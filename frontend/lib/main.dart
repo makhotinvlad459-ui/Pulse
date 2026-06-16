@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart'; // Добавлен импорт для kIsWeb
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -21,34 +21,68 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   GlobalErrorHandler.initialize();
-  // Инициализация Firebase
-  try {
-    if (kIsWeb) {
-      // Явная инициализация для Flutter Web
-      await Firebase.initializeApp(
-        options: const FirebaseOptions(
-          apiKey: "AIzaSyBXoRO7sp49PotOrUEPmTsbRxCpcDpdyZ0",
-          authDomain: "pulse-yourmoney.firebaseapp.com",
-          projectId: "pulse-yourmoney",
-          storageBucket: "pulse-yourmoney.firebasestorage.app",
-          messagingSenderId: "267395124760",
-          appId: "1:267395124760:web:93231e40b80650ccf9bd6d",
-        ),
-      );
-    } else {
-      // Инициализация для Android/iOS
-      await Firebase.initializeApp();
-    }
 
-    // Запрос разрешения на уведомления
-    await FirebaseMessaging.instance.requestPermission();
-    final token = await FirebaseMessaging.instance.getToken();
-    print("FCM Token: $token");
-  } catch (e, stack) {
-    print("Firebase initialization error: $e\n$stack");
-  }
-
+  // 🔥 Запускаем приложение сразу, не дожидаясь Firebase
   runApp(const ProviderScope(child: MyApp()));
+
+  // 📡 Инициализируем Firebase в фоне (без блокировки UI)
+  _initFirebaseInBackground();
+}
+
+/// Фоновая инициализация Firebase с таймаутом
+void _initFirebaseInBackground() {
+  // Используем микротаск, чтобы не блокировать даже микросекунду
+  Future.microtask(() async {
+    try {
+      print('🔥 [FCM] Инициализация Firebase в фоне...');
+
+      // Инициализация с таймаутом 5 секунд
+      if (kIsWeb) {
+        await Firebase.initializeApp(
+          options: const FirebaseOptions(
+            apiKey: "AIzaSyBXoRO7sp49PotOrUEPmTsbRxCpcDpdyZ0",
+            authDomain: "pulse-yourmoney.firebaseapp.com",
+            projectId: "pulse-yourmoney",
+            storageBucket: "pulse-yourmoney.firebasestorage.app",
+            messagingSenderId: "267395124760",
+            appId: "1:267395124760:web:93231e40b80650ccf9bd6d",
+          ),
+        ).timeout(const Duration(seconds: 5));
+      } else {
+        await Firebase.initializeApp().timeout(const Duration(seconds: 5));
+      }
+
+      print('✅ [FCM] Firebase инициализирован');
+
+      // Запрос разрешения + получение токена с таймаутом
+      try {
+        await FirebaseMessaging.instance
+            .requestPermission()
+            .timeout(const Duration(seconds: 3));
+            
+        final token = await FirebaseMessaging.instance
+            .getToken()
+            .timeout(const Duration(seconds: 3));
+            
+        if (token != null && token.isNotEmpty) {
+          print('✅ [FCM] Токен получен: $token');
+          // Можно сохранить токен на сервер, если нужно
+        } else {
+          print('⚠️ [FCM] Токен не получен (пустой)');
+        }
+      } on TimeoutException {
+        print('⏱️ [FCM] Таймаут при получении токена (пропускаем)');
+      } catch (e) {
+        print('⚠️ [FCM] Ошибка при получении токена: $e');
+      }
+
+    } on TimeoutException {
+      print('⏱️ [FCM] Таймаут инициализации Firebase (пропускаем)');
+    } catch (e, stack) {
+      print('❌ [FCM] Ошибка инициализации Firebase: $e');
+      print('Stack: $stack');
+    }
+  });
 }
 
 class MyApp extends ConsumerStatefulWidget {
@@ -62,12 +96,23 @@ class _MyAppState extends ConsumerState<MyApp> {
   @override
   void initState() {
     super.initState();
-    PushNotificationsService.init();
+    // Инициализация уведомлений (тоже неблокирующая)
+    _initNotifications();
   }
 
-    @override
+  void _initNotifications() {
+    // Запускаем без ожидания
+    Future.microtask(() async {
+      try {
+        await PushNotificationsService.init();
+      } catch (e) {
+        print('⚠️ [Notifications] Ошибка инициализации: $e');
+      }
+    });
+  }
+
+  @override
   void dispose() {
-    // ✅ Закрываем WebSocket при закрытии приложения
     WebSocketService().dispose();
     super.dispose();
   }
