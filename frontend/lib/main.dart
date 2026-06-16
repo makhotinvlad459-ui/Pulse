@@ -1,4 +1,4 @@
-import 'dart:async'; 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -30,14 +30,13 @@ void main() async {
   _initFirebaseInBackground();
 }
 
-/// Фоновая инициализация Firebase с таймаутом
+/// Фоновая инициализация Firebase с таймаутом 10 секунд
 void _initFirebaseInBackground() {
-  // Используем микротаск, чтобы не блокировать даже микросекунду
   Future.microtask(() async {
     try {
       print('🔥 [FCM] Инициализация Firebase в фоне...');
 
-      // Инициализация с таймаутом 5 секунд
+      // Инициализация Firebase с таймаутом 10 секунд
       if (kIsWeb) {
         await Firebase.initializeApp(
           options: const FirebaseOptions(
@@ -48,25 +47,26 @@ void _initFirebaseInBackground() {
             messagingSenderId: "267395124760",
             appId: "1:267395124760:web:93231e40b80650ccf9bd6d",
           ),
-        ).timeout(const Duration(seconds: 5));
+        ).timeout(const Duration(seconds: 10));
       } else {
-        await Firebase.initializeApp().timeout(const Duration(seconds: 5));
+        await Firebase.initializeApp().timeout(const Duration(seconds: 10));
       }
 
       print('✅ [FCM] Firebase инициализирован');
 
-      // Запрос разрешения + получение токена с таймаутом
+      // Запрос разрешения + получение токена с таймаутом 10 секунд
       try {
         await FirebaseMessaging.instance
             .requestPermission()
-            .timeout(const Duration(seconds: 3));
-            
+            .timeout(const Duration(seconds: 5));
+
         final token = await FirebaseMessaging.instance
             .getToken()
-            .timeout(const Duration(seconds: 3));
-            
+            .timeout(const Duration(seconds: 10));
+
         if (token != null && token.isNotEmpty) {
           print('✅ [FCM] Токен получен: $token');
+          // Можно сохранить токен на сервер, если нужно
         } else {
           print('⚠️ [FCM] Токен не получен (пустой)');
         }
@@ -92,15 +92,16 @@ class _MyAppState extends ConsumerState<MyApp> {
   @override
   void initState() {
     super.initState();
-    _initNotifications();
+    _initNotificationListeners();
   }
 
-  void _initNotifications() {
+  /// Только слушатели уведомлений (без запроса токена)
+  void _initNotificationListeners() {
     Future.microtask(() async {
       try {
-        await PushNotificationsService.init();
+        await PushNotificationsService.initListeners();
       } catch (e) {
-        print('⚠️ [Notifications] Ошибка инициализации: $e');
+        print('⚠️ [Notifications] Ошибка инициализации слушателей: $e');
       }
     });
   }

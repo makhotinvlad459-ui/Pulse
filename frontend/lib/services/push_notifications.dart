@@ -3,29 +3,22 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 class PushNotificationsService {
   static final FirebaseMessaging _fcm = FirebaseMessaging.instance;
 
-  static Future<void> init() async {
+  // Только слушатели сообщений, без запроса токена
+  static Future<void> initListeners() async {
     try {
-      NotificationSettings settings = await _fcm.requestPermission(
-        alert: true,
-        badge: true,
-        sound: true,
-      );
-      
-      if (settings.authorizationStatus != AuthorizationStatus.authorized) {
-        print('Push notifications not authorized');
-        return;
-      }
-      
-      String? token = await _fcm.getToken();
-      print('FCM Token: $token');
-      // ❌ НЕ отправляем на сервер здесь
-      
+      // Слушатель для сообщений в foreground
       FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-        print('Got message in foreground: ${message.notification?.title}');
+        print('📨 [FCM] Сообщение в foreground: ${message.notification?.title}');
       });
-      
+
+      // Слушатель для открытия приложения из уведомления
+      FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+        print('📲 [FCM] Приложение открыто из уведомления: ${message.notification?.title}');
+      });
+
+      print('✅ [FCM] Слушатели уведомлений инициализированы');
     } catch (e) {
-      print('Push notifications init error: $e');
+      print('❌ [FCM] Ошибка инициализации слушателей: $e');
     }
   }
 }
