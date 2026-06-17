@@ -402,8 +402,12 @@ class _EditTransactionDialogState extends ConsumerState<EditTransactionDialog> {
       'company_id': widget.companyId
     }, data: data);
     
-    await widget.onSuccess();
+    // ✅ СНАЧАЛА ЗАКРЫВАЕМ ОКНО
     if (mounted) Navigator.pop(context);
+    
+    // ✅ ПОТОМ ОБНОВЛЯЕМ СПИСОК В ФОНЕ (без await)
+    widget.onSuccess();
+    
   } catch (e) {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
