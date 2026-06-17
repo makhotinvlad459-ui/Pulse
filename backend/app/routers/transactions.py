@@ -891,11 +891,14 @@ async def mark_transaction_paid(
     transaction.is_paid = True
     transaction.paid_at = datetime.utcnow()
     
-    # Обновляем баланс счета (только если это не перевод)
-    if transaction.type != 'transfer':
-        account = await db.get(Account, transaction.account_id)
-        if account:
-            account.balance += transaction.amount
+    # ========== ИСПРАВЛЕНО: пересчёт баланса через общую функцию ==========
+    # Пересчитываем баланс счета (учитывает все типы транзакций)
+    await recalc_account_balance(transaction.account_id, db)
+    
+    # Если это перевод, пересчитываем баланс счёта назначения
+    if transaction.type == 'transfer' and transaction.transfer_to_account_id is not None:
+        await recalc_account_balance(transaction.transfer_to_account_id, db)
+    # ===================================================================
     
     await db.commit()
     await db.refresh(transaction)
@@ -949,11 +952,14 @@ async def mark_transaction_unpaid(
     transaction.is_paid = False
     transaction.paid_at = None
     
-    # Возвращаем баланс счета
-    if transaction.type != 'transfer':
-        account = await db.get(Account, transaction.account_id)
-        if account:
-            account.balance -= transaction.amount
+    # ========== ИСПРАВЛЕНО: пересчёт баланса через общую функцию ==========
+    # Пересчитываем баланс счета
+    await recalc_account_balance(transaction.account_id, db)
+    
+    # Если это перевод, пересчитываем баланс счёта назначения
+    if transaction.type == 'transfer' and transaction.transfer_to_account_id is not None:
+        await recalc_account_balance(transaction.transfer_to_account_id, db)
+    # ===================================================================
     
     await db.commit()
     await db.refresh(transaction)
@@ -963,4 +969,4 @@ async def mark_transaction_unpaid(
         "transaction_id": transaction.id,
         "is_paid": transaction.is_paid,
         "paid_at": transaction.paid_at
-    }     
+    }
