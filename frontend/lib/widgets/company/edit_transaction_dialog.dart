@@ -418,48 +418,53 @@ class _EditTransactionDialogState extends ConsumerState<EditTransactionDialog> {
 }
 
   Future<void> _deleteTransaction() async {
-    final t = AppLocalizations.of(context)!;
-    String title, content, confirmText;
-    if (widget.isFounder) {
-      title = t.deleteTransactionTitle;
-      content = t.deleteTransactionContentPermanent;
-      confirmText = t.delete;
-    } else {
-      title = t.hideTransactionTitle;
-      content = t.hideTransactionContent;
-      confirmText = t.hide;
-    }
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: Text(content),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(t.cancel)),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: Text(confirmText, style: const TextStyle(color: Colors.red))),
-        ],
-      ),
-    );
-    if (confirm != true) return;
-
-    setState(() => _loading = true);
-    final api = ApiClient();
-    try {
-      await api.delete('/transactions/${widget.transaction['id']}',
-          queryParameters: {'company_id': widget.companyId});
-      await widget.onSuccess();
-      if (mounted) Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(widget.isFounder ? t.transactionDeletedPermanent : t.transactionHidden)),
-      );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
-      }
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
+  final t = AppLocalizations.of(context)!;
+  String title, content, confirmText;
+  if (widget.isFounder) {
+    title = t.deleteTransactionTitle;
+    content = t.deleteTransactionContentPermanent;
+    confirmText = t.delete;
+  } else {
+    title = t.hideTransactionTitle;
+    content = t.hideTransactionContent;
+    confirmText = t.hide;
   }
+  final confirm = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text(title),
+      content: Text(content),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context, false), child: Text(t.cancel)),
+        TextButton(onPressed: () => Navigator.pop(context, true), child: Text(confirmText, style: const TextStyle(color: Colors.red))),
+      ],
+    ),
+  );
+  if (confirm != true) return;
+
+  setState(() => _loading = true);
+  final api = ApiClient();
+  try {
+    await api.delete('/transactions/${widget.transaction['id']}',
+        queryParameters: {'company_id': widget.companyId});
+    
+    // ✅ СНАЧАЛА ЗАКРЫВАЕМ ОКНО
+    if (mounted) Navigator.pop(context);
+    
+    // ✅ ПОТОМ ПОКАЗЫВАЕМ УВЕДОМЛЕНИЕ И ОБНОВЛЯЕМ СПИСОК (без await)
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(widget.isFounder ? t.transactionDeletedPermanent : t.transactionHidden)),
+    );
+    widget.onSuccess();
+    
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+    }
+  } finally {
+    if (mounted) setState(() => _loading = false);
+  }
+}
 
   @override
   Widget build(BuildContext context) {
