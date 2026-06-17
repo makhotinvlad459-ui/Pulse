@@ -35,19 +35,19 @@ class _ProductionTabState extends ConsumerState<ProductionTab> {
             labelColor: colorScheme.primary,
             unselectedLabelColor: colorScheme.onSurfaceVariant,
             tabs: [
-              Tab(text: t.manufacturedProducts),
-              Tab(text: t.productionJournal),
+              Tab(text: t.productionJournal),      // ← ПЕРВАЯ
+              Tab(text: t.manufacturedProducts),   // ← ВТОРАЯ
             ],
           ),
           Expanded(
             child: TabBarView(
               children: [
-                ManufacturedProductsTab(
+                ProductionJournalTab(              // ← ПЕРВАЯ
                   companyId: widget.companyId,
                   permissions: widget.permissions,
                   onRefresh: widget.onRefresh,
                 ),
-                ProductionJournalTab(
+                ManufacturedProductsTab(           // ← ВТОРАЯ
                   companyId: widget.companyId,
                   permissions: widget.permissions,
                   onRefresh: widget.onRefresh,

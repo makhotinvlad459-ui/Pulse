@@ -856,7 +856,7 @@
   "groupProduction": "Производство",
   "permViewProduction": "Просмотр производства",
   "permCreateProduction": "Создание производственных записей",
-  "permEditProduction": "Редактирование производственных записей",
+  "permEditProduction": "Редактирование производственных записей и продажи",
   "permDeleteProduction": "Удаление производственных записей",
   "permManageManufacturedProducts": "Управление производимыми товарами",
   "produce": "Произвести",
@@ -1005,7 +1005,8 @@
 "halfYearTitle": "6 месяцев",
 "halfYearSubtitle": "Экономия 300 ",
 "months": "месяцев",
-"halfYearDescription": "Экономия 300 ₽"
+"halfYearDescription": "Экономия 300 ",
+"reorderTabs": "Reorder tabs"
 }
 
   
