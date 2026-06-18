@@ -121,7 +121,7 @@ class _IncomeExpenseTabState extends ConsumerState<IncomeExpenseTab> {
                 children: [
                   Text(t.balanceForPeriod,
                       style: const TextStyle(fontSize: 12)),
-                  Text('${_balance.toStringAsFixed(2)} ₽',
+                  Text('${_balance.toStringAsFixed(2)} ${t.currencySymbol}',
                       style: const TextStyle(
                           fontSize: 24, fontWeight: FontWeight.bold)),
                 ],
@@ -242,7 +242,7 @@ class _CategoryColumn extends StatelessWidget {
               return ListTile(
                 leading: Text(getIcon(entry.key)),
                 title: Text(entry.key),
-                trailing: Text('${entry.value.toStringAsFixed(2)} ₽'),
+                trailing: Text('${entry.value.toStringAsFixed(2)} ${t.currencySymbol}'),
                 onTap: () => onTapCategory(entry.key),
               );
             },
@@ -304,7 +304,7 @@ class TransactionsByCategoryScreen extends StatelessWidget {
               final trans = transactions[index];
               return Card(
                 child: ListTile(
-                  title: Text('${trans['amount']} ₽'),
+                  title: Text('${trans['amount']} ${t.currencySymbol}'),
                   subtitle: Text(trans['description'] ?? ''),
                   trailing: Text(DateFormat('dd.MM.yyyy')
                       .format(DateTime.parse(trans['date']))),

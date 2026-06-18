@@ -545,7 +545,6 @@
    "enterTitle": "Enter title",
   "titleRequired": "Title*",
   "createButton": "Create",
-  "currencySymbol": "",
   "unitPcs": "pcs",
   "unitKg": "kg",
   "unitG": "g",
@@ -813,7 +812,7 @@
   "recommended": "Recommended",
   "forever": "forever",
   "perMonth": "per month",
-  "currencySymbol": "₽",
+  "currencySymbol": "",
   "subscriptionInfoText": "After purchasing a subscription, limits are completely removed. Additional companies remain forever.",
   "limitReachedWarning": "Free operation limit reached. Subscribe to continue working.",
   

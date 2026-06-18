@@ -15,13 +15,32 @@ class SummaryCards extends ConsumerWidget {
     ref.watch(localeProvider);
     final t = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
+    final currencySymbol = t.currencySymbol;
     return Row(
       children: [
-        _SummaryCard(title: t.incomeTitle, amount: income, color: Colors.green, colorScheme: colorScheme),
+        _SummaryCard(
+          title: t.incomeTitle,
+          amount: income,
+          color: Colors.green,
+          colorScheme: colorScheme,
+          currencySymbol: currencySymbol,
+        ),
         const SizedBox(width: 8),
-        _SummaryCard(title: t.expenseTitle, amount: expense, color: Colors.red, colorScheme: colorScheme),
+        _SummaryCard(
+          title: t.expenseTitle,
+          amount: expense,
+          color: Colors.red,
+          colorScheme: colorScheme,
+          currencySymbol: currencySymbol,
+        ),
         const SizedBox(width: 8),
-        _SummaryCard(title: t.profitTitle, amount: profit, color: Colors.blue, colorScheme: colorScheme),
+        _SummaryCard(
+          title: t.profitTitle,
+          amount: profit,
+          color: Colors.blue,
+          colorScheme: colorScheme,
+          currencySymbol: currencySymbol,
+        ),
       ],
     );
   }
@@ -32,8 +51,15 @@ class _SummaryCard extends StatelessWidget {
   final double amount;
   final Color color;
   final ColorScheme colorScheme;
+  final String currencySymbol;
 
-  const _SummaryCard({required this.title, required this.amount, required this.color, required this.colorScheme});
+  const _SummaryCard({
+    required this.title,
+    required this.amount,
+    required this.color,
+    required this.colorScheme,
+    required this.currencySymbol,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -48,7 +74,14 @@ class _SummaryCard extends StatelessWidget {
             children: [
               Text(title, style: TextStyle(color: color, fontWeight: FontWeight.bold)),
               const SizedBox(height: 4),
-              Text('${amount.toStringAsFixed(2)} ₽', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
+              Text(
+                '${amount.toStringAsFixed(2)} $currencySymbol',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: colorScheme.onSurface,
+                ),
+              ),
             ],
           ),
         ),

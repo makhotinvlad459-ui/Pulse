@@ -32,6 +32,16 @@ class _CreateOrderDialogState extends ConsumerState<CreateOrderDialog> {
   List<dynamic> _products = [];
   bool _loadingProducts = true;
 
+  // 👇 ФУНКЦИЯ ДЛЯ ЛОКАЛИЗОВАННОГО ОТОБРАЖЕНИЯ ИМЕНИ
+  String _getUserDisplayName(Map<String, dynamic> member, AppLocalizations t) {
+    final fullName = member['full_name'] ?? '';
+    final role = member['role'];
+    if (role == 'founder' || fullName == 'Основатель') {
+      return t.founderRole;
+    }
+    return fullName;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -131,10 +141,10 @@ class _CreateOrderDialogState extends ConsumerState<CreateOrderDialog> {
                 dropdownColor: colorScheme.surface,
                 style: TextStyle(color: colorScheme.onSurface),
                 items: [
-                  DropdownMenuItem(value: null, child: Text(t.notAssigned)),
+                  DropdownMenuItem(value: null, child: Text(t.notAssigned)), // ✅ используем локализацию
                   ...widget.members.map((m) => DropdownMenuItem(
                     value: m['id'],
-                    child: Text(m['full_name']),
+                    child: Text(_getUserDisplayName(m, t)), // ✅ локализованное имя
                   )),
                 ],
                 onChanged: (v) => _assigneeId = v,

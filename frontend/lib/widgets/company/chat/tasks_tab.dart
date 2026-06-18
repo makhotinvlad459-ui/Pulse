@@ -29,6 +29,16 @@ class _TasksTabState extends ConsumerState<TasksTab> with AutomaticKeepAliveClie
   @override
   bool get wantKeepAlive => true;
 
+  // 👇 ФУНКЦИЯ ДЛЯ ЛОКАЛИЗОВАННОГО ОТОБРАЖЕНИЯ ИМЕНИ
+  String _getUserDisplayName(Map<String, dynamic> member, AppLocalizations t) {
+    final fullName = member['full_name'] ?? '';
+    final role = member['role'];
+    if (role == 'founder' || fullName == 'Основатель') {
+      return t.founderRole;
+    }
+    return fullName;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -109,9 +119,10 @@ class _TasksTabState extends ConsumerState<TasksTab> with AutomaticKeepAliveClie
                     dropdownColor: colorScheme.surface,
                     style: TextStyle(color: colorScheme.onSurface),
                     items: [
-                      const DropdownMenuItem(value: null, child: Text('Не назначен')),
+                      DropdownMenuItem(value: null, child: Text(t.notAssigned)), // ✅ исправлено
                       ..._employees.map((e) => DropdownMenuItem(
-                          value: e['user_id'], child: Text(e['full_name']))),
+                          value: e['user_id'],
+                          child: Text(_getUserDisplayName(e, t)))), // ✅ локализованное имя
                     ],
                     onChanged: (v) => assigneeId = v,
                   ),
