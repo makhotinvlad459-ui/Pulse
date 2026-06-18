@@ -312,11 +312,14 @@ class StockWriteOff(Base):
     date: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     description: Mapped[str | None] = mapped_column(String(200), nullable=True)
     created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    journal_entry_id: Mapped[int | None] = mapped_column(ForeignKey("production_journal_entries.id"), nullable=True)
 
     # relationships
     company: Mapped["Company"] = relationship()
     product: Mapped["Product"] = relationship(back_populates="write_offs")
     creator: Mapped["User"] = relationship()
+    journal_entry: Mapped["ProductionJournalEntry"] = relationship()
+
 
 class TransactionItem(Base):
     __tablename__ = "transaction_items"

@@ -244,6 +244,7 @@ async def produce_product(
                         reason=f"Производство: {product.name} x{data.quantity}",
                         date=production_date,
                         created_by=current_user.id,
+                        journal_entry_id=journal_entry.id, 
                     )
                     db.add(write_off)
                     mat_product.current_quantity -= mat_quantity
@@ -455,7 +456,8 @@ async def delete_production_journal_entry(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Удалить запись и откатить изменения остатков"""
+    """Удалить запись и откатить изменения остатков (материалов и готовой продукции)"""
+    # 1. Находим запись журнала
     result = await db.execute(
         select(ProductionJournalEntry).where(
             ProductionJournalEntry.id == entry_id,
@@ -465,30 +467,41 @@ async def delete_production_journal_entry(
     entry = result.scalar_one_or_none()
     if not entry:
         raise HTTPException(status_code=404, detail="Entry not found")
-    
-    # Получаем связанную stock_transaction
+
+    # 2. Восстанавливаем материалы (списания)
+    writeoffs_result = await db.execute(
+        select(StockWriteOff).where(StockWriteOff.journal_entry_id == entry_id)
+    )
+    writeoffs = writeoffs_result.scalars().all()
+    for wo in writeoffs:
+        # Возвращаем количество на склад
+        product = await db.get(Product, wo.product_id)
+        if product:
+            product.current_quantity += wo.quantity
+        # Удаляем запись списания
+        await db.delete(wo)
+
+    # 3. Восстанавливаем остаток готовой продукции
     stock_result = await db.execute(
         select(ProductionStockTransaction).where(
             ProductionStockTransaction.journal_entry_id == entry_id
         )
     )
     stock_tx = stock_result.scalar_one_or_none()
-    
     if stock_tx and stock_tx.type == ProductionTransactionType.PRODUCTION:
-        # Возвращаем остаток готовой продукции
         product_result = await db.execute(
             select(ManufacturedProduct).where(ManufacturedProduct.id == entry.product_id)
         )
         product = product_result.scalar_one_or_none()
         if product:
             product.current_stock -= entry.actual_quantity
-        
         await db.delete(stock_tx)
-    
+
+    # 4. Удаляем запись журнала
     await db.delete(entry)
     await db.commit()
-    
-    return {"message": "Entry deleted"}
+
+    return {"message": "Entry deleted, materials and stock restored"}
 
 
 # ========== СТАТИСТИКА И ОСТАТКИ ==========
