@@ -1,15 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, func
 from typing import List, Optional
 from enum import Enum
 from datetime import datetime
 from pydantic import BaseModel
+from sqlalchemy.orm import selectinload
 
 from app.database import get_db
-from app.models import User, Company, Product, CompanyMember, UserRole, ProductType, OrderItem, TransactionItem, Counterparty
+from app.models import User, Company, Product, CompanyMember, UserRole, ProductType, OrderItem, TransactionItem, Counterparty, StockWriteOff
 from app.deps import get_current_user
-from app.routers.orders import _has_permission  
+from app.routers.orders import _has_permission
 
 router = APIRouter(prefix="/products", tags=["products"], redirect_slashes=False)
 
@@ -18,6 +19,7 @@ router = APIRouter(prefix="/products", tags=["products"], redirect_slashes=False
 class ProductTypeEnum(str, Enum):
     PRODUCT = "product"
     MATERIAL = "material"
+
 
 # Схемы
 class ProductCreate(BaseModel):
@@ -29,6 +31,7 @@ class ProductCreate(BaseModel):
     barcode: Optional[str] = None
     supplier: Optional[str] = None
 
+
 class ProductUpdate(BaseModel):
     name: Optional[str] = None
     unit: Optional[str] = None
@@ -37,6 +40,7 @@ class ProductUpdate(BaseModel):
     size: Optional[str] = None
     barcode: Optional[str] = None
     supplier: Optional[str] = None
+
 
 class ProductResponse(BaseModel):
     id: int
@@ -54,6 +58,7 @@ class ProductResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
 # Вспомогательная функция проверки доступа
 async def _check_company_access(company_id: int, current_user: User, db: AsyncSession) -> bool:
     if current_user.role == UserRole.FOUNDER:
@@ -62,6 +67,7 @@ async def _check_company_access(company_id: int, current_user: User, db: AsyncSe
             return True
     result = await db.execute(select(CompanyMember).where(CompanyMember.company_id == company_id, CompanyMember.user_id == current_user.id))
     return result.scalar_one_or_none() is not None
+
 
 @router.get("/", response_model=List[ProductResponse])
 async def get_products(
@@ -82,6 +88,7 @@ async def get_products(
     result = await db.execute(query)
     products = result.scalars().all()
     return [ProductResponse.model_validate(p) for p in products]
+
 
 @router.post("/", response_model=ProductResponse)
 async def create_product(
@@ -129,6 +136,43 @@ async def create_product(
     await db.refresh(new_product)
     return ProductResponse.model_validate(new_product)
 
+
+# ========== ЭНДПОИНТ ДЛЯ СПИСАНИЙ СО СКЛАДА (НОВЫЙ) ==========
+@router.get("/stock-writeoffs")
+async def get_stock_writeoffs(
+    company_id: int = Query(...),
+    start_date: Optional[datetime] = Query(None),
+    end_date: Optional[datetime] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not await _check_company_access(company_id, current_user, db):
+        raise HTTPException(403, "Access denied")
+
+    query = select(StockWriteOff).where(StockWriteOff.company_id == company_id)
+    if start_date:
+        query = query.where(StockWriteOff.date >= start_date)
+    if end_date:
+        query = query.where(StockWriteOff.date <= end_date)
+    query = query.order_by(StockWriteOff.date.desc())
+    query = query.options(selectinload(StockWriteOff.product))
+
+    result = await db.execute(query)
+    writeoffs = result.scalars().all()
+
+    return [
+        {
+            "id": w.id,
+            "product_id": w.product_id,
+            "product_name": w.product.name if w.product else None,
+            "quantity": float(w.quantity),
+            "reason": w.reason,
+            "date": w.date.isoformat(),
+        }
+        for w in writeoffs
+    ]
+
+
 @router.get("/{product_id}", response_model=ProductResponse)
 async def get_product(
     product_id: int,
@@ -143,6 +187,7 @@ async def get_product(
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
     return ProductResponse.model_validate(product)
+
 
 @router.patch("/{product_id}", response_model=ProductResponse)
 async def update_product(
@@ -172,10 +217,10 @@ async def update_product(
         product.barcode = product_data.barcode
     if product_data.supplier is not None:
         product.supplier = product_data.supplier
-        # При желании можно и здесь синхронизировать контрагента, но для простоты опускаем
     await db.commit()
     await db.refresh(product)
     return ProductResponse.model_validate(product)
+
 
 @router.delete("/{product_id}")
 async def delete_product(
@@ -186,15 +231,15 @@ async def delete_product(
 ):
     if not await _check_company_access(company_id, current_user, db):
         raise HTTPException(403, "Access denied")
-    
+
     product = await db.get(Product, product_id)
     if not product or product.company_id != company_id:
         raise HTTPException(404, "Product not found")
-    
+
     perm_name = "edit_product" if product.type == ProductType.PRODUCT else "edit_material"
     if not await _has_permission(company_id, current_user, db, perm_name):
         raise HTTPException(403, f"No permission to delete {product.type}")
-    
+
     # Проверяем, используется ли товар в заказах или транзакциях
     used_in_orders = await db.execute(
         select(OrderItem).where(OrderItem.product_id == product_id).limit(1)
