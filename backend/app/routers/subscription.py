@@ -15,31 +15,59 @@ from app.services.subscription_limits import FREE_LIMITS, get_company_limit_info
 
 router = APIRouter(prefix="/subscription", tags=["subscription"], redirect_slashes=False)
 
-# Цены для ЮKassa (рубли)
-SUBSCRIPTION_PRICES = {
+# ========== ЦЕНЫ ==========
+# Для Web (ЮKassa) - рубли (только Россия)
+PRICES_WEB = {
     "monthly": 500,
     "half_year": 2700,
-    "extra_company": 250
+    "extra_company": 250,
+    "currency": "₽",
+    "currency_code": "RUB"
 }
 
+# Для Mobile (Google Play / App Store) - доллары (весь мир)
+PRICES_MOBILE = {
+    "monthly": 800,      # $8.00
+    "half_year": 4320,   # $43.20
+    "extra_company": 400, # $4.00
+    "currency": "$",
+    "currency_code": "USD"
+}
+
+def detect_platform(request: Request) -> str:
+    """Определяем платформу по User-Agent"""
+    user_agent = request.headers.get("user-agent", "").lower()
+    if "android" in user_agent or "iphone" in user_agent or "ipad" in user_agent:
+        return "mobile"
+    return "web"
+
+# ========== МОДЕЛИ ЗАПРОСОВ ==========
 class PaymentCreateRequest(BaseModel):
     plan: str  # "monthly", "half_year", "extra_company"
     platform: str = "web"  # "web", "android", "ios"
 
 class VerifyMobilePurchaseRequest(BaseModel):
     token: str  # purchaseToken от Google или receipt от Apple
-    plan: str
+    plan: str  # "monthly", "half_year", "extra_company"
     store: str  # "google" или "apple"
     product_id: str  # ID продукта из магазина
 
-# ===================== СТАТУС ПОДПИСКИ =====================
+# ==========================================
+# 1. СТАТУС ПОДПИСКИ
+# ==========================================
 @router.get("/status")
 async def get_subscription_status(
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     from app.services.subscription_limits import get_company_limit_info
     
+    # Определяем платформу
+    platform = detect_platform(request)
+    prices = PRICES_MOBILE if platform == "mobile" else PRICES_WEB
+    
+    # Считаем компании пользователя
     result = await db.execute(
         select(func.count(Company.id))
         .where(Company.founder_id == current_user.id)
@@ -67,19 +95,34 @@ async def get_subscription_status(
         "can_create_transaction": has_active or limits["remaining_transactions"] > 0,
         "can_create_message": has_active or limits["remaining_messages"] > 0,
         "can_create_company": has_active or limits["remaining_companies"] > 0,
+        # 👇 Цены для фронта
+        "prices": {
+            "monthly": prices["monthly"],
+            "half_year": prices["half_year"],
+            "extra_company": prices["extra_company"],
+            "currency": prices["currency"],
+            "currency_code": prices["currency_code"],
+            "platform": platform
+        }
     }
 
-# ===================== WEB (ЮKassa) =====================
+# ==========================================
+# 2. WEB - ПЛАТЕЖИ ЧЕРЕЗ ЮKassa
+# ==========================================
 @router.post("/create-payment")
 async def create_payment(
     req: PaymentCreateRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Создание платежа через ЮKassa (только для Web)"""
+    """
+    Создание платежа через ЮKassa (только для Web)
+    """
     
     # Защита: мобильные платформы не должны использовать этот эндпоинт
-    if req.platform != "web":
+    platform = detect_platform(request)
+    if platform == "mobile" or req.platform != "web":
         raise HTTPException(
             status_code=400,
             detail="Mobile payments must use Google Play or App Store"
@@ -88,20 +131,23 @@ async def create_payment(
     plan = req.plan
     has_active_subscription = current_user.subscription_until and current_user.subscription_until > datetime.utcnow()
     
-    # Расчет суммы
+    # Используем цены для Web
+    prices = PRICES_WEB
+    
+    # Расчет суммы с учетом количества компаний
     if plan == "monthly":
         extra_count = current_user.extra_companies or 0
-        amount = SUBSCRIPTION_PRICES["monthly"] + (extra_count * SUBSCRIPTION_PRICES["extra_company"])
+        amount = prices["monthly"] + (extra_count * prices["extra_company"])
     elif plan == "half_year":
         extra_count = current_user.extra_companies or 0
-        amount = 2700 + (extra_count * 250 * 6)   # 250 в месяц × 6 месяцев
+        amount = prices["half_year"] + (extra_count * prices["extra_company"] * 6)
     elif plan == "extra_company":
         if not has_active_subscription:
             raise HTTPException(
                 status_code=400,
                 detail="ERROR_NEED_BASE_SUBSCRIPTION"
             )
-        amount = SUBSCRIPTION_PRICES["extra_company"]
+        amount = prices["extra_company"]
     else:
         raise HTTPException(
             status_code=400,
@@ -114,7 +160,8 @@ async def create_payment(
         plan=plan,
         amount=amount,
         status="pending",
-        platform="web"  # <-- указываем платформу
+        platform="web",
+        product_id=plan
     )
     db.add(payment_order)
     await db.flush()
@@ -155,7 +202,9 @@ async def create_payment(
 
     return {"confirmation_url": confirmation_url, "order_id": order_db_id}
 
-# ===================== WEBHOOK ЮKassa =====================
+# ==========================================
+# 3. WEBHOOK ЮKassa
+# ==========================================
 @router.post("/webhook")
 async def yookassa_webhook(request: Request, db: AsyncSession = Depends(get_db)):
     """Webhook от ЮKassa для подтверждения оплаты"""
@@ -171,12 +220,13 @@ async def yookassa_webhook(request: Request, db: AsyncSession = Depends(get_db))
     user_id = int(metadata["user_id"])
     amount = float(payment["amount"]["value"])
 
+    # Находим заказ
     result = await db.execute(
         select(PaymentOrder).where(
             PaymentOrder.payment_id == payment_id,
             PaymentOrder.user_id == user_id,
             PaymentOrder.plan == plan,
-            PaymentOrder.platform == "web"  # <-- только для веб-платежей
+            PaymentOrder.platform == "web"
         )
     )
     order = result.scalar_one_or_none()
@@ -196,7 +246,9 @@ async def yookassa_webhook(request: Request, db: AsyncSession = Depends(get_db))
     await db.commit()
     return {"status": "ok"}
 
-# ===================== МОБИЛЬНЫЕ ПЛАТЕЖИ =====================
+# ==========================================
+# 4. МОБИЛЬНЫЕ ПЛАТЕЖИ (Google Play / App Store)
+# ==========================================
 @router.post("/verify-mobile")
 async def verify_mobile_purchase(
     req: VerifyMobilePurchaseRequest,
@@ -207,19 +259,6 @@ async def verify_mobile_purchase(
     Верификация покупок из Google Play или App Store
     Вызывается из мобильного приложения после успешной покупки
     """
-    
-    # Проверяем, что пользователь не пытается купить то же самое дважды
-    existing_order = await db.execute(
-        select(PaymentOrder).where(
-            PaymentOrder.user_id == current_user.id,
-            PaymentOrder.plan == req.plan,
-            PaymentOrder.platform == req.store,
-            PaymentOrder.status == "pending"
-        )
-    )
-    if existing_order.scalar_one_or_none():
-        # Если уже есть pending заказ, проверяем не был ли он уже оплачен
-        pass
     
     # Верифицируем покупку в зависимости от магазина
     if req.store == "google":
@@ -235,8 +274,9 @@ async def verify_mobile_purchase(
         plan=req.plan,
         amount=0,  # Сумма не хранится, т.к. платеж через магазин
         status="paid",
-        payment_id=req.token,  # Сохраняем токен для истории
-        platform=req.store,  # "google" или "apple"
+        payment_id=req.token,
+        platform=req.store,
+        product_id=req.product_id
     )
     db.add(payment_order)
 
@@ -246,24 +286,56 @@ async def verify_mobile_purchase(
     await db.commit()
     return {"status": "ok"}
 
-# ===================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====================
+# ==========================================
+# 5. ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+# ==========================================
+
+async def _activate_subscription(db: AsyncSession, user: User, plan: str):
+    """Активация подписки или добавление дополнительной компании"""
+    now = datetime.utcnow()
+    
+    if plan == "extra_company":
+        # Добавляем одну компанию (разовая покупка)
+        user.extra_companies = (user.extra_companies or 0) + 1
+        
+    elif plan == "monthly":
+        # Продлеваем подписку на 30 дней
+        delta = timedelta(days=30)
+        if user.subscription_until and user.subscription_until > now:
+            user.subscription_until = user.subscription_until + delta
+        else:
+            user.subscription_until = now + delta
+        user.subscription_plan = "monthly"
+        
+    elif plan == "half_year":
+        # Продлеваем подписку на 180 дней
+        delta = timedelta(days=180)
+        if user.subscription_until and user.subscription_until > now:
+            user.subscription_until = user.subscription_until + delta
+        else:
+            user.subscription_until = now + delta
+        user.subscription_plan = "half_year"
+        
+    else:
+        raise HTTPException(status_code=400, detail="Unknown plan")
+    
+    await db.commit()
 
 async def _verify_google_purchase(token: str, product_id: str, user: User):
     """
     Верификация покупки в Google Play
     TODO: Реализовать через Google Play Developer API
     """
-    # ВРЕМЕННАЯ ЗАГЛУШКА - пока просто пропускаем
-    # В продакшене нужно реально проверять через API
-    
-    # Пример реальной проверки:
+    # ==========================================
+    # ВРЕМЕННАЯ ЗАГЛУШКА - пока пропускаем
+    # ==========================================
+    # В продакшене нужно:
     # 1. Получить access_token для Service Account
-    # 2. Сделать запрос к:
-    # https://androidpublisher.googleapis.com/androidpublisher/v3/applications/{packageName}/purchases/products/{productId}/tokens/{token}
-    # 3. Проверить, что purchaseState = 0 (куплено)
-    # 4. Проверить, что consumptionState = 0 (не потреблено, если consumable)
-    
-    # Пока возвращаем True для тестирования
+    # 2. Запросить: 
+    #    https://androidpublisher.googleapis.com/androidpublisher/v3/applications/{packageName}/purchases/products/{productId}/tokens/{token}
+    # 3. Проверить purchaseState = 0 (куплено)
+    # 4. Для подписок проверить expiryTime
+    # ==========================================
     return True
 
 async def _verify_apple_purchase(receipt: str, product_id: str, user: User):
@@ -271,44 +343,22 @@ async def _verify_apple_purchase(receipt: str, product_id: str, user: User):
     Верификация покупки в App Store
     TODO: Реализовать через Apple App Store Server API
     """
-    # ВРЕМЕННАЯ ЗАГЛУШКА - пока просто пропускаем
-    
-    # Пример реальной проверки:
-    # 1. Отправить receipt на https://buy.itunes.apple.com/verifyReceipt (production)
+    # ==========================================
+    # ВРЕМЕННАЯ ЗАГЛУШКА - пока пропускаем
+    # ==========================================
+    # В продакшене нужно:
+    # 1. Отправить receipt на:
+    #    https://buy.itunes.apple.com/verifyReceipt (production)
     #    или https://sandbox.itunes.apple.com/verifyReceipt (sandbox)
     # 2. Проверить status = 0
     # 3. Найти в receipt нужный product_id
     # 4. Проверить expires_date для подписок
-    
+    # ==========================================
     return True
 
-async def _activate_subscription(db: AsyncSession, user: User, plan: str):
-    """Активация подписки или добавление дополнительной компании"""
-    now = datetime.utcnow()
-    
-    if plan == "extra_company":
-        # Добавляем одну компанию
-        user.extra_companies = (user.extra_companies or 0) + 1
-    elif plan == "monthly":
-        delta = timedelta(days=30)
-        if user.subscription_until and user.subscription_until > now:
-            user.subscription_until = user.subscription_until + delta
-        else:
-            user.subscription_until = now + delta
-        user.subscription_plan = "monthly"
-    elif plan == "half_year":
-        delta = timedelta(days=180)
-        if user.subscription_until and user.subscription_until > now:
-            user.subscription_until = user.subscription_until + delta
-        else:
-            user.subscription_until = now + delta
-        user.subscription_plan = "half_year"
-    else:
-        raise HTTPException(status_code=400, detail="Unknown plan")
-    
-    await db.commit()
-
-# ===================== iOS (устаревший, оставляем для совместимости) =====================
+# ==========================================
+# 6. iOS (устаревший, для совместимости)
+# ==========================================
 @router.post("/ios/verify-receipt")
 async def verify_apple_receipt(
     request: Request,
