@@ -18,7 +18,7 @@ class SubscriptionScreen extends ConsumerStatefulWidget {
 class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
   bool _loading = true;
   Map<String, dynamic> _status = {};
-  Map<String, dynamic> _prices = {};  // 👈 ДОБАВЛЕНО
+  Map<String, dynamic> _prices = {};
 
   @override
   void initState() {
@@ -30,10 +30,11 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
     final api = ApiClient();
     try {
       final res = await api.get('/subscription/status');
+      print('🔥 PRICES: ${res.data['prices']}');
       if (mounted) {
         setState(() {
           _status = res.data;
-          _prices = res.data['prices'] ?? {};  // 👈 ДОБАВЛЕНО
+          _prices = res.data['prices'] ?? {};
           _loading = false;
         });
       }
@@ -46,6 +47,34 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
           onRetry: _loadStatus,
         );
       }
+    }
+  }
+
+  // 👇 ФУНКЦИЯ ФОРМАТИРОВАНИЯ ЦЕНЫ
+  String _formatPrice(int price, String currency) {
+    if (currency == '\$' || currency == 'USD') {
+      // Доллары — делим на 100 и показываем с двумя знаками
+      final dollars = price / 100;
+      if (dollars == dollars.toInt()) {
+        return '\$${dollars.toInt()}';
+      }
+      return '\$${dollars.toStringAsFixed(2)}';
+    } else {
+      // Рубли — показываем как есть
+      return '$price $currency';
+    }
+  }
+
+  // 👇 ФУНКЦИЯ ДЛЯ ЭКОНОМИИ
+  String _formatSavings(int savings, String currency) {
+    if (currency == '\$' || currency == 'USD') {
+      final dollars = savings / 100;
+      if (dollars == dollars.toInt()) {
+        return '\$${dollars.toInt()}';
+      }
+      return '\$${dollars.toStringAsFixed(2)}';
+    } else {
+      return '$savings $currency';
     }
   }
 
@@ -103,6 +132,15 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
     final halfYearPrice = _prices['half_year'] ?? 2700;
     final extraCompanyPrice = _prices['extra_company'] ?? 250;
     final currency = _prices['currency'] ?? '₽';
+
+    // 👇 ФОРМАТИРОВАННЫЕ ЦЕНЫ ДЛЯ ОТОБРАЖЕНИЯ
+    final monthlyPriceDisplay = _formatPrice(monthlyPrice, currency);
+    final halfYearPriceDisplay = _formatPrice(halfYearPrice, currency);
+    final extraCompanyPriceDisplay = _formatPrice(extraCompanyPrice, currency);
+    
+    // 👇 ЭКОНОМИЯ ДЛЯ ПОЛУГОДА
+    final savings = monthlyPrice * 6 - halfYearPrice;
+    final savingsDisplay = _formatSavings(savings, currency);
 
     final bool isBlocked = !hasActive &&
         (remainingTransactions <= 0 ||
@@ -174,7 +212,6 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
             ),
             const SizedBox(height: 12),
 
-            // Лимит транзакций
             _buildLimitCard(
               icon: Icons.receipt,
               title: t.transactions,
@@ -186,7 +223,6 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
             ),
             const SizedBox(height: 8),
 
-            // Лимит сообщений
             _buildLimitCard(
               icon: Icons.chat,
               title: t.chatMessages,
@@ -198,7 +234,6 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
             ),
             const SizedBox(height: 8),
 
-            // Лимит компаний
             _buildLimitCard(
               icon: Icons.business,
               title: t.companies,
@@ -245,7 +280,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
             _buildTariffCard(
               title: t.basicSubscription,
               subtitle: t.basicSubscriptionDescription,
-              price: '$monthlyPrice $currency',  // 👈 ИСПРАВЛЕНО
+              price: monthlyPriceDisplay,
               priceNote:
                   extraCompanies > 0
                       ? t.extraCompaniesInfo(extraCompanies, extraCompanies * monthlyPrice)
@@ -259,8 +294,8 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
             // Полугодовая подписка
             _buildTariffCard(
               title: '6 месяцев',
-              subtitle: 'Экономия ${(monthlyPrice * 6 - halfYearPrice).toInt()} $currency',
-              price: '$halfYearPrice $currency',  // 👈 ИСПРАВЛЕНО
+              subtitle: 'Экономия $savingsDisplay',
+              price: halfYearPriceDisplay,
               priceNote:
                   extraCompanies > 0
                       ? t.extraCompaniesInfo(extraCompanies, extraCompanies * monthlyPrice * 6)
@@ -275,7 +310,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
             _buildTariffCard(
               title: t.extraCompany,
               subtitle: t.extraCompanyDescription,
-              price: '$extraCompanyPrice $currency',  // 👈 ИСПРАВЛЕНО
+              price: extraCompanyPriceDisplay,
               priceNote: t.forever,
               onPress: () => _handlePurchase('extra_company'),
               isRecommended: false,
