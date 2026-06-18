@@ -16,6 +16,7 @@ import 'services/websocket_service.dart';
 import 'services/push_notifications.dart';
 import 'package:frontend/l10n/app_localizations.dart';
 import 'services/error/global_error_handler.dart';
+import 'screens/privacy_policy_screen.dart'; 
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -156,6 +157,8 @@ class _MyAppState extends ConsumerState<MyApp> {
             return MaterialPageRoute(builder: (_) => const RegisterScreen());
           case '/home':
             return MaterialPageRoute(builder: (_) => const HomeScreen());
+          case '/privacy-policy': 
+            return MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen());
           case '/forgot-password':
             return MaterialPageRoute(builder: (_) => const ForgotPasswordScreen());
           default:

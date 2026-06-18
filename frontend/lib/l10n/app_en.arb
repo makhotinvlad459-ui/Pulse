@@ -1006,6 +1006,9 @@
 "halfYearTitle": "6 months",
 "halfYearSubtitle": "Save 300 ",
 "months": "months",
-"halfYearDescription": "Save 300 "
+"halfYearDescription": "Save 300 ",
+"privacyPolicy": "Privacy Policy",
+"privacyPolicyTitle": "Privacy Policy",
+"privacyPolicyHint": "By clicking \"Sign In\", you agree to the Privacy Policy"
 
 }

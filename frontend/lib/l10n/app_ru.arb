@@ -951,7 +951,7 @@
   "signIn": "Войти",
   "noAccount": "Нет аккаунта? Зарегистрируйтесь",
   "forgotPassword": "Забыли пароль?",
-  "developerInfo": "Приложение разработано Индивидуальным предпринимателем Махотиным В.А ИНН 510903037097",
+  "developerInfo": "Приложение разработано Индивидуальным предпринимателем Махотиным В.А",
   "appPurpose": "для ведения управленческого учета любого количества предприятий",
   "contactLabel": "Все вопросы и предложения отправляйте:",
   "contactEmail": "finance.pulsemoney@gmail.com",
@@ -1006,7 +1006,10 @@
 "halfYearSubtitle": "Экономия 300 ",
 "months": "месяцев",
 "halfYearDescription": "Экономия 300 ",
-"reorderTabs": "Reorder tabs"
+"reorderTabs": "Reorder tabs",
+"privacyPolicy": "Политика конфиденциальности",
+"privacyPolicyTitle": "Политика конфиденциальности",
+"privacyPolicyHint": "Нажимая \"Войти\", вы соглашаетесь с политикой конфиденциальности"
 }
 
   

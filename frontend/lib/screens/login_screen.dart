@@ -11,6 +11,7 @@ import 'package:frontend/l10n/app_localizations.dart';
 import '../services/api_client.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/services.dart'; 
+import '../screens/privacy_policy_screen.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -383,6 +384,37 @@ Container(
       
       const SizedBox(height: 10),
       
+      Container(
+  height: 0.5,
+  width: 60,
+  color: Colors.white.withOpacity(0.25),
+),
+
+const SizedBox(height: 10),
+
+// Ссылка на политику конфиденциальности
+GestureDetector(
+  onTap: () {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const PrivacyPolicyScreen(),
+      ),
+    );
+  },
+  child: Text(
+    t?.privacyPolicy ?? 'Политика конфиденциальности',
+    textAlign: TextAlign.center,
+    style: TextStyle(
+      fontSize: 10,
+      color: Colors.white.withOpacity(0.7),
+      fontWeight: FontWeight.w400,
+      decoration: TextDecoration.underline,
+      decorationColor: Colors.white.withOpacity(0.4),
+    ),
+  ),
+),
+
       // Лейбл: вопросы и предложения
       Text(
         t?.contactLabel ?? 'Все вопросы и предложения отправляйте:',
