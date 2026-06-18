@@ -480,6 +480,7 @@ class PaymentOrder(Base):
     status: Mapped[str] = mapped_column(String, nullable=False, default="pending")
     payment_id: Mapped[str | None] = mapped_column(String, nullable=True)
     platform: Mapped[str] = mapped_column(String, default="web") 
+    product_id: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
