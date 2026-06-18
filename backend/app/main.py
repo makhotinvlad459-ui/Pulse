@@ -10,7 +10,7 @@ import firebase_admin
 from firebase_admin import credentials
 
 from app.auth import router as auth_router
-from app.routers import subscription, production, journal, counterparties, companies, accounts, categories, transactions, statistics, admin, showcase, chat, tasks, websocket, notifications, products, permissions, orders
+from app.routers import subscription, production, privacy, journal, counterparties, companies, accounts, categories, transactions, statistics, admin, showcase, chat, tasks, websocket, notifications, products, permissions, orders
 from app.websocket_manager import manager
 
 
@@ -86,6 +86,7 @@ for router in routers:
     
     app.include_router(router, prefix="/api")
     app.include_router(websocket.router)
+    app.include_router(privacy.router)
 
 # Статика
 UPLOAD_DIR = "uploads"
