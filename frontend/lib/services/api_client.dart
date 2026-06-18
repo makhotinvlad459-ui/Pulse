@@ -12,41 +12,32 @@ import '../l10n/app_localizations.dart';
 import '../models/journal_entry.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
 
-
 class ApiClient {
   static String get baseUrl {
     const bool isProduction = bool.fromEnvironment('dart.vm.product');
-    // Переопределение для отладки на реальном устройстве
     const String customDebugUrl = String.fromEnvironment('DEBUG_API_URL');
     
-    // Web
     if (kIsWeb) {
       if (isProduction) return '/api';
       return 'http://localhost:8000/api';
     }
     
-    // Релизные сборки (Android, iOS)
     if (isProduction) {
       return 'https://pulse-yourmoney.com/api';
     }
     
-    // Debug-режим на мобильных устройствах
     if (kDebugMode) {
-      // Если передан кастомный URL через --dart-define, используем его
       if (customDebugUrl.isNotEmpty) {
         return customDebugUrl;
       }
-      // Для Android-эмулятора
       if (Platform.isAndroid) {
         return 'http://10.0.2.2:8000/api';
       }
-      // Для iOS-симулятора
       if (Platform.isIOS) {
         return 'http://localhost:8000/api';
       }
     }
     
-    // Fallback
     return 'http://localhost:8000/api';
   }
 
@@ -55,6 +46,13 @@ class ApiClient {
 
   Dio get dio => _dio;
 
+  // 👇 ФУНКЦИЯ ОПРЕДЕЛЕНИЯ ПЛАТФОРМЫ
+  String _getPlatform() {
+    if (kIsWeb) return 'web';
+    if (Platform.isAndroid) return 'android';
+    if (Platform.isIOS) return 'ios';
+    return 'mobile';
+  }
 
   ApiClient() {
     _dio.options = BaseOptions(
@@ -64,205 +62,202 @@ class ApiClient {
       followRedirects: true,
       maxRedirects: 5,
       validateStatus: (status) => status != null && status < 400,
-      headers: {},
+      headers: {
+        // 👇 ГЛАВНОЕ - ДОБАВЛЯЕМ ЗАГОЛОВОК
+        'x-client-platform': _getPlatform(),
+      },
     );
 
     _dio.interceptors.add(InterceptorsWrapper(
-  onRequest: (options, handler) async {
-    final token = await _storage.read(key: 'access_token');
-    if (token != null) {
-      options.headers ??= {};
-      options.headers['Authorization'] = 'Bearer $token';
-    }
-    return handler.next(options);
-  },
-  onError: (DioException e, handler) async {
-    final isAuthEndpoint = e.requestOptions.path.contains('/auth/login') ||
-                           e.requestOptions.path.contains('/auth/register');
-
-    if (e.response?.statusCode == 401 && !isAuthEndpoint) {
-      final container = ProviderScope.containerOf(navigatorKey.currentContext!);
-      final authNotifier = container.read(authProvider.notifier);
-      final refreshed = await authNotifier.refreshAccessToken();
-
-      if (refreshed) {
-        final newToken = await _storage.read(key: 'access_token');
-        e.requestOptions.headers['Authorization'] = 'Bearer $newToken';
-        try {
-          final response = await _dio.fetch(e.requestOptions);
-          return handler.resolve(response);
-        } catch (_) {
-          _redirectToLogin();
-          return handler.reject(e);
+      onRequest: (options, handler) async {
+        final token = await _storage.read(key: 'access_token');
+        if (token != null) {
+          options.headers ??= {};
+          options.headers['Authorization'] = 'Bearer $token';
         }
-      } else {
-        _redirectToLogin();
-        return handler.reject(e);
-      }
-    }
+        // 👇 ДЛЯ ПРОВЕРКИ В ЛОГАХ
+        print('📱 [ApiClient] Platform: ${options.headers['x-client-platform']}');
+        return handler.next(options);
+      },
+      onError: (DioException e, handler) async {
+        final isAuthEndpoint = e.requestOptions.path.contains('/auth/login') ||
+                               e.requestOptions.path.contains('/auth/register');
 
-    final errorMessage = _getLocalizedErrorMessage(e);
-    final userFriendlyError = DioException(
-      requestOptions: e.requestOptions,
-      response: e.response,
-      type: e.type,
-      error: errorMessage,
-    );
-    return handler.reject(userFriendlyError);
-  },
-));
+        if (e.response?.statusCode == 401 && !isAuthEndpoint) {
+          final container = ProviderScope.containerOf(navigatorKey.currentContext!);
+          final authNotifier = container.read(authProvider.notifier);
+          final refreshed = await authNotifier.refreshAccessToken();
 
-_dio.interceptors.add(LogInterceptor(responseBody: true, requestBody: true));
+          if (refreshed) {
+            final newToken = await _storage.read(key: 'access_token');
+            e.requestOptions.headers['Authorization'] = 'Bearer $newToken';
+            try {
+              final response = await _dio.fetch(e.requestOptions);
+              return handler.resolve(response);
+            } catch (_) {
+              _redirectToLogin();
+              return handler.reject(e);
+            }
+          } else {
+            _redirectToLogin();
+            return handler.reject(e);
+          }
+        }
+
+        final errorMessage = _getLocalizedErrorMessage(e);
+        final userFriendlyError = DioException(
+          requestOptions: e.requestOptions,
+          response: e.response,
+          type: e.type,
+          error: errorMessage,
+        );
+        return handler.reject(userFriendlyError);
+      },
+    ));
+
+    _dio.interceptors.add(LogInterceptor(responseBody: true, requestBody: true));
   }
 
   void clearAuth() {
-  _dio.options.headers.remove('Authorization');
-}
+    _dio.options.headers.remove('Authorization');
+  }
 
   void _redirectToLogin() async {
-  await _storage.delete(key: 'access_token');
-  await _storage.delete(key: 'refresh_token');
-  _dio.options.headers.remove('Authorization'); // 👈 добавить
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    navigatorKey.currentState?.pushNamedAndRemoveUntil('/login', (route) => false);
-  });
-}
+    await _storage.delete(key: 'access_token');
+    await _storage.delete(key: 'refresh_token');
+    _dio.options.headers.remove('Authorization');
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      navigatorKey.currentState?.pushNamedAndRemoveUntil('/login', (route) => false);
+    });
+  }
 
   String _getLocalizedErrorMessage(DioException e) {
-  // Получаем локализацию
-  final context = navigatorKey.currentContext;
-  final t = context != null ? AppLocalizations.of(context) : null;
+    final context = navigatorKey.currentContext;
+    final t = context != null ? AppLocalizations.of(context) : null;
 
-  String tr(String key, [String fallback = '']) {
-    if (t == null) return fallback.isEmpty ? key : fallback;
-    try {
-      final value = (t as dynamic)[key];
-      if (value is String) return value;
-      return fallback.isEmpty ? key : fallback;
-    } catch (_) {
-      return fallback.isEmpty ? key : fallback;
-    }
-  }
-
-  // ========== НОВАЯ ОБРАБОТКА 402 (Payment Required) ==========
-  if (e.response?.statusCode == 402) {
-    // Показываем диалог о необходимости подписки
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (navigatorKey.currentContext != null) {
-        _showSubscriptionRequiredDialog(navigatorKey.currentContext!);
+    String tr(String key, [String fallback = '']) {
+      if (t == null) return fallback.isEmpty ? key : fallback;
+      try {
+        final value = (t as dynamic)[key];
+        if (value is String) return value;
+        return fallback.isEmpty ? key : fallback;
+      } catch (_) {
+        return fallback.isEmpty ? key : fallback;
       }
-    });
-    return e.response?.data?['detail'] ?? 'Достигнут лимит бесплатных операций. Оформите подписку.';
-  }
-  // ============================================================
+    }
 
-  // Сетевые ошибки
-  if (e.type == DioExceptionType.connectionTimeout ||
-      e.type == DioExceptionType.receiveTimeout ||
-      e.type == DioExceptionType.connectionError) {
-    return tr('error_connection', 'No connection to server. Check your internet.');
-  }
-
-  // Ошибки с ответом сервера
-  if (e.response != null) {
-    final statusCode = e.response!.statusCode;
-    final data = e.response!.data;
-
-    if (data is Map<String, dynamic>) {
-      if (data.containsKey('detail') && data['detail'] is String) {
-        final detail = data['detail'] as String;
-        if (detail == 'Invalid credentials' && t != null) {
-          return tr('error_invalid_credentials', 'Invalid email or password');
+    if (e.response?.statusCode == 402) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (navigatorKey.currentContext != null) {
+          _showSubscriptionRequiredDialog(navigatorKey.currentContext!);
         }
-        return detail;
+      });
+      return e.response?.data?['detail'] ?? 'Достигнут лимит бесплатных операций. Оформите подписку.';
+    }
+
+    if (e.type == DioExceptionType.connectionTimeout ||
+        e.type == DioExceptionType.receiveTimeout ||
+        e.type == DioExceptionType.connectionError) {
+      return tr('error_connection', 'No connection to server. Check your internet.');
+    }
+
+    if (e.response != null) {
+      final statusCode = e.response!.statusCode;
+      final data = e.response!.data;
+
+      if (data is Map<String, dynamic>) {
+        if (data.containsKey('detail') && data['detail'] is String) {
+          final detail = data['detail'] as String;
+          if (detail == 'Invalid credentials' && t != null) {
+            return tr('error_invalid_credentials', 'Invalid email or password');
+          }
+          return detail;
+        }
+        if (data.containsKey('message') && data['message'] is String) {
+          return data['message'];
+        }
+        if (data.containsKey('error') && data['error'] is String) {
+          return data['error'];
+        }
       }
-      if (data.containsKey('message') && data['message'] is String) {
-        return data['message'];
-      }
-      if (data.containsKey('error') && data['error'] is String) {
-        return data['error'];
+
+      if (statusCode != null) {
+        return tr('error_server', 'Server error: $statusCode').replaceFirst('{code}', '$statusCode');
       }
     }
 
-    if (statusCode != null) {
-      return tr('error_server', 'Server error: $statusCode').replaceFirst('{code}', '$statusCode');
-    }
+    final msg = e.message ?? '';
+    return tr('error_unknown', 'An error occurred: $msg').replaceFirst('{message}', msg);
   }
 
-  final msg = e.message ?? '';
-  return tr('error_unknown', 'An error occurred: $msg').replaceFirst('{message}', msg);
-}
-
-void _showSubscriptionRequiredDialog(BuildContext context) {
-  final t = AppLocalizations.of(context);
-  
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (context) => AlertDialog(
-      title: Row(
-        children: [
-          const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
-          const SizedBox(width: 8),
-          Text(t?.subscriptionRequiredTitle ?? 'Лимит исчерпан'),
-        ],
-      ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(t?.subscriptionRequiredMessage ?? 'Вы достигли лимита бесплатных операций.'),
-          const SizedBox(height: 12),
-          Text(
-            t?.subscriptionRequiredAction ?? 'Оформите подписку, чтобы продолжить работу без ограничений.',
-            style: const TextStyle(fontWeight: FontWeight.w500),
+  void _showSubscriptionRequiredDialog(BuildContext context) {
+    final t = AppLocalizations.of(context);
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
+            const SizedBox(width: 8),
+            Text(t?.subscriptionRequiredTitle ?? 'Лимит исчерпан'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(t?.subscriptionRequiredMessage ?? 'Вы достигли лимита бесплатных операций.'),
+            const SizedBox(height: 12),
+            Text(
+              t?.subscriptionRequiredAction ?? 'Оформите подписку, чтобы продолжить работу без ограничений.',
+              style: const TextStyle(fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+            },
+            child: Text(t?.cancel ?? 'Отмена'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              Navigator.of(context).pushNamed('/subscription');
+            },
+            child: Text(t?.upgrade ?? 'Оформить подписку'),
           ),
         ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () {
-            Navigator.of(context).pop();
-          },
-          child: Text(t?.cancel ?? 'Отмена'),
-        ),
-        ElevatedButton(
-          onPressed: () {
-            Navigator.of(context).pop();
-            // Переход на экран подписки
-            Navigator.of(context).pushNamed('/subscription');
-          },
-          child: Text(t?.upgrade ?? 'Оформить подписку'),
-        ),
-      ],
-    ),
-  );
-}
-  // Базовые методы
-  Future<Response> post(String path, {dynamic data, Map<String, dynamic>? queryParameters}) async {
-  try {
-    return await _dio.post(path, data: data, queryParameters: queryParameters);
-  } catch (e) {
-    throw _normalizeError(e);
+    );
   }
-}
+
+  // ========== ОСНОВНЫЕ МЕТОДЫ ==========
+  Future<Response> post(String path, {dynamic data, Map<String, dynamic>? queryParameters}) async {
+    try {
+      return await _dio.post(path, data: data, queryParameters: queryParameters);
+    } catch (e) {
+      throw _normalizeError(e);
+    }
+  }
 
   Future<Response> get(String path, {Map<String, dynamic>? queryParameters}) async {
-  try {
-    return await _dio.get(path, queryParameters: queryParameters);
-  } catch (e) {
-    throw _normalizeError(e);
+    try {
+      return await _dio.get(path, queryParameters: queryParameters);
+    } catch (e) {
+      throw _normalizeError(e);
+    }
   }
-}
 
   dynamic _normalizeError(dynamic error) {
-  if (error is DioException) {
-    // Пробрасываем DioException дальше, но с понятным сообщением
-    return error;
+    if (error is DioException) {
+      return error;
+    }
+    return Exception('Unknown error occurred');
   }
-  return Exception('Unknown error occurred');
-}
-
 
   Future<Response> put(String path, {dynamic data, Map<String, dynamic>? queryParameters}) =>
       _dio.put(path, data: data, queryParameters: queryParameters);
@@ -271,14 +266,14 @@ void _showSubscriptionRequiredDialog(BuildContext context) {
       _dio.patch(path, data: data, queryParameters: queryParameters);
 
   Future<Response> delete(String path, {dynamic data, Map<String, dynamic>? queryParameters}) async {
-  final token = await getToken();
-  return _dio.delete(
-    path,
-    data: data,
-    queryParameters: queryParameters,
-    options: Options(headers: {'Authorization': 'Bearer $token'}),
-  );
-}
+    final token = await getToken();
+    return _dio.delete(
+      path,
+      data: data,
+      queryParameters: queryParameters,
+      options: Options(headers: {'Authorization': 'Bearer $token'}),
+    );
+  }
 
   Future<Response> postForm(String path, {required Map<String, String> data}) async {
     return await _dio.post(
@@ -291,7 +286,12 @@ void _showSubscriptionRequiredDialog(BuildContext context) {
     );
   }
 
-  // Загрузка файлов
+  // ========== ТОКЕНЫ ==========
+  Future<void> setToken(String token) async => await _storage.write(key: 'access_token', value: token);
+  Future<void> clearToken() async => await _storage.delete(key: 'access_token');
+  Future<String?> getToken() async => await _storage.read(key: 'access_token');
+
+  // ========== ЗАГРУЗКА ФАЙЛОВ ==========
   Future<Map<String, dynamic>> uploadChatFile({
     required int companyId,
     required Uint8List bytes,
@@ -333,12 +333,7 @@ void _showSubscriptionRequiredDialog(BuildContext context) {
     }
   }
 
-  // Управление токеном
-  Future<void> setToken(String token) async => await _storage.write(key: 'access_token', value: token);
-  Future<void> clearToken() async => await _storage.delete(key: 'access_token');
-  Future<String?> getToken() async => await _storage.read(key: 'access_token');
-
-  // ========== Методы для работы с API ==========
+  // ========== API МЕТОДЫ ==========
   Future<List<Company>> getCompanies() async {
     final response = await get('/companies');
     final data = response.data;
@@ -423,7 +418,6 @@ void _showSubscriptionRequiredDialog(BuildContext context) {
     });
   }
 
-  // ========== Методы для работы с правами ==========
   Future<List<dynamic>> getAllPermissions() async {
     final response = await get('/permissions/list');
     return response.data;
@@ -448,7 +442,6 @@ void _showSubscriptionRequiredDialog(BuildContext context) {
     return Company.fromJson(response.data);
   }
 
-  // ========== Загрузка файлов ==========
   Future<Map<String, dynamic>> uploadTransactionFile({
     required int companyId,
     required Uint8List bytes,
@@ -494,64 +487,63 @@ void _showSubscriptionRequiredDialog(BuildContext context) {
     return response;
   }
 
-    // ========== Журнал ==========
   Future<List<JournalEntry>> getJournalEntries(int companyId, DateTime start, DateTime end) async {
     final response = await get('/journal/', queryParameters: {
-    'company_id': companyId,
-    'start_date': start.toIso8601String(),
-    'end_date': end.toIso8601String(),
-  });
+      'company_id': companyId,
+      'start_date': start.toIso8601String(),
+      'end_date': end.toIso8601String(),
+    });
     final List<dynamic> data = response.data;
-  return data.map((json) => JournalEntry.fromJson(json)).toList();
-}
+    return data.map((json) => JournalEntry.fromJson(json)).toList();
+  }
 
   Future<JournalEntry> createJournalEntry(int companyId, {
-  required DateTime start,
-  required DateTime end,
-  String? description,
-  String? counterparty,
-  int? showcaseItemId,
-  int quantity = 1,
-  double totalAmount = 0.0,
-  List<Map<String, dynamic>>? items,
-}) async {
-  final response = await post('/journal/', queryParameters: {'company_id': companyId}, data: {
-    'datetime_start': start.toIso8601String(),
-    'datetime_end': end.toIso8601String(),
-    'description': description,
-    'counterparty': counterparty,
-    'showcase_item_id': showcaseItemId,
-    'quantity': quantity,
-    'total_amount': totalAmount,
-    'items': items, // отправляем список объектов
-  });
-  return JournalEntry.fromJson(response.data);
-}
+    required DateTime start,
+    required DateTime end,
+    String? description,
+    String? counterparty,
+    int? showcaseItemId,
+    int quantity = 1,
+    double totalAmount = 0.0,
+    List<Map<String, dynamic>>? items,
+  }) async {
+    final response = await post('/journal/', queryParameters: {'company_id': companyId}, data: {
+      'datetime_start': start.toIso8601String(),
+      'datetime_end': end.toIso8601String(),
+      'description': description,
+      'counterparty': counterparty,
+      'showcase_item_id': showcaseItemId,
+      'quantity': quantity,
+      'total_amount': totalAmount,
+      'items': items,
+    });
+    return JournalEntry.fromJson(response.data);
+  }
 
-Future<JournalEntry> updateJournalEntry(int companyId, int entryId, {
-  DateTime? start,
-  DateTime? end,
-  String? description,
-  String? counterparty,
-  int? showcaseItemId,
-  int? quantity,
-  double? totalAmount,
-  List<Map<String, dynamic>>? items,
-  String? status,
-}) async {
-  final data = <String, dynamic>{};
-  if (start != null) data['datetime_start'] = start.toIso8601String();
-  if (end != null) data['datetime_end'] = end.toIso8601String();
-  if (description != null) data['description'] = description;
-  if (counterparty != null) data['counterparty'] = counterparty;
-  if (showcaseItemId != null) data['showcase_item_id'] = showcaseItemId;
-  if (quantity != null) data['quantity'] = quantity;
-  if (totalAmount != null) data['total_amount'] = totalAmount;
-  if (items != null) data['items'] = items;
-  if (status != null) data['status'] = status;
-  final response = await patch('/journal/$entryId', queryParameters: {'company_id': companyId}, data: data);
-  return JournalEntry.fromJson(response.data);
-}
+  Future<JournalEntry> updateJournalEntry(int companyId, int entryId, {
+    DateTime? start,
+    DateTime? end,
+    String? description,
+    String? counterparty,
+    int? showcaseItemId,
+    int? quantity,
+    double? totalAmount,
+    List<Map<String, dynamic>>? items,
+    String? status,
+  }) async {
+    final data = <String, dynamic>{};
+    if (start != null) data['datetime_start'] = start.toIso8601String();
+    if (end != null) data['datetime_end'] = end.toIso8601String();
+    if (description != null) data['description'] = description;
+    if (counterparty != null) data['counterparty'] = counterparty;
+    if (showcaseItemId != null) data['showcase_item_id'] = showcaseItemId;
+    if (quantity != null) data['quantity'] = quantity;
+    if (totalAmount != null) data['total_amount'] = totalAmount;
+    if (items != null) data['items'] = items;
+    if (status != null) data['status'] = status;
+    final response = await patch('/journal/$entryId', queryParameters: {'company_id': companyId}, data: data);
+    return JournalEntry.fromJson(response.data);
+  }
 
   Future<void> deleteJournalEntry(int companyId, int entryId) async {
     await delete('/journal/$entryId', queryParameters: {'company_id': companyId});
@@ -565,52 +557,11 @@ Future<JournalEntry> updateJournalEntry(int companyId, int entryId, {
   }
 
   Future<Map<String, dynamic>> uploadOrderAttachment({
-  required int orderId,
-  required int companyId,
-  required Uint8List bytes,
-  required String filename,
-}) async {
-  final token = await getToken();
-  if (token == null) throw Exception('No authentication token');
-  
-  final formData = FormData.fromMap({
-    'file': MultipartFile.fromBytes(bytes, filename: filename),
-  });
-  
-  final response = await _dio.post(
-    '/orders/$orderId/attachments',
-    data: formData,
-    queryParameters: {'company_id': companyId},
-    options: Options(headers: {'Authorization': 'Bearer $token'}),
-  );
-  return response.data;
-}
-
-Future<Response> getOrderAttachmentFile(int attachmentId, int companyId) async {
-  final token = await getToken();
-  final response = await _dio.get(
-    '/orders/attachments/$attachmentId/file',
-    queryParameters: {'company_id': companyId},
-    options: Options(
-      responseType: ResponseType.bytes,
-      headers: {'Authorization': 'Bearer $token'},
-    ),
-  );
-  return response;
-}
-
-Future<void> deleteMyAccount(String password) async {
-  await delete('/auth/me', data: {'password': password});
-}
-
-// ========== Журнал: вложения ==========
-Future<Map<String, dynamic>> uploadJournalAttachment({
-  required int entryId,
-  required int companyId,
-  required Uint8List bytes,
-  required String filename,
-}) async {
-  try {
+    required int orderId,
+    required int companyId,
+    required Uint8List bytes,
+    required String filename,
+  }) async {
     final token = await getToken();
     if (token == null) throw Exception('No authentication token');
     
@@ -619,81 +570,119 @@ Future<Map<String, dynamic>> uploadJournalAttachment({
     });
     
     final response = await _dio.post(
-      '/journal/$entryId/attachments',
+      '/orders/$orderId/attachments',
       data: formData,
       queryParameters: {'company_id': companyId},
       options: Options(headers: {'Authorization': 'Bearer $token'}),
     );
-    return response.data as Map<String, dynamic>;
-  } on DioException catch (e) {
-    throw Exception(_getLocalizedErrorMessage(e));
-  } catch (e) {
-    throw Exception('Upload error: $e');
+    return response.data;
   }
-}
 
-Future<Response> getJournalAttachmentFile(int attachmentId, int companyId) async {
-  final token = await getToken();
-  return await _dio.get(
-    '/journal/attachments/$attachmentId/file',
-    queryParameters: {'company_id': companyId},
-    options: Options(
-      responseType: ResponseType.bytes,
-      headers: {'Authorization': 'Bearer $token'},
-    ),
-  );
-}
+  Future<Response> getOrderAttachmentFile(int attachmentId, int companyId) async {
+    final token = await getToken();
+    final response = await _dio.get(
+      '/orders/attachments/$attachmentId/file',
+      queryParameters: {'company_id': companyId},
+      options: Options(
+        responseType: ResponseType.bytes,
+        headers: {'Authorization': 'Bearer $token'},
+      ),
+    );
+    return response;
+  }
 
-Future<List<dynamic>> getCounterpartyDocuments(int counterpartyId, int companyId) async {
-  final response = await get('/counterparties/$counterpartyId/documents', queryParameters: {'company_id': companyId});
-  return response.data;
-}
+  Future<void> deleteMyAccount(String password) async {
+    await delete('/auth/me', data: {'password': password});
+  }
 
-Future<Map<String, dynamic>> uploadCounterpartyDocument({
-  required int counterpartyId,
-  required int companyId,
-  required Uint8List bytes,
-  required String filename,
-  String? description,
-}) async {
-  final token = await getToken();
-  if (token == null) throw Exception('No token');
-  final formData = FormData.fromMap({
-    'file': MultipartFile.fromBytes(bytes, filename: filename),
-    'description': description,
-  });
-  final response = await _dio.post(
-    '/counterparties/$counterpartyId/documents',
-    data: formData,
-    queryParameters: {'company_id': companyId},
-    options: Options(headers: {'Authorization': 'Bearer $token'}),
-  );
-  return response.data;
-}
+  Future<Map<String, dynamic>> uploadJournalAttachment({
+    required int entryId,
+    required int companyId,
+    required Uint8List bytes,
+    required String filename,
+  }) async {
+    try {
+      final token = await getToken();
+      if (token == null) throw Exception('No authentication token');
+      
+      final formData = FormData.fromMap({
+        'file': MultipartFile.fromBytes(bytes, filename: filename),
+      });
+      
+      final response = await _dio.post(
+        '/journal/$entryId/attachments',
+        data: formData,
+        queryParameters: {'company_id': companyId},
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+      return response.data as Map<String, dynamic>;
+    } on DioException catch (e) {
+      throw Exception(_getLocalizedErrorMessage(e));
+    } catch (e) {
+      throw Exception('Upload error: $e');
+    }
+  }
 
-Future<Response> getCounterpartyDocumentFile(int documentId, int companyId) async {
-  final token = await getToken();
-  return await _dio.get(
-    '/counterparties/documents/$documentId/file',
-    queryParameters: {'company_id': companyId},
-    options: Options(responseType: ResponseType.bytes, headers: {'Authorization': 'Bearer $token'}),
-  );
-}
+  Future<Response> getJournalAttachmentFile(int attachmentId, int companyId) async {
+    final token = await getToken();
+    return await _dio.get(
+      '/journal/attachments/$attachmentId/file',
+      queryParameters: {'company_id': companyId},
+      options: Options(
+        responseType: ResponseType.bytes,
+        headers: {'Authorization': 'Bearer $token'},
+      ),
+    );
+  }
 
-// Удалить документ
-Future<void> deleteCounterpartyDocument(int documentId, int companyId) async {
-  await delete('/counterparties/documents/$documentId', queryParameters: {'company_id': companyId});
-}
+  Future<List<dynamic>> getCounterpartyDocuments(int counterpartyId, int companyId) async {
+    final response = await get('/counterparties/$counterpartyId/documents', queryParameters: {'company_id': companyId});
+    return response.data;
+  }
 
-// Получить записи журнала по контрагенту
-Future<List<dynamic>> getCounterpartyJournalEntries(int counterpartyId, int companyId) async {
-  final response = await get('/counterparties/$counterpartyId/journal', queryParameters: {'company_id': companyId});
-  return response.data;
-}
+  Future<Map<String, dynamic>> uploadCounterpartyDocument({
+    required int counterpartyId,
+    required int companyId,
+    required Uint8List bytes,
+    required String filename,
+    String? description,
+  }) async {
+    final token = await getToken();
+    if (token == null) throw Exception('No token');
+    final formData = FormData.fromMap({
+      'file': MultipartFile.fromBytes(bytes, filename: filename),
+      'description': description,
+    });
+    final response = await _dio.post(
+      '/counterparties/$counterpartyId/documents',
+      data: formData,
+      queryParameters: {'company_id': companyId},
+      options: Options(headers: {'Authorization': 'Bearer $token'}),
+    );
+    return response.data;
+  }
 
-Future<void> deleteJournalAttachment(int attachmentId, int companyId) async {
-  await delete('/journal/attachments/$attachmentId', queryParameters: {'company_id': companyId});
-}
+  Future<Response> getCounterpartyDocumentFile(int documentId, int companyId) async {
+    final token = await getToken();
+    return await _dio.get(
+      '/counterparties/documents/$documentId/file',
+      queryParameters: {'company_id': companyId},
+      options: Options(responseType: ResponseType.bytes, headers: {'Authorization': 'Bearer $token'}),
+    );
+  }
+
+  Future<void> deleteCounterpartyDocument(int documentId, int companyId) async {
+    await delete('/counterparties/documents/$documentId', queryParameters: {'company_id': companyId});
+  }
+
+  Future<List<dynamic>> getCounterpartyJournalEntries(int counterpartyId, int companyId) async {
+    final response = await get('/counterparties/$counterpartyId/journal', queryParameters: {'company_id': companyId});
+    return response.data;
+  }
+
+  Future<void> deleteJournalAttachment(int attachmentId, int companyId) async {
+    await delete('/journal/attachments/$attachmentId', queryParameters: {'company_id': companyId});
+  }
 
   Future<void> changePassword(String oldPassword, String newPassword) async {
     await post('/auth/change-password', data: {

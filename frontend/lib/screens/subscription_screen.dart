@@ -18,6 +18,7 @@ class SubscriptionScreen extends ConsumerStatefulWidget {
 class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
   bool _loading = true;
   Map<String, dynamic> _status = {};
+  Map<String, dynamic> _prices = {};  // 👈 ДОБАВЛЕНО
 
   @override
   void initState() {
@@ -32,6 +33,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
       if (mounted) {
         setState(() {
           _status = res.data;
+          _prices = res.data['prices'] ?? {};  // 👈 ДОБАВЛЕНО
           _loading = false;
         });
       }
@@ -95,6 +97,12 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
     final extraCompanies = _status['extra_companies'] ?? 0;
     final nextPayment = _status['next_payment_amount'] ?? 500;
     final expiresAt = _status['subscription_expires_at'];
+
+    // 👇 ЦЕНЫ ИЗ БЭКЕНДА
+    final monthlyPrice = _prices['monthly'] ?? 500;
+    final halfYearPrice = _prices['half_year'] ?? 2700;
+    final extraCompanyPrice = _prices['extra_company'] ?? 250;
+    final currency = _prices['currency'] ?? '₽';
 
     final bool isBlocked = !hasActive &&
         (remainingTransactions <= 0 ||
@@ -237,10 +245,10 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
             _buildTariffCard(
               title: t.basicSubscription,
               subtitle: t.basicSubscriptionDescription,
-              price: '${nextPayment.toInt()} ${t.currencySymbol}',
+              price: '$monthlyPrice $currency',  // 👈 ИСПРАВЛЕНО
               priceNote:
                   extraCompanies > 0
-                      ? t.extraCompaniesInfo(extraCompanies, extraCompanies * 250)
+                      ? t.extraCompaniesInfo(extraCompanies, extraCompanies * monthlyPrice)
                       : null,
               onPress: () => _handlePurchase('monthly'),
               isRecommended: true,
@@ -248,14 +256,14 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
               colorScheme: colorScheme,
             ),
 
-            // Полугодовая подписка (явные строки без геттеров)
+            // Полугодовая подписка
             _buildTariffCard(
               title: '6 месяцев',
-              subtitle: 'Экономия 300 ₽',
-              price: '2700 ${t.currencySymbol}',
+              subtitle: 'Экономия ${(monthlyPrice * 6 - halfYearPrice).toInt()} $currency',
+              price: '$halfYearPrice $currency',  // 👈 ИСПРАВЛЕНО
               priceNote:
                   extraCompanies > 0
-                      ? t.extraCompaniesInfo(extraCompanies, extraCompanies * 1500)
+                      ? t.extraCompaniesInfo(extraCompanies, extraCompanies * monthlyPrice * 6)
                       : null,
               onPress: () => _handlePurchase('half_year'),
               isRecommended: false,
@@ -267,7 +275,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
             _buildTariffCard(
               title: t.extraCompany,
               subtitle: t.extraCompanyDescription,
-              price: '250 ${t.currencySymbol}',
+              price: '$extraCompanyPrice $currency',  // 👈 ИСПРАВЛЕНО
               priceNote: t.forever,
               onPress: () => _handlePurchase('extra_company'),
               isRecommended: false,

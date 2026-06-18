@@ -1,4 +1,4 @@
-// lib/payment/payment_mobile.dart - полная исправленная версия
+// lib/payment/payment_mobile.dart
 
 import 'payment_interface.dart';
 import 'dart:io' show Platform;
@@ -18,7 +18,6 @@ class PaymentServiceInstance implements PaymentService {
       throw Exception('In-app purchases not available on this device');
     }
     
-    // Подписываемся на поток обновлений покупок
     _inAppPurchase.purchaseStream.listen((purchaseDetailsList) {
       for (final purchaseDetails in purchaseDetailsList) {
         _handlePurchaseUpdate(purchaseDetails);
@@ -61,7 +60,6 @@ class PaymentServiceInstance implements PaymentService {
   }
 
   Future<void> _purchaseProduct(String productId, String store) async {
-    // Получаем детали продукта
     final productDetailsResponse = await _inAppPurchase.queryProductDetails({productId});
     
     if (productDetailsResponse.productDetails.isEmpty) {
@@ -70,20 +68,18 @@ class PaymentServiceInstance implements PaymentService {
 
     final productDetails = productDetailsResponse.productDetails.first;
     
-    // Создаём параметр покупки
     final purchaseParam = PurchaseParam(
       productDetails: productDetails,
       applicationUserName: null,
     );
 
-    // Запускаем покупку
+    // 👇 В новой версии buyNonConsumable работает для всего
     final bool success = await _inAppPurchase.buyNonConsumable(purchaseParam: purchaseParam);
     
     if (!success) {
       throw Exception('Failed to start purchase');
     }
 
-    // Ждём завершения покупки (максимум 30 секунд)
     int attempts = 0;
     while (_purchaseDetails == null && attempts < 30) {
       await Future.delayed(const Duration(seconds: 1));
@@ -115,7 +111,7 @@ class PaymentServiceInstance implements PaymentService {
       case 'half_year':
         return 'half_year_subscription';
       case 'extra_company':
-        return 'extra_company';
+        return 'extra_company_addon';
       default:
         throw Exception('Unknown plan: $plan');
     }

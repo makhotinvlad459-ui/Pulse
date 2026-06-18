@@ -35,10 +35,28 @@ PRICES_MOBILE = {
 }
 
 def detect_platform(request: Request) -> str:
-    """Определяем платформу по User-Agent"""
-    user_agent = request.headers.get("user-agent", "").lower()
-    if "android" in user_agent or "iphone" in user_agent or "ipad" in user_agent:
+    """Определяем платформу по заголовкам"""
+    
+    # 1. Сначала проверяем явный заголовок от мобилок
+    client_platform = request.headers.get("x-client-platform", "").lower()
+    if client_platform in ["android", "ios", "mobile"]:
+        print(f"📱 Платформа из заголовка: {client_platform}")
         return "mobile"
+    
+    # 2. Проверяем User-Agent (для веб-браузеров)
+    user_agent = request.headers.get("user-agent", "").lower()
+    print(f"🔍 User-Agent: {user_agent}")
+    
+    if "android" in user_agent or "iphone" in user_agent or "ipad" in user_agent:
+        print("📱 Платформа: MOBILE (из User-Agent)")
+        return "mobile"
+    
+    # 3. Фолбэк для Flutter/Dart (если нет заголовка)
+    if "dart" in user_agent:
+        print("📱 Платформа: MOBILE (Dart)")
+        return "mobile"
+    
+    print("💻 Платформа: WEB")
     return "web"
 
 # ========== МОДЕЛИ ЗАПРОСОВ ==========
