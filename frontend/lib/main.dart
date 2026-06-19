@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,12 +19,18 @@ import 'package:frontend/l10n/app_localizations.dart';
 import 'services/error/global_error_handler.dart';
 import 'screens/privacy_policy_screen.dart'; 
 
+
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   GlobalErrorHandler.initialize();
-
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      systemNavigationBarColor: Colors.transparent,
+    ),
+  );
   // 🔥 Запускаем приложение сразу, не дожидаясь Firebase
   runApp(const ProviderScope(child: MyApp()));
 

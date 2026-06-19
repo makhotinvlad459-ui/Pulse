@@ -29,7 +29,7 @@ PRICES_WEB = {
 PRICES_MOBILE = {
     "monthly": 800,      # $8.00
     "half_year": 4320,   # $43.20
-    "extra_company": 400, # $4.00
+    "extra_company": 2500, # $25
     "currency": "$",
     "currency_code": "USD"
 }
