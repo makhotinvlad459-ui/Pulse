@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import '../../services/api_client.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/locale_provider.dart';
@@ -275,7 +274,7 @@ class _CounterpartiesTabState extends ConsumerState<CounterpartiesTab> {
                                         )),
                                     if (totalDebt != 0)
                                       Text('⚠️ ${t.debt}: ${totalDebt.abs().toStringAsFixed(2)}$currency',
-                                          style: TextStyle(
+                                          style: const TextStyle(
                                             color: Colors.orange,
                                             fontWeight: FontWeight.w500,
                                           )),

@@ -22,7 +22,7 @@ class ProductionJournalReportWidget extends ConsumerStatefulWidget {
 class _ProductionJournalReportWidgetState extends ConsumerState<ProductionJournalReportWidget> {
   List<Map<String, dynamic>> _entries = [];
   List<Map<String, dynamic>> _filteredEntries = [];
-  Map<int, String> _productNames = {};
+  final Map<int, String> _productNames = {};
   Set<String> _creators = {};
   String? _selectedCreator;
   bool _loading = false;
@@ -312,7 +312,7 @@ class _ProductionJournalReportWidgetState extends ConsumerState<ProductionJourna
                             ],
                           ),
                         );
-                      }).toList(),
+                      }),
                     ],
                   ),
                 ),
@@ -383,7 +383,7 @@ class _ProductionJournalReportWidgetState extends ConsumerState<ProductionJourna
                               ],
                             ),
                           );
-                        }).toList(),
+                        }),
                       ],
                     ),
                   ),

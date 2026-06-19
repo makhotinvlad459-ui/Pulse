@@ -172,7 +172,7 @@ Future<void> _loadAccounts() async {
   final currency = t.currencySymbol;
   
   List<Map<String, dynamic>> saleItems = [];
-  final TextEditingController _productSearchController = TextEditingController();
+  final TextEditingController productSearchController = TextEditingController();
   
   int? cashAccountId, bankAccountId, selectedAccountId;
   DateTime date = DateTime.now();
@@ -229,14 +229,14 @@ Future<void> _loadAccounts() async {
                           'maxStock': selected['current_stock'],
                         });
                       }
-                      _productSearchController.clear();
+                      productSearchController.clear();
                     });
                   },
                   fieldViewBuilder: (context, textController, focusNode, onFieldSubmitted) {
-                    textController.text = _productSearchController.text;
+                    textController.text = productSearchController.text;
                     textController.addListener(() {
-                      if (_productSearchController.text != textController.text) {
-                        _productSearchController.text = textController.text;
+                      if (productSearchController.text != textController.text) {
+                        productSearchController.text = textController.text;
                       }
                     });
                     return TextField(
@@ -545,7 +545,7 @@ Future<void> _loadAccounts() async {
     final outputUnitController = TextEditingController(text: existing?['unit'] ?? 'шт');
     List<Map<String, dynamic>> recipeItems = [];
     
-    if (isEdit && existing?['recipe'] != null && existing!['recipe'].isNotEmpty) {
+    if (isEdit && existing['recipe'] != null && existing['recipe'].isNotEmpty) {
       try {
         final decoded = jsonDecode(existing['recipe']);
         if (decoded is List) {
@@ -753,7 +753,7 @@ Future<void> _loadAccounts() async {
                   })).toList()) : null;
                   try {
                     if (isEdit) {
-                      await _api.patch('/production/products/${existing!['id']}', 
+                      await _api.patch('/production/products/${existing['id']}', 
                         queryParameters: {'company_id': widget.companyId}, 
                         data: {'name': name, 'price': price, 'recipe': recipeJson, 'unit': outputUnit},
                       );
@@ -874,7 +874,7 @@ Future<void> _loadAccounts() async {
                                           ),
                                           Text(
                                             '${t.stock}: ${p['current_stock']} ${_getUnitDisplay(p['unit'] ?? 'шт')}',
-                                            style: TextStyle(color: Colors.green, fontWeight: FontWeight.w500),
+                                            style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w500),
                                           ),
                                         ],
                                       ),

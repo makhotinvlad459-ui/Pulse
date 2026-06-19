@@ -136,7 +136,7 @@ class _ProductionJournalEntryDialogState extends State<ProductionJournalEntryDia
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   DropdownButtonFormField<Map<String, dynamic>>(
-                    value: _selectedProduct,
+                    initialValue: _selectedProduct,
                     decoration: InputDecoration(
                       labelText: t.product,
                       labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),

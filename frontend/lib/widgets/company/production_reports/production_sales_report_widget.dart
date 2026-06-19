@@ -238,7 +238,7 @@ class _ProductionSalesReportWidgetState extends ConsumerState<ProductionSalesRep
                         DataCell(
                           !isPaid
                               ? IconButton(
-                                  icon: Icon(Icons.payment, color: Colors.green, size: 20),
+                                  icon: const Icon(Icons.payment, color: Colors.green, size: 20),
                                   onPressed: () => _markAsPaid(transactionId),
                                   tooltip: t.markAsPaid,
                                 )

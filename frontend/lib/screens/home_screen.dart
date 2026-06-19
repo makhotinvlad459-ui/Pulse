@@ -26,7 +26,7 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  bool _isLoading = false;
+  final bool _isLoading = false;
 
   @override
   void initState() {
