@@ -2,7 +2,7 @@ name: frontend
 description: "A new Flutter project."
 publish_to: 'none'
 
-version: 1.0.0+3
+version: 1.0.0+4
 
 environment:
   sdk: ^3.5.4
@@ -73,10 +73,10 @@ flutter:
 flutter_launcher_icons:
   android: "launcher_icon"
   ios: true
-  image_path: "assets/logo.png"  # ← ИСПРАВЛЕНО (путь должен быть правильным)
+  image_path: "assets/logo.png"  
   remove_alpha_ios: true  
   adaptive_icon_background: "#000000" 
-  adaptive_icon_foreground: "assets/logo_foreground.png"  # ← Убедись, что файл существует
+  adaptive_icon_foreground: "assets/logo_foreground.png"  
   web:
     generate: true
     image_path: "assets/logo.png"

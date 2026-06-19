@@ -111,7 +111,7 @@ class PaymentServiceInstance implements PaymentService {
       case 'half_year':
         return 'half_year_subscription';
       case 'extra_company':
-        return 'extra_company_addon';
+        return 'extra_company_addon_2';
       default:
         throw Exception('Unknown plan: $plan');
     }
