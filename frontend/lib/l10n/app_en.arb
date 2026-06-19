@@ -1009,6 +1009,7 @@
 "privacyPolicy": "Privacy Policy",
 "privacyPolicyTitle": "Privacy Policy",
 "privacyPolicyHint": "By clicking \"Sign In\", you agree to the Privacy Policy",
-"totalConsumptionTitle": "Total consumption (warehouse/showcase/production)"
+"totalConsumptionTitle": "Total consumption (warehouse/showcase/production)",
+"webVersion": "Web version"
 
 }

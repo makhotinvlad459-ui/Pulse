@@ -900,6 +900,22 @@ async def update_member(
         if "phone" in data:
             user.phone = data["phone"]
     
+    # ✅ ДОБАВЛЯЕМ СИНХРОНИЗАЦИЮ С КОМПАНИЕЙ
+    # Проверяем, является ли пользователь управляющим или основателем
+    company = await db.get(Company, company_id)
+    if company:
+        # Если пользователь — управляющий (role_in_company == 'manager')
+        # или основатель (company.founder_id == user_id)
+        if member.role_in_company == 'manager' or company.founder_id == user_id:
+            # Обновляем manager_full_name и manager_phone в таблице Company
+            if "full_name" in data:
+                company.manager_full_name = data["full_name"]
+            if "phone" in data:
+                company.manager_phone = data["phone"]
+    
+    await db.commit()
+    return {"detail": "Member updated"}
+    
     await db.commit()
     return {"detail": "Member updated"}
 

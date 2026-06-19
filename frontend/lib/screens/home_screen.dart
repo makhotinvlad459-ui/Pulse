@@ -17,6 +17,7 @@ import '../widgets/company/change_password_dialog.dart';
 import '../services/error/error_handler.dart';
 import 'dart:async' show Future;
 import 'company_screen.dart' deferred as CompanyScreen;
+import 'package:url_launcher/url_launcher.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -743,6 +744,24 @@ class SettingsDrawer extends StatelessWidget {
               );
             },
           ),
+          ListTile(
+  leading: const Icon(Icons.web),
+  title: Text(t.webVersion),
+  onTap: () async {
+    final Uri url = Uri.parse('https://pulse-yourmoney.com');
+    try {
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      } else {
+        throw Exception('Could not launch $url');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${t.error}: $e')),
+      );
+    }
+  },
+),
           ListTile(
             leading: const Icon(Icons.lock_outline),
             title: Text(t.changePassword),
