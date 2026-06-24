@@ -22,6 +22,9 @@ class _AddMaterialDialogState extends ConsumerState<AddMaterialDialog> {
   double _quantity = 1;
   double _totalPrice = 0;
   bool _useFromStock = false;
+  
+  // Флаг для отмены запросов при dispose
+  bool _isDisposed = false;
 
   // Преобразование ключа единицы измерения в локализованную строку
   String _unitKeyToDisplay(String key, AppLocalizations t) {
@@ -42,7 +45,14 @@ class _AddMaterialDialogState extends ConsumerState<AddMaterialDialog> {
   @override
   void initState() {
     super.initState();
+    _isDisposed = false;
     _filteredProducts = [];
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    super.dispose();
   }
 
   @override
@@ -60,14 +70,16 @@ class _AddMaterialDialogState extends ConsumerState<AddMaterialDialog> {
             children: [
               TextField(
                 onChanged: (value) {
-                  setState(() {
-                    _searchQuery = value;
-                    if (value.isNotEmpty) {
-                      _filteredProducts = widget.products.where((p) => p['name'].toLowerCase().contains(value.toLowerCase())).toList();
-                    } else {
-                      _filteredProducts = [];
-                    }
-                  });
+                  if (!_isDisposed && mounted) {
+                    setState(() {
+                      _searchQuery = value;
+                      if (value.isNotEmpty) {
+                        _filteredProducts = widget.products.where((p) => p['name'].toLowerCase().contains(value.toLowerCase())).toList();
+                      } else {
+                        _filteredProducts = [];
+                      }
+                    });
+                  }
                 },
                 decoration: InputDecoration(labelText: t.searchMaterialHint, labelStyle: TextStyle(color: colorScheme.onSurfaceVariant)),
                 style: TextStyle(color: colorScheme.onSurface),
@@ -84,13 +96,15 @@ class _AddMaterialDialogState extends ConsumerState<AddMaterialDialog> {
                         title: Text(prod['name'], style: TextStyle(color: colorScheme.onSurface)),
                         subtitle: Text('${_unitKeyToDisplay(prod['unit'], t)} / ${t.remainingStockLower}: ${prod['current_quantity']}', style: TextStyle(color: colorScheme.onSurfaceVariant)),
                         onTap: () {
-                          setState(() {
-                            _selectedProductId = prod['id'];
-                            _selectedProductName = prod['name'];
-                            _totalPrice = 0;
-                            _searchQuery = '';
-                            _filteredProducts = [];
-                          });
+                          if (!_isDisposed && mounted) {
+                            setState(() {
+                              _selectedProductId = prod['id'];
+                              _selectedProductName = prod['name'];
+                              _totalPrice = 0;
+                              _searchQuery = '';
+                              _filteredProducts = [];
+                            });
+                          }
                         },
                       );
                     },
@@ -103,11 +117,15 @@ class _AddMaterialDialogState extends ConsumerState<AddMaterialDialog> {
                   title: Text('${t.selectedLabel}: $_selectedProductName', style: TextStyle(color: colorScheme.onSurface)),
                   trailing: IconButton(
                     icon: const Icon(Icons.clear),
-                    onPressed: () => setState(() {
-                      _selectedProductId = null;
-                      _selectedProductName = '';
-                      _totalPrice = 0;
-                    }),
+                    onPressed: () {
+                      if (!_isDisposed && mounted) {
+                        setState(() {
+                          _selectedProductId = null;
+                          _selectedProductName = '';
+                          _totalPrice = 0;
+                        });
+                      }
+                    },
                   ),
                 ),
               ],
@@ -138,7 +156,11 @@ class _AddMaterialDialogState extends ConsumerState<AddMaterialDialog> {
                 children: [
                   Checkbox(
                     value: _useFromStock,
-                    onChanged: (v) => setState(() => _useFromStock = v ?? false),
+                    onChanged: (v) {
+                      if (!_isDisposed && mounted) {
+                        setState(() => _useFromStock = v ?? false);
+                      }
+                    },
                   ),
                   const SizedBox(width: 8),
                   Text(t.useFromStockLabel, style: TextStyle(color: colorScheme.onSurface)),
@@ -149,7 +171,12 @@ class _AddMaterialDialogState extends ConsumerState<AddMaterialDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: Text(t.cancel, style: TextStyle(color: colorScheme.onSurfaceVariant))),
+        TextButton(
+          onPressed: () {
+            if (mounted) Navigator.pop(context);
+          },
+          child: Text(t.cancel, style: TextStyle(color: colorScheme.onSurfaceVariant)),
+        ),
         ElevatedButton(
           onPressed: _submit,
           child: Text(t.add),
@@ -159,10 +186,13 @@ class _AddMaterialDialogState extends ConsumerState<AddMaterialDialog> {
   }
 
   Future<void> _createNewProduct() async {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     final t = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
     final nameController = TextEditingController();
-    String unitKey = 'шт'; // по умолчанию
+    String unitKey = 'шт';
     String unitDisplay = t.unitPcs;
     double price = 0;
 
@@ -214,9 +244,17 @@ class _AddMaterialDialogState extends ConsumerState<AddMaterialDialog> {
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(t.cancel, style: TextStyle(color: colorScheme.onSurfaceVariant))),
+          TextButton(
+            onPressed: () {
+              if (ctx.mounted) Navigator.pop(ctx);
+            },
+            child: Text(t.cancel, style: TextStyle(color: colorScheme.onSurfaceVariant)),
+          ),
           ElevatedButton(
             onPressed: () async {
+              if (_isDisposed) return;
+              if (!mounted) return;
+              
               if (nameController.text.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.enterMaterialName)));
                 return;
@@ -228,14 +266,20 @@ class _AddMaterialDialogState extends ConsumerState<AddMaterialDialog> {
                   'unit': unitKey,
                   'type': 'material',
                 });
+                if (_isDisposed) return;
+                if (!mounted) return;
+                
                 final newProduct = productRes.data;
                 setState(() {
                   _selectedProductId = newProduct['id'];
                   _selectedProductName = newProduct['name'];
                   _totalPrice = price;
                 });
-                Navigator.pop(ctx);
+                if (ctx.mounted) Navigator.pop(ctx);
               } catch (e) {
+                if (_isDisposed) return;
+                if (!mounted) return;
+                
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
               }
             },
@@ -247,6 +291,9 @@ class _AddMaterialDialogState extends ConsumerState<AddMaterialDialog> {
   }
 
   void _submit() {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     final t = AppLocalizations.of(context)!;
     if (_selectedProductId == null || _quantity <= 0 || _totalPrice <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.selectMaterialAndQuantity)));

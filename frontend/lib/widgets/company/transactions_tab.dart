@@ -43,20 +43,27 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
   DateTime _endDate = DateTime(DateTime.now().year, DateTime.now().month + 1, 0)
       .add(const Duration(days: 1))
       .subtract(const Duration(seconds: 1));
+  
+  // Флаг для отмены запросов при dispose
+  bool _isDisposed = false;
 
   @override
   void initState() {
     super.initState();
+    _isDisposed = false;
     _loadTransactions();
   }
 
   @override
   void dispose() {
+    _isDisposed = true;
     super.dispose();
   }
 
   Future<void> _loadTransactions() async {
+    if (_isDisposed) return;
     if (!mounted) return;
+    
     setState(() => _loading = true);
     final api = ApiClient();
     try {
@@ -66,14 +73,19 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
         'end_date': _endDate.toIso8601String(),
         'include_deleted': 'true',
       });
-      final List<dynamic> data = res.data;
+      
+      if (_isDisposed) return;
       if (!mounted) return;
+      
+      final List<dynamic> data = res.data;
       setState(() {
         _transactions = data.map((json) => Transaction.fromJson(json)).toList();
         _loading = false;
       });
     } catch (e) {
+      if (_isDisposed) return;
       if (!mounted) return;
+      
       setState(() => _loading = false);
       final t = AppLocalizations.of(context)!;
       ScaffoldMessenger.of(context)
@@ -82,6 +94,9 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
   }
 
   Future<void> _selectPeriod() async {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     final t = AppLocalizations.of(context)!;
     final now = DateTime.now();
     DateTime endDate = _endDate.isAfter(now) ? now : _endDate;
@@ -93,7 +108,9 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
       locale: Localizations.localeOf(context),
     );
     if (picked != null) {
+      if (_isDisposed) return;
       if (!mounted) return;
+      
       setState(() {
         _startDate = picked.start;
         _endDate = picked.end
@@ -105,20 +122,31 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
   }
 
   Future<void> _markAsPaid(int transactionId) async {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     final t = AppLocalizations.of(context)!;
     final api = ApiClient();
     try {
       await api.patch('/transactions/$transactionId/pay',
           queryParameters: {'company_id': widget.companyId});
+      
+      if (_isDisposed) return;
       if (!mounted) return;
+      
       await _loadTransactions();
       await widget.onRefresh();
+      
+      if (_isDisposed) return;
       if (!mounted) return;
+      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(t.transactionMarkedAsPaid)),
       );
     } catch (e) {
+      if (_isDisposed) return;
       if (!mounted) return;
+      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('${t.error}: $e')),
       );
@@ -210,63 +238,90 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
   }
 
   Future<void> _restoreTransaction(int id) async {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     final t = AppLocalizations.of(context)!;
     final api = ApiClient();
     try {
       await api.post('/transactions/$id/restore',
           queryParameters: {'company_id': widget.companyId});
+      
+      if (_isDisposed) return;
       if (!mounted) return;
+      
       await _loadTransactions();
       await widget.onRefresh();
+      
+      if (_isDisposed) return;
       if (!mounted) return;
+      
       ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(t.transactionRestored)));
     } catch (e) {
+      if (_isDisposed) return;
       if (!mounted) return;
+      
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text('${t.error}: $e')));
     }
   }
 
   Future<void> _permanentDeleteTransaction(int id) async {
-  final t = AppLocalizations.of(context)!;
-  final confirm = await showDialog<bool>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: Text(t.permanentDeleteTitle),
-      content: Text(t.permanentDeleteContent),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context, false), child: Text(t.cancel)),
-        TextButton(onPressed: () => Navigator.pop(context, true), child: Text(t.delete, style: const TextStyle(color: Colors.red))),
-      ],
-    ),
-  );
-  if (confirm != true) return;
-  
-  final api = ApiClient();
-  try {
-    await api.delete('/transactions/$id',
-        queryParameters: {'company_id': widget.companyId});
-    
-    if (!mounted) return;
-    await widget.onRefresh();
-    if (!mounted) return;
-    await _loadTransactions();
+    if (_isDisposed) return;
     if (!mounted) return;
     
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(t.transactionDeleted)),
+    final t = AppLocalizations.of(context)!;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(t.permanentDeleteTitle),
+        content: Text(t.permanentDeleteContent),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(t.cancel)),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: Text(t.delete, style: const TextStyle(color: Colors.red))),
+        ],
+      ),
     );
-  } catch (e) {
+    if (confirm != true) return;
+    
+    if (_isDisposed) return;
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${t.error}: $e')),
-    );
+    
+    final api = ApiClient();
+    try {
+      await api.delete('/transactions/$id',
+          queryParameters: {'company_id': widget.companyId});
+      
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
+      await widget.onRefresh();
+      await _loadTransactions();
+      
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(t.transactionDeleted)),
+      );
+    } catch (e) {
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${t.error}: $e')),
+      );
+    }
   }
-}
+
   Future<void> _editTransaction(Transaction transaction) async {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     final t = AppLocalizations.of(context)!;
     if (!widget.isFounder && !widget.permissions.contains('edit_transaction')) return;
+    
     final Map<String, dynamic> map = {
       'id': transaction.id,
       'type': transaction.type,
@@ -293,6 +348,7 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
         accounts: widget.accounts,
         categories: widget.categories,
         onSuccess: () async {
+          if (_isDisposed) return;
           if (!mounted) return;
           await _loadTransactions();
           await widget.onRefresh();
@@ -303,9 +359,13 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
   }
 
   Future<Uint8List?> _getTransactionImageBytes(int transactionId) async {
+    if (_isDisposed) return null;
+    
     final api = ApiClient();
     try {
       final response = await api.getTransactionFile(transactionId);
+      if (_isDisposed) return null;
+      
       if (response.data is List<int>) {
         return Uint8List.fromList(response.data as List<int>);
       } else if (response.data is String) {
@@ -318,6 +378,9 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
   }
 
   Future<void> _showAttachment(String? url, int transactionId) async {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     final t = AppLocalizations.of(context)!;
     if (url == null) return;
     
@@ -331,6 +394,10 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
       );
       
       final bytes = await _getTransactionImageBytes(transactionId);
+      
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
       if (mounted) Navigator.pop(context);
       
       if (bytes == null) {
@@ -341,6 +408,8 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
         }
         return;
       }
+      
+      if (!mounted) return;
       
       showDialog(
         context: context,
@@ -369,7 +438,9 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
                 right: 20,
                 child: IconButton(
                   icon: const Icon(Icons.close, color: Colors.white, size: 30),
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: () {
+                    if (mounted) Navigator.pop(context);
+                  },
                 ),
               ),
             ],
@@ -402,6 +473,9 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
   }
 
   Future<void> _downloadTransactionFile(int transactionId, String filename) async {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     final api = ApiClient();
     final t = AppLocalizations.of(context)!;
     try {
@@ -412,6 +486,10 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
       );
       
       final response = await api.getTransactionFile(transactionId);
+      
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
       final bytes = response.data as List<int>;
       
       if (mounted) Navigator.pop(context);
@@ -439,12 +517,13 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
         }
       }
     } catch (e) {
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${t.error}: $e')),
-        );
-      }
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${t.error}: $e')),
+      );
     }
   }
 
@@ -772,11 +851,15 @@ class _TransactionsTabState extends ConsumerState<TransactionsTab> {
             right: 16,
             child: FloatingActionButton(
               onPressed: () async {
+                if (_isDisposed) return;
+                if (!mounted) return;
+                
                 await showDialog(
                   context: context,
                   builder: (_) => AddTransactionDialog(
                     companyId: widget.companyId,
                     onSuccess: () async {
+                      if (_isDisposed) return;
                       if (!mounted) return;
                       await _loadTransactions();
                       await widget.onRefresh();

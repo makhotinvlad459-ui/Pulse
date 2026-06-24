@@ -101,18 +101,18 @@ class GlobalErrorHandler {
     
     // Дополнительная проверка на валидность контекста
     try {
-      // Если контекст не валидный, это вызовет исключение
       Localizations.localeOf(context);
     } catch (_) {
       debugPrint('⚠️ Context is invalid, skipping error dialog.');
       return;
     }
     
-    // Показываем диалог только если ошибка не игнорируется (мы уже проверили)
+    // Показываем диалог только если ошибка не игнорируется
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (navigatorKey.currentContext != null) {
+      final currentContext = navigatorKey.currentContext;
+      if (currentContext != null && currentContext.mounted) {
         ErrorHandler.showErrorDialog(
-          navigatorKey.currentContext!,
+          currentContext,
           error,
         );
       }

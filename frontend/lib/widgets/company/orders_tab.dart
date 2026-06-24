@@ -30,37 +30,61 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
   List<dynamic> _orders = [];
   bool _loading = true;
   List<Map<String, dynamic>> _companyMembers = [];
+  
+  // Флаг для отмены запросов при dispose
+  bool _isDisposed = false;
 
   @override
   void initState() {
     super.initState();
+    _isDisposed = false;
     _loadOrders();
     _loadCompanyMembers();
   }
 
+  @override
+  void dispose() {
+    _isDisposed = true;
+    super.dispose();
+  }
+
   Future<void> _loadCompanyMembers() async {
+    if (_isDisposed) return;
+    
     final api = ApiClient();
     try {
       final res = await api.get('/orders/company/${widget.companyId}/members');
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
       setState(() {
         _companyMembers = List<Map<String, dynamic>>.from(res.data);
       });
     } catch (e) {
-      print('Error loading members: $e');
+      if (!_isDisposed) print('Error loading members: $e');
     }
   }
 
   Future<void> _loadOrders() async {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     setState(() => _loading = true);
     final api = ApiClient();
     try {
       final res = await api.get('/orders', queryParameters: {'company_id': widget.companyId});
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
       setState(() {
         _orders = res.data;
         _loading = false;
       });
       widget.onDataChanged?.call();
     } catch (e) {
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
       setState(() => _loading = false);
       final t = AppLocalizations.of(context)!;
       String errorMsg = e.toString();
@@ -88,17 +112,27 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
   bool get _canEdit => widget.isFounder || widget.permissions.contains('edit_orders');
 
   Future<void> _updateOrderStatus(int orderId, String newStatus) async {
+    if (_isDisposed) return;
+    
     final api = ApiClient();
     try {
       await api.post('/orders/$orderId/status', queryParameters: {'company_id': widget.companyId}, data: {'status': newStatus});
-      _loadOrders();
+      if (!_isDisposed) {
+        _loadOrders();
+      }
     } catch (e) {
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
       final t = AppLocalizations.of(context)!;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
     }
   }
 
   Future<void> _deleteOrder(int orderId) async {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     final t = AppLocalizations.of(context)!;
     final confirm = await showDialog<bool>(
       context: context,
@@ -112,17 +146,30 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
       ),
     );
     if (confirm != true) return;
+    
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     final api = ApiClient();
     try {
       await api.delete('/orders/$orderId', queryParameters: {'company_id': widget.companyId});
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
       _loadOrders();
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.orderDeleted)));
     } catch (e) {
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
     }
   }
 
   void _showCreateOrderDialog() {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     showDialog(
       context: context,
       builder: (context) => CreateOrderDialog(
@@ -134,6 +181,9 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
   }
 
   void _showOrderDetails(Map<String, dynamic> order) {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     showDialog(
       context: context,
       builder: (context) => OrderDetailsDialog(

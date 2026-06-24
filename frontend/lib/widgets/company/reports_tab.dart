@@ -58,29 +58,48 @@ class ReportsTabState extends ConsumerState<ReportsTab> {
   double _totalProfit = 0;
   List<String> _xLabels = [];
   int _activeSalesTab = 0;
+  
+  // Флаг для отмены запросов при dispose
+  bool _isDisposed = false;
 
   @override
   void initState() {
     super.initState();
+    _isDisposed = false;
     _setPeriodForMode('month');
   }
 
-  void refreshData() => _loadData();
+  @override
+  void dispose() {
+    _isDisposed = true;
+    super.dispose();
+  }
+
+  void refreshData() {
+    if (!_isDisposed && mounted) {
+      _loadData();
+    }
+  }
 
   Future<void> _loadMaterialWriteoffs() async {
+    if (_isDisposed) return;
+    
     try {
       final res = await _api.get('/products/stock-writeoffs', queryParameters: {
         'company_id': widget.companyId,
         'start_date': _startDate.toIso8601String(),
         'end_date': _endDate.toIso8601String(),
       });
+      if (_isDisposed) return;
+      
       _materialWriteoffs = List<Map<String, dynamic>>.from(res.data);
     } catch (e) {
+      if (!_isDisposed) print('Error loading material writeoffs: $e');
       _materialWriteoffs = [];
     }
   }
 
-  // 👇 НОВЫЙ МЕТОД: объединяет расход из заказов и списания при производстве
+  // 👇 ОБЪЕДИНЯЕТ расход из заказов и списания при производстве
   List<Map<String, dynamic>> _getCombinedConsumption() {
     Map<String, double> combined = {};
 
@@ -109,6 +128,8 @@ class ReportsTabState extends ConsumerState<ReportsTab> {
   }
 
   void _setPeriodForMode(String mode) {
+    if (_isDisposed) return;
+    
     final now = DateTime.now();
     DateTime start, end;
     switch (mode) {
@@ -133,17 +154,22 @@ class ReportsTabState extends ConsumerState<ReportsTab> {
         start = DateTime(now.year, now.month, 1);
         end = now;
     }
-    setState(() {
-      _startDate = start;
-      _endDate = end;
-      _periodMode = mode;
-      _chartInterval = (mode == 'day' || mode == 'week' || mode == 'month') ? 'day' : 'month';
-    });
+    
+    if (!_isDisposed && mounted) {
+      setState(() {
+        _startDate = start;
+        _endDate = end;
+        _periodMode = mode;
+        _chartInterval = (mode == 'day' || mode == 'week' || mode == 'month') ? 'day' : 'month';
+      });
+    }
     _loadData();
   }
 
   void _shiftPeriod(int delta) {
+    if (_isDisposed) return;
     if (_periodMode == 'custom') return;
+    
     DateTime newStart = _startDate, newEnd = _endDate;
     switch (_periodMode) {
       case 'day':
@@ -166,14 +192,20 @@ class ReportsTabState extends ConsumerState<ReportsTab> {
         break;
     }
     if (newStart.isAfter(DateTime.now())) return;
-    setState(() {
-      _startDate = newStart;
-      _endDate = newEnd;
-    });
+    
+    if (!_isDisposed && mounted) {
+      setState(() {
+        _startDate = newStart;
+        _endDate = newEnd;
+      });
+    }
     _loadData();
   }
 
   void _selectCustomPeriod() async {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     final now = DateTime.now();
     final picked = await showDateRangePicker(
       context: context,
@@ -182,6 +214,9 @@ class ReportsTabState extends ConsumerState<ReportsTab> {
       initialDateRange: DateTimeRange(start: _startDate, end: _endDate),
       locale: Localizations.localeOf(context),
     );
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     if (picked != null) {
       setState(() {
         _startDate = picked.start;
@@ -194,7 +229,12 @@ class ReportsTabState extends ConsumerState<ReportsTab> {
   }
 
   Future<void> _loadData() async {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     setState(() => _loading = true);
+    
+    // Параллельная загрузка всех данных
     await Future.wait([
       _loadDynamics(),
       _loadIncomeByCategory(),
@@ -206,21 +246,31 @@ class ReportsTabState extends ConsumerState<ReportsTab> {
       _loadProductConsumption(),
       _loadMaterialWriteoffs(),
     ]);
+    
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     _calculateTotals();
     _prepareChartSpots();
     setState(() => _loading = false);
   }
 
   Future<void> _loadDynamics() async {
+    if (_isDisposed) return;
+    
     try {
       final res = await _api.getDynamics(widget.companyId, _startDate, _endDate, _chartInterval);
+      if (_isDisposed) return;
       _dynamicsRaw = res.data ?? [];
     } catch (e) {
+      if (!_isDisposed) print('Error loading dynamics: $e');
       _dynamicsRaw = [];
     }
   }
 
   void _prepareChartSpots() {
+    if (_isDisposed) return;
+    
     if (_dynamicsRaw.isEmpty) {
       _incomeSpots = [];
       _expenseSpots = [];
@@ -263,12 +313,16 @@ class ReportsTabState extends ConsumerState<ReportsTab> {
   }
 
   Future<void> _loadIncomeByCategory() async {
+    if (_isDisposed) return;
+    
     try {
       final res = await _api.get('/statistics/income', queryParameters: {
         'company_id': widget.companyId,
         'start_date': _startDate.toIso8601String(),
         'end_date': _endDate.toIso8601String(),
       });
+      if (_isDisposed) return;
+      
       final data = res.data;
       List<dynamic> raw = data['by_category'] ?? [];
       List<Map<String, dynamic>> normalized = [];
@@ -287,16 +341,22 @@ class ReportsTabState extends ConsumerState<ReportsTab> {
         normalized.add({'category_name': t.withoutCategory, 'total': totalNoCat});
       }
       _incomeByCategory = normalized;
-    } catch (e) {}
+    } catch (e) {
+      if (!_isDisposed) print('Error loading income by category: $e');
+    }
   }
 
   Future<void> _loadExpenseByCategory() async {
+    if (_isDisposed) return;
+    
     try {
       final res = await _api.get('/statistics/expense', queryParameters: {
         'company_id': widget.companyId,
         'start_date': _startDate.toIso8601String(),
         'end_date': _endDate.toIso8601String(),
       });
+      if (_isDisposed) return;
+      
       final data = res.data;
       List<dynamic> raw = data['by_category'] ?? [];
       List<Map<String, dynamic>> normalized = [];
@@ -315,24 +375,34 @@ class ReportsTabState extends ConsumerState<ReportsTab> {
         normalized.add({'category_name': t.withoutCategory, 'total': totalNoCat});
       }
       _expenseByCategory = normalized;
-    } catch (e) {}
+    } catch (e) {
+      if (!_isDisposed) print('Error loading expense by category: $e');
+    }
   }
 
   Future<void> _loadCashVsNoncash() async {
+    if (_isDisposed) return;
+    
     try {
       final res = await _api.get('/statistics/cash-vs-noncash', queryParameters: {
         'company_id': widget.companyId,
         'start_date': _startDate.toIso8601String(),
         'end_date': _endDate.toIso8601String(),
       });
+      if (_isDisposed) return;
+      
       _cashVsNoncash = {
         'cash': (res.data['cash'] as num).toDouble(),
         'noncash': (res.data['noncash'] as num).toDouble(),
       };
-    } catch (e) {}
+    } catch (e) {
+      if (!_isDisposed) print('Error loading cash vs noncash: $e');
+    }
   }
 
   Future<void> _loadProductSales() async {
+    if (_isDisposed) return;
+    
     try {
       final res = await _api.get('/statistics/product-sales', queryParameters: {
         'company_id': widget.companyId,
@@ -340,13 +410,17 @@ class ReportsTabState extends ConsumerState<ReportsTab> {
         'end_date': _endDate.toIso8601String(),
         'sort_by': 'quantity',
       });
+      if (_isDisposed) return;
       _productSales = res.data ?? [];
     } catch (e) {
+      if (!_isDisposed) print('Error loading product sales: $e');
       _productSales = [];
     }
   }
 
   Future<void> _loadShowcaseSales() async {
+    if (_isDisposed) return;
+    
     try {
       final res = await _api.get('/statistics/showcase-sales', queryParameters: {
         'company_id': widget.companyId,
@@ -354,13 +428,17 @@ class ReportsTabState extends ConsumerState<ReportsTab> {
         'end_date': _endDate.toIso8601String(),
         'sort_by': 'quantity',
       });
+      if (_isDisposed) return;
       _showcaseSales = res.data ?? [];
     } catch (e) {
+      if (!_isDisposed) print('Error loading showcase sales: $e');
       _showcaseSales = [];
     }
   }
 
   Future<void> _loadProductIncome() async {
+    if (_isDisposed) return;
+    
     try {
       final res = await _api.get('/statistics/product-income', queryParameters: {
         'company_id': widget.companyId,
@@ -368,13 +446,17 @@ class ReportsTabState extends ConsumerState<ReportsTab> {
         'end_date': _endDate.toIso8601String(),
         'sort_by': 'quantity',
       });
+      if (_isDisposed) return;
       _productIncome = res.data ?? [];
     } catch (e) {
+      if (!_isDisposed) print('Error loading product income: $e');
       _productIncome = [];
     }
   }
 
   Future<void> _loadProductConsumption() async {
+    if (_isDisposed) return;
+    
     try {
       final res = await _api.get('/statistics/product-consumption', queryParameters: {
         'company_id': widget.companyId,
@@ -382,22 +464,28 @@ class ReportsTabState extends ConsumerState<ReportsTab> {
         'end_date': _endDate.toIso8601String(),
         'sort_by': 'quantity',
       });
+      if (_isDisposed) return;
       _productConsumption = res.data ?? [];
     } catch (e) {
+      if (!_isDisposed) print('Error loading product consumption: $e');
       _productConsumption = [];
     }
   }
 
   void _calculateTotals() {
+    if (_isDisposed) return;
+    
     _totalIncome = _dynamicsRaw.fold(0, (sum, item) => sum + ((item['income'] as num?)?.toDouble() ?? 0));
     _totalExpense = _dynamicsRaw.fold(0, (sum, item) => sum + ((item['expense'] as num?)?.toDouble() ?? 0));
     _totalProfit = _totalIncome - _totalExpense;
   }
 
   void _onSpotTapped(int index) async {
+    if (_isDisposed) return;
     if (index < 0 || index >= _dynamicsRaw.length) return;
     final periodStr = _dynamicsRaw[index]['period'];
     if (periodStr == null) return;
+    
     DateTime newStart, newEnd;
     if (_chartInterval == 'day') {
       newStart = DateTime.parse(periodStr);
@@ -420,17 +508,23 @@ class ReportsTabState extends ConsumerState<ReportsTab> {
       newEnd = DateTime(year, 12, 31);
     }
     if (_startDate == newStart && _endDate == newEnd) return;
-    setState(() {
-      _startDate = newStart;
-      _endDate = newEnd;
-      _periodMode = 'custom';
-      _chartInterval = 'day';
-    });
+    
+    if (!_isDisposed && mounted) {
+      setState(() {
+        _startDate = newStart;
+        _endDate = newEnd;
+        _periodMode = 'custom';
+        _chartInterval = 'day';
+      });
+    }
     await _loadData();
   }
 
   // Экспорт доходов по категориям
   Future<void> _exportIncomeCategories() async {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     final t = AppLocalizations.of(context)!;
     if (_incomeByCategory.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.noDataToExport)));
@@ -458,6 +552,9 @@ class ReportsTabState extends ConsumerState<ReportsTab> {
 
   // Экспорт расходов по категориям
   Future<void> _exportExpenseCategories() async {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     final t = AppLocalizations.of(context)!;
     if (_expenseByCategory.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.noDataToExport)));
@@ -590,7 +687,7 @@ class ReportsTabState extends ConsumerState<ReportsTab> {
             children: [
               ProductTables(
                 productIncome: _productIncome,
-                productConsumption: _getCombinedConsumption(), // ✅ ОБЪЕДИНЯЕМ РАСХОД
+                productConsumption: _getCombinedConsumption(),
               ),
             ],
           ),
@@ -604,7 +701,11 @@ class ReportsTabState extends ConsumerState<ReportsTab> {
                 productSales: _productSales,
                 showcaseSales: _showcaseSales,
                 activeTab: _activeSalesTab,
-                onTabChanged: (value) => setState(() => _activeSalesTab = value),
+                onTabChanged: (value) {
+                  if (!_isDisposed && mounted) {
+                    setState(() => _activeSalesTab = value);
+                  }
+                },
               ),
             ],
           ),
@@ -648,7 +749,7 @@ class ReportsTabState extends ConsumerState<ReportsTab> {
             ],
           ),
 
-          // ========== ПРОИЗВОДСТВЕННЫЕ ОТЧЕТЫ (НОВЫЕ) ==========
+          // ========== ПРОИЗВОДСТВЕННЫЕ ОТЧЕТЫ ==========
           ExpansionTile(
             title: Text(t.productionReports, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             leading: const Icon(Icons.factory),

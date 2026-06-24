@@ -1010,7 +1010,35 @@
 "privacyPolicyTitle": "Политика конфиденциальности",
 "privacyPolicyHint": "Нажимая \"Войти\", вы соглашаетесь с политикой конфиденциальности",
 "totalConsumptionTitle": "Общий расход (склад/витрина/производство)",
-"webVersion": "Веб-версия"
+"webVersion": "Веб-версия",
+"error_connection": "Нет соединения с сервером. Проверьте интернет.",
+  "error_invalid_credentials": "Неверный email или пароль",
+  "error_server": "Ошибка сервера: {code}",
+  "error_unknown": "Произошла ошибка: {message}",
+  "error_auth_message": "Нет токена авторизации",
+  "error_upload": "Ошибка загрузки: {e}",
+  "error_subscription_message": "Вы достигли лимита бесплатных операций. Оформите подписку, чтобы продолжить.",
+  "need_base_subscription": "Нельзя купить дополнительную компанию без активной базовой подписки. Пожалуйста, оформите подписку.",
+  "invalid_plan": "Неверный план подписки",
+  "error_subscription_title": "Требуется подписка",
+  "error_cancel_title": "Запрос отменён",
+  "error_cancel_message": "Операция была отменена.",
+  "error_generic_title": "Ошибка",
+  "error_auth_title": "Сессия истекла",
+  "error_auth_message_login": "Ваша сессия истекла. Пожалуйста, войдите снова.",
+  "error_forbidden_title": "Доступ запрещён",
+  "error_forbidden_message": "У вас нет прав для выполнения этого действия.",
+  "error_not_found_title": "Не найдено",
+  "error_not_found_message": "Запрашиваемый ресурс не найден.",
+  "error_validation_title": "Ошибка валидации",
+  "error_validation_message": "Пожалуйста, проверьте введённые данные и попробуйте снова.",
+  "error_server_title": "Ошибка сервера",
+  "error_server_message": "Произошла ошибка на сервере. Пожалуйста, попробуйте позже.",
+  "error_network_title": "Ошибка сети",
+  "error_network_message": "Не удаётся подключиться к серверу. Проверьте интернет-соединение.",
+  "error_unknown_title": "Непредвиденная ошибка",
+  "error_unknown_message": "Произошла непредвиденная ошибка. Пожалуйста, попробуйте снова."
+
 }
 
   

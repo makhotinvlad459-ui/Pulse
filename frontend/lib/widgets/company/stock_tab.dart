@@ -30,6 +30,9 @@ class _StockTabState extends ConsumerState<StockTab> {
   // Для автодополнения
   List<String> _existingCounterparties = [];
   bool _loadingCounterparties = false;
+  
+  // Флаг для отмены запросов при dispose
+  bool _isDisposed = false;
 
   String _unitKeyToDisplay(String key, AppLocalizations t) {
     switch (key) {
@@ -109,6 +112,7 @@ class _StockTabState extends ConsumerState<StockTab> {
   @override
   void initState() {
     super.initState();
+    _isDisposed = false;
     final available = _availableTypes;
     if (available.isNotEmpty && !available.contains(_activeType)) {
       _activeType = available.first;
@@ -117,22 +121,41 @@ class _StockTabState extends ConsumerState<StockTab> {
     _loadCounterparties();
   }
 
+  @override
+  void dispose() {
+    _isDisposed = true;
+    _searchController.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadCounterparties() async {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     setState(() => _loadingCounterparties = true);
     final api = ApiClient();
     try {
       final res = await api.get('/counterparties/', queryParameters: {'company_id': widget.companyId});
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
       setState(() {
         _existingCounterparties = List<String>.from(res.data.map((cp) => cp['name']));
         _loadingCounterparties = false;
       });
     } catch (e) {
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
       setState(() => _loadingCounterparties = false);
-      print('Error loading counterparties: $e');
+      if (!_isDisposed) print('Error loading counterparties: $e');
     }
   }
 
   Future<void> _loadProducts() async {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     setState(() => _loading = true);
     final api = ApiClient();
     try {
@@ -140,11 +163,18 @@ class _StockTabState extends ConsumerState<StockTab> {
         'company_id': widget.companyId,
         'type': _activeType,
       });
+      
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
       setState(() {
         _products = res.data;
         _loading = false;
       });
     } catch (e) {
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
       setState(() => _loading = false);
       final t = AppLocalizations.of(context)!;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -162,6 +192,9 @@ class _StockTabState extends ConsumerState<StockTab> {
   }
 
   Future<void> _deleteProduct(Map<String, dynamic> product) async {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     final t = AppLocalizations.of(context)!;
     final confirm = await showDialog<bool>(
       context: context,
@@ -181,14 +214,24 @@ class _StockTabState extends ConsumerState<StockTab> {
       ),
     );
     if (confirm != true) return;
+    
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     final api = ApiClient();
     try {
       await api.delete('/products/${product['id']}', queryParameters: {'company_id': widget.companyId});
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
       _loadProducts();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(t.productDeleted)),
       );
     } catch (e) {
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('${t.error}: $e')),
       );
@@ -196,7 +239,10 @@ class _StockTabState extends ConsumerState<StockTab> {
   }
 
   Future<void> _addOrEditProduct([Map<String, dynamic>? existing]) async {
+    if (_isDisposed) return;
+    if (!mounted) return;
     if (!_canCreate && existing == null) return;
+    
     final isEdit = existing != null;
     if (isEdit && !_canEdit) return;
 
@@ -215,16 +261,16 @@ class _StockTabState extends ConsumerState<StockTab> {
     final colorScheme = Theme.of(context).colorScheme;
 
     final unitsDisplay = [
-  t.unitPcs,
-  t.unitKg,
-  t.unitGram,
-  t.unitLiter,
-  t.unitMl,
-  t.unitMeter,
-  t.unitCm,
-  t.unitInch,
-  t.unitPack,
-];
+      t.unitPcs,
+      t.unitKg,
+      t.unitGram,
+      t.unitLiter,
+      t.unitMl,
+      t.unitMeter,
+      t.unitCm,
+      t.unitInch,
+      t.unitPack,
+    ];
 
     await showDialog(
       context: context,
@@ -370,9 +416,16 @@ class _StockTabState extends ConsumerState<StockTab> {
                     'supplier': supplierController.text,
                   });
                 }
+                
+                if (_isDisposed) return;
+                if (!mounted) return;
+                
                 Navigator.pop(context);
                 _loadProducts();
               } catch (e) {
+                if (_isDisposed) return;
+                if (!mounted) return;
+                
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
               }
             },

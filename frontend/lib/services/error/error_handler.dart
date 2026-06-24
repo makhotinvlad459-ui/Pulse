@@ -42,14 +42,36 @@ class ErrorHandler {
       }
     }
 
-    // Dio ошибки
+    // Проверка на отмену запроса (DioException.cancel)
+    if (error is DioException && error.type == DioExceptionType.cancel) {
+      return AppError(
+        title: getText('error_cancel_title', 'Request Cancelled'),
+        message: getText('error_cancel_message', 'The operation was cancelled.'),
+        canRetry: false,
+      );
+    }
+
+    // Обработка ошибок с кодом 402 (подписка)
+    if (error is DioException && error.response?.statusCode == 402) {
+      return AppError(
+        title: getText('error_subscription_title', 'Subscription Required'),
+        message: error.response?.data?['detail'] ?? 
+                 getText('error_subscription_message', 'You have reached the limit of free operations. Please subscribe to continue.'),
+        canRetry: false,
+        onRetry: () {
+          if (effectiveContext != null) {
+            Navigator.of(effectiveContext).pushNamed('/subscription');
+          }
+        },
+      );
+    }
+
+    // Обработка кодов ошибок из detail (ERROR_NEED_BASE_SUBSCRIPTION и т.д.)
     if (error is DioException) {
-      // ✅ НОВЫЙ БЛОК: Обработка кодов ошибок из detail
       final responseData = error.response?.data;
       if (responseData is Map && responseData.containsKey('detail')) {
         final detail = responseData['detail'];
         if (detail is String && detail.startsWith('ERROR_')) {
-          // Это код ошибки с бэкенда
           switch (detail) {
             case 'ERROR_NEED_BASE_SUBSCRIPTION':
               return AppError(
@@ -69,7 +91,6 @@ class ErrorHandler {
                 canRetry: false,
               );
             default:
-              // Если неизвестный код ошибки, показываем как есть
               return AppError(
                 title: getText('error_generic_title', 'Error'),
                 message: detail,
@@ -79,22 +100,10 @@ class ErrorHandler {
           }
         }
       }
+    }
 
-      // 402 - Payment Required
-      if (error.response?.statusCode == 402) {
-        return AppError(
-          title: getText('error_subscription_title', 'Subscription Required'),
-          message: error.response?.data?['detail'] ?? 
-                   getText('error_subscription_message', 'You have reached the limit of free operations. Please subscribe to continue.'),
-          canRetry: false,
-          onRetry: () {
-            if (effectiveContext != null) {
-              Navigator.of(effectiveContext).pushNamed('/subscription');
-            }
-          },
-        );
-      }
-
+    // Dio ошибки
+    if (error is DioException) {
       // 401 - Unauthorized
       if (error.response?.statusCode == 401) {
         return AppError(
@@ -102,7 +111,9 @@ class ErrorHandler {
           message: getText('error_auth_message', 'Your session has expired. Please login again.'),
           canRetry: true,
           onRetry: onRetry ?? () {
-            navigatorKey.currentState?.pushNamedAndRemoveUntil('/login', (route) => false);
+            if (navigatorKey.currentContext != null) {
+              navigatorKey.currentState?.pushNamedAndRemoveUntil('/login', (route) => false);
+            }
           },
         );
       }
@@ -175,15 +186,6 @@ class ErrorHandler {
           onRetry: onRetry,
         );
       }
-
-      // Cancel error
-      if (error.type == DioExceptionType.cancel) {
-        return AppError(
-          title: getText('error_cancel_title', 'Request Cancelled'),
-          message: getText('error_cancel_message', 'The operation was cancelled.'),
-          canRetry: false,
-        );
-      }
     }
 
     // Обработка ошибки из response.data (например, {detail: "message"})
@@ -226,6 +228,9 @@ class ErrorHandler {
     dynamic error, {
     VoidCallback? onRetry,
   }) async {
+    // Проверяем, что контекст еще валидный
+    if (!context.mounted) return;
+    
     final appError = handleError(error, context: context, onRetry: onRetry);
     final t = AppLocalizations.of(context);
     
@@ -247,22 +252,28 @@ class ErrorHandler {
         content: Text(appError.message),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () {
+              if (context.mounted) Navigator.of(context).pop();
+            },
             child: Text(t?.close ?? 'Close'),
           ),
           if (appError.canRetry && appError.onRetry != null)
             ElevatedButton(
               onPressed: () {
-                Navigator.of(context).pop();
-                appError.onRetry!();
+                if (context.mounted) {
+                  Navigator.of(context).pop();
+                  appError.onRetry!();
+                }
               },
               child: Text(t?.retry ?? 'Retry'),
-            ),
+          ),
           if (!appError.canRetry && appError.onRetry != null)
             ElevatedButton(
               onPressed: () {
-                Navigator.of(context).pop();
-                appError.onRetry!();
+                if (context.mounted) {
+                  Navigator.of(context).pop();
+                  appError.onRetry!();
+                }
               },
               child: Text(t?.upgrade ?? 'Upgrade'),
             ),
@@ -276,6 +287,8 @@ class ErrorHandler {
     dynamic error, {
     VoidCallback? onRetry,
   }) {
+    if (!context.mounted) return;
+    
     final appError = handleError(error, context: context, onRetry: onRetry);
     final t = AppLocalizations.of(context);
     

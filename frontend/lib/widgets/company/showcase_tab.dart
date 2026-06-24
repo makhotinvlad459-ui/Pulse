@@ -36,6 +36,9 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
   // Для автодополнения контрагентов
   List<String> _existingCounterparties = [];
   bool _loadingCounterparties = false;
+  
+  // Флаг для отмены запросов при dispose
+  bool _isDisposed = false;
 
   // Функция перевода категорий (системные)
   String _translateCategoryName(String name, AppLocalizations t) {
@@ -62,43 +65,74 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
   @override
   void initState() {
     super.initState();
+    _isDisposed = false;
     _loadData();
     _loadCounterparties();
   }
 
+  @override
+  void dispose() {
+    _isDisposed = true;
+    super.dispose();
+  }
+
   Future<void> _loadData() async {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     setState(() => _loading = true);
     await Future.wait([_loadItems(), _loadCategories()]);
+    
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     setState(() => _loading = false);
   }
 
   Future<void> _loadItems() async {
+    if (_isDisposed) return;
+    
     try {
       final res = await _api.get('/showcase', queryParameters: {'company_id': widget.companyId});
+      if (_isDisposed) return;
+      
       _items = (res.data as List).map((json) => ShowcaseItem.fromJson(json)).toList();
     } catch (e) {
-      print('Load items error: $e');
+      if (!_isDisposed) print('Load items error: $e');
     }
   }
 
   Future<void> _loadCategories() async {
+    if (_isDisposed) return;
+    
     try {
       final res = await _api.get('/categories', queryParameters: {'company_id': widget.companyId});
+      if (_isDisposed) return;
+      
       _categories = res.data;
     } catch (e) {
-      print('Load categories error: $e');
+      if (!_isDisposed) print('Load categories error: $e');
     }
   }
 
   Future<void> _loadCounterparties() async {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     setState(() => _loadingCounterparties = true);
     try {
       final res = await _api.get('/counterparties', queryParameters: {'company_id': widget.companyId});
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
       setState(() {
         _existingCounterparties = List<String>.from(res.data.map((cp) => cp['name']));
         _loadingCounterparties = false;
       });
     } catch (e) {
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
       setState(() => _loadingCounterparties = false);
       print('Error loading counterparties: $e');
     }
@@ -117,16 +151,21 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
   }
 
   Future<void> _saveOrder(List<ShowcaseItem> newItems) async {
+    if (_isDisposed) return;
+    
     final ids = newItems.map((i) => i.id).toList();
     try {
       await _api.post('/showcase/reorder', queryParameters: {'company_id': widget.companyId}, data: ids);
     } catch (e) {
-      print('Reorder error: $e');
+      if (!_isDisposed) print('Reorder error: $e');
     }
   }
 
   Future<void> _openReorderDialog() async {
+    if (_isDisposed) return;
+    if (!mounted) return;
     if (!_canEdit) return;
+    
     final t = AppLocalizations.of(context)!;
     List<ShowcaseItem> tempItems = List.from(_items);
     await showDialog(
@@ -162,10 +201,13 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
               ElevatedButton(
                 onPressed: () async {
                   await _saveOrder(tempItems);
+                  if (_isDisposed) return;
+                  if (!mounted) return;
+                  
                   setState(() {
                     _items = tempItems;
                   });
-                  Navigator.pop(context);
+                  if (mounted) Navigator.pop(context);
                 },
                 child: Text(t.save),
               ),
@@ -177,7 +219,10 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
   }
 
   Future<void> _addItem() async {
+    if (_isDisposed) return;
+    if (!mounted) return;
     if (!_canEdit) return;
+    
     final t = AppLocalizations.of(context)!;
     final nameController = TextEditingController();
     final priceController = TextEditingController();
@@ -254,9 +299,16 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                       'category_id': categoryId,
                       'recipe': recipeJson,
                     });
+                    
+                    if (_isDisposed) return;
+                    if (!mounted) return;
+                    
                     Navigator.pop(context);
                     _loadData();
                   } catch (e) {
+                    if (_isDisposed) return;
+                    if (!mounted) return;
+                    
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
                   }
                 },
@@ -270,7 +322,10 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
   }
 
   Future<void> _editItem(ShowcaseItem item) async {
+    if (_isDisposed) return;
+    if (!mounted) return;
     if (!_canEdit) return;
+    
     final t = AppLocalizations.of(context)!;
     final nameController = TextEditingController(text: item.name);
     final priceController = TextEditingController(text: item.price.toString());
@@ -282,6 +337,8 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
         if (decoded is List) {
           // Загружаем продукты, чтобы получить названия
           final productsRes = await _api.get('/products', queryParameters: {'company_id': widget.companyId});
+          if (_isDisposed) return;
+          
           final products = (productsRes.data as List).cast<Map<String, dynamic>>();
           final Map<int, String> productNames = {};
           for (var p in products) {
@@ -294,7 +351,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
           }).toList();
         }
       } catch (e) {
-        print('Error parsing recipe: $e');
+        if (!_isDisposed) print('Error parsing recipe: $e');
       }
     }
     await showDialog(
@@ -367,9 +424,16 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                       'category_id': categoryId,
                       'recipe': recipeJson,
                     });
+                    
+                    if (_isDisposed) return;
+                    if (!mounted) return;
+                    
                     Navigator.pop(context);
                     _loadData();
                   } catch (e) {
+                    if (_isDisposed) return;
+                    if (!mounted) return;
+                    
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
                   }
                 },
@@ -383,7 +447,10 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
   }
 
   Future<void> _deleteItem(ShowcaseItem item) async {
+    if (_isDisposed) return;
+    if (!mounted) return;
     if (!_canEdit) return;
+    
     final t = AppLocalizations.of(context)!;
     final confirm = await showDialog<bool>(
       context: context,
@@ -397,17 +464,29 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
       ),
     );
     if (confirm != true) return;
+    
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     try {
       await _api.delete('/showcase/${item.id}', queryParameters: {'company_id': widget.companyId});
-      _loadData();
+      if (!_isDisposed) {
+        _loadData();
+      }
     } catch (e) {
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
     }
   }
 
   // Продажа одного товара
   Future<void> _sellItem(ShowcaseItem item) async {
+    if (_isDisposed) return;
+    if (!mounted) return;
     if (!_canSell) return;
+    
     final t = AppLocalizations.of(context)!;
     final currency = t.currencySymbol;
     double quantity = 1.0;
@@ -416,6 +495,9 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
     final counterpartyController = TextEditingController();
 
     final accountsRes = await _api.get('/accounts', queryParameters: {'company_id': widget.companyId});
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     final accounts = accountsRes.data as List;
     int? cashAccountId = accounts.firstWhere((a) => a['type'] == 'cash', orElse: () => null)?['id'];
     int? bankAccountId = accounts.firstWhere((a) => a['type'] == 'bank', orElse: () => null)?['id'];
@@ -604,7 +686,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                         });
                       }
                     } catch (e) {
-                      print('Recipe parse error: $e');
+                      if (!_isDisposed) print('Recipe parse error: $e');
                     }
                   }
                   final data = {
@@ -621,11 +703,18 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                   };
                   try {
                     await _api.post('/transactions/', queryParameters: {'company_id': widget.companyId}, data: data);
+                    
+                    if (_isDisposed) return;
+                    if (!mounted) return;
+                    
                     Navigator.pop(context);
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.saleCompleted)));
                     widget.onRefresh?.call();
                     _loadData();
                   } catch (e) {
+                    if (_isDisposed) return;
+                    if (!mounted) return;
+                    
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
                   }
                 },
@@ -640,7 +729,10 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
 
   // Массовая продажа
   Future<void> _openBulkSaleDialog() async {
+    if (_isDisposed) return;
+    if (!mounted) return;
     if (!_canSell) return;
+    
     final t = AppLocalizations.of(context)!;
     final currency = t.currencySymbol;
     _bulkSaleItems = _items.map((item) => {
@@ -662,6 +754,9 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
     final counterpartyController = TextEditingController();
 
     final accountsRes = await _api.get('/accounts', queryParameters: {'company_id': widget.companyId});
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     final accounts = accountsRes.data as List;
     cashAccountId = accounts.firstWhere((a) => a['type'] == 'cash', orElse: () => null)?['id'];
     bankAccountId = accounts.firstWhere((a) => a['type'] == 'bank', orElse: () => null)?['id'];
@@ -874,7 +969,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                           });
                         }
                       } catch (e) {
-                        print('Recipe parse error: $e');
+                        if (!_isDisposed) print('Recipe parse error: $e');
                       }
                     }
                     final data = {
@@ -892,6 +987,10 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                     };
                     await _api.post('/transactions/', queryParameters: {'company_id': widget.companyId}, data: data);
                   }
+                  
+                  if (_isDisposed) return;
+                  if (!mounted) return;
+                  
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.saleCompleted)));
                   widget.onRefresh?.call();
@@ -907,6 +1006,9 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
   }
 
   void _showMenu(ShowcaseItem item) {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     final t = AppLocalizations.of(context)!;
     final colorScheme = Theme.of(context).colorScheme;
     showGeneralDialog(
@@ -936,6 +1038,8 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                         width: double.infinity,
                         child: ElevatedButton.icon(
                           onPressed: _canSell ? () {
+                            if (_isDisposed) return;
+                            if (!mounted) return;
                             Navigator.pop(context);
                             _sellItem(item);
                           } : null,
@@ -957,6 +1061,8 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                           children: [
                             TextButton.icon(
                               onPressed: () {
+                                if (_isDisposed) return;
+                                if (!mounted) return;
                                 Navigator.pop(context);
                                 _editItem(item);
                               },
@@ -965,6 +1071,8 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                             ),
                             TextButton.icon(
                               onPressed: () {
+                                if (_isDisposed) return;
+                                if (!mounted) return;
                                 Navigator.pop(context);
                                 _deleteItem(item);
                               },

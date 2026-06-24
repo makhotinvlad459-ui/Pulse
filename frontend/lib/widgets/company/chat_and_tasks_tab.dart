@@ -25,15 +25,20 @@ class ChatAndTasksTab extends ConsumerStatefulWidget {
 class _ChatAndTasksTabState extends ConsumerState<ChatAndTasksTab>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  
+  // Флаг для отмены запросов при dispose
+  bool _isDisposed = false;
 
   @override
   void initState() {
     super.initState();
+    _isDisposed = false;
     _tabController = TabController(length: 2, vsync: this);
   }
 
   @override
   void dispose() {
+    _isDisposed = true;
     _tabController.dispose();
     super.dispose();
   }

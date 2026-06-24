@@ -7,6 +7,7 @@ import '../services/api_client.dart';
 import '../providers/auth_provider.dart';
 import '../providers/locale_provider.dart';
 import '../models/user.dart';
+import 'package:dio/dio.dart'; 
 import '../models/company.dart';
 import '../widgets/company/account_card.dart';
 import '../widgets/company/transactions_tab.dart';
@@ -33,8 +34,11 @@ class RainTheme {
   final Color color;
   final double opacity;
   final double speed;
-  const RainTheme(
-      {required this.color, required this.opacity, required this.speed});
+  const RainTheme({
+    required this.color,
+    required this.opacity,
+    required this.speed,
+  });
 }
 
 RainTheme getRainTheme(AppTheme theme) {
@@ -85,6 +89,9 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
 
   Set<String> _myPermissions = {};
   bool _permissionsLoaded = false;
+  
+  // Флаг для отмены запросов при dispose
+  bool _isDisposed = false;
 
   // ------------------- Перетаскиваемые вкладки -------------------
   final List<String> _allTabKeys = [
@@ -132,7 +139,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
   Set<String> _getEffectivePermissions() {
     final authState = ref.read(authProvider);
     final isFounder = authState.user?.role == UserRole.founder;
-    
+
     if (isFounder) {
       return {
         'view_operations',
@@ -164,26 +171,46 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
   }
 
   Future<void> _loadTabOrder() async {
-    final prefs = await SharedPreferences.getInstance();
-    final saved = prefs.getStringList('tab_order_${_company.id}');
-    if (saved != null && saved.isNotEmpty) {
-      final validKeys =
-          saved.where((key) => _allTabKeys.contains(key)).toList();
-      for (var key in _allTabKeys) {
-        if (!validKeys.contains(key)) validKeys.add(key);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (_isDisposed) return;
+      
+      final saved = prefs.getStringList('tab_order_${_company.id}');
+      if (saved != null && saved.isNotEmpty) {
+        final validKeys = saved.where((key) => _allTabKeys.contains(key)).toList();
+        for (var key in _allTabKeys) {
+          if (!validKeys.contains(key)) validKeys.add(key);
+        }
+        _tabOrder = validKeys;
+      } else {
+        _tabOrder = List.from(_allTabKeys);
       }
-      _tabOrder = validKeys;
-    } else {
-      _tabOrder = List.from(_allTabKeys);
+      
+      if (!_isDisposed && mounted) {
+        _rebuildTabs();
+      }
+    } catch (e) {
+      // Игнорируем ошибки загрузки порядка табов
+      debugPrint('Error loading tab order: $e');
+      if (!_isDisposed && mounted) {
+        _tabOrder = List.from(_allTabKeys);
+        _rebuildTabs();
+      }
     }
-    _rebuildTabs();
   }
 
   Future<void> _saveTabOrder(List<String> newOrder) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList('tab_order_${_company.id}', newOrder);
-    _tabOrder = newOrder;
-    _rebuildTabs();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList('tab_order_${_company.id}', newOrder);
+      if (_isDisposed) return;
+      _tabOrder = newOrder;
+      if (mounted) {
+        _rebuildTabs();
+      }
+    } catch (e) {
+      debugPrint('Error saving tab order: $e');
+    }
   }
 
   Future<void> _openReorderTabsDialog() async {
@@ -234,6 +261,9 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
   }
 
   void _rebuildTabs() {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     final t = AppLocalizations.of(context)!;
     final effectivePermissions = _getEffectivePermissions();
 
@@ -353,7 +383,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
         _tabController.dispose();
         _tabController = TabController(length: newTabs.length, vsync: this);
       }
-      
+
       setState(() {
         _tabs = newTabs;
         _tabWidgets = newWidgets;
@@ -365,6 +395,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
   void initState() {
     super.initState();
     _company = widget.company;
+    _isDisposed = false;
     initializeDateFormatting('ru_RU', null);
     _tabController = TabController(length: 0, vsync: this);
     _loadData();
@@ -374,6 +405,8 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
 
   @override
   void dispose() {
+    _isDisposed = true;
+    
     // Закрываем WebSocket соединения с try-catch
     try {
       WebSocketService().disconnectChat();
@@ -391,6 +424,8 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
   }
 
   Future<void> _initWebSocket() async {
+    if (_isDisposed) return;
+    
     final authState = ref.read(authProvider);
     final user = authState.user;
     if (user == null) return;
@@ -419,15 +454,19 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
   }
 
   Future<void> _refreshCounters() async {
+    if (_isDisposed) return;
+    
     final api = ApiClient();
     try {
       final countsRes = await api.get('/notifications/unread-counts/');
+      if (_isDisposed) return;
+      
       final counts = countsRes.data as Map<String, dynamic>?;
       if (counts == null) return;
-      
+
       final companyIdStr = _company.id.toString();
       final companyCounts = counts[companyIdStr] as Map<String, dynamic>?;
-      
+
       if (mounted) {
         setState(() {
           _unreadMessagesCount = companyCounts?['unread_messages'] ?? 0;
@@ -440,29 +479,50 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
   }
 
   void _onPendingTasksChanged(int pending) {
-    if (mounted) setState(() => _pendingTasksCount = pending);
+    if (!_isDisposed && mounted) {
+      setState(() => _pendingTasksCount = pending);
+    }
   }
 
   void _onUnreadMessagesChanged(int unread) {
-    if (mounted) setState(() => _unreadMessagesCount = unread);
+    if (!_isDisposed && mounted) {
+      setState(() => _unreadMessagesCount = unread);
+    }
   }
 
   Future<void> _loadData() async {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     setState(() => _loading = true);
+    
     final api = ApiClient();
+    
     try {
-      final updatedCompany = await api.getCompany(_company.id);
+      // ✅ ПАРАЛЛЕЛЬНАЯ ЗАГРУЗКА ВСЕХ ДАННЫХ
+      final results = await Future.wait([
+        api.getCompany(_company.id),
+        api.get('/accounts', queryParameters: {'company_id': _company.id}),
+        api.get('/transactions', queryParameters: {'company_id': _company.id}),
+        api.get('/categories', queryParameters: {'company_id': _company.id}),
+      ]).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          throw Exception('Request timeout');
+        },
+      );
       
-      final accountsRes = await api
-          .get('/accounts', queryParameters: {'company_id': _company.id});
-      final transactionsRes = await api.get('/transactions',
-          queryParameters: {'company_id': _company.id});
-      final categoriesRes = await api.get('/categories',
-          queryParameters: {'company_id': _company.id});
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
+      final updatedCompany = results[0] as Company;
+      final accountsRes = results[1] as Response;
+      final transactionsRes = results[2] as Response;
+      final categoriesRes = results[3] as Response;
       
       setState(() {
         _company = updatedCompany;
-        
+
         final accountsList =
             (accountsRes.data as List).cast<Map<String, dynamic>>();
         accountsList.sort((a, b) {
@@ -471,7 +531,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
           if (orderA != orderB) return orderA.compareTo(orderB);
           return a['id'].compareTo(b['id']);
         });
-        
+
         Map<String, dynamic>? archive;
         for (var acc in accountsList) {
           if (acc['name'] == 'Архив') {
@@ -479,62 +539,81 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
             break;
           }
         }
-        
+
         _archiveAccountId = archive?['id'];
         _accounts = accountsList.where((a) => a['name'] != 'Архив').toList();
-        
+
         _transactions = transactionsRes.data;
         _categories = categoriesRes.data;
-        
+
         _loading = false;
       });
+
+      // Загружаем счетчики и права параллельно
+      await Future.wait([
+        _refreshCounters(),
+        _loadMyPermissions(),
+      ]);
       
-      await _refreshCounters();
-      await _loadMyPermissions();
-      
+      if (_isDisposed) return;
+      if (!mounted) return;
+
       // Перестраиваем вкладки после загрузки данных
       _rebuildTabs();
+      
     } catch (e) {
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
       setState(() => _loading = false);
-      if (mounted) {
-        await ErrorHandler.showErrorDialog(
-          context,
-          e,
-          onRetry: _loadData, 
-        );
-      }
+      
+      await ErrorHandler.showErrorDialog(
+        context,
+        e,
+        onRetry: _loadData,
+      );
     }
   }
 
   Future<void> _loadMyPermissions() async {
+    if (_isDisposed) return;
+    
     final api = ApiClient();
     try {
       final res = await api.getMyPermissions(_company.id);
+      if (_isDisposed) return;
       if (!mounted) return;
-      
+
       final perms = res['permissions'] as List?;
       setState(() {
         _myPermissions = (perms ?? []).cast<String>().toSet();
         _permissionsLoaded = true;
       });
-      
+
       // Перестраиваем вкладки после загрузки прав
-      _rebuildTabs();
+      if (!_isDisposed && mounted) {
+        _rebuildTabs();
+      }
     } catch (e) {
       debugPrint('Error loading permissions: $e');
-      if (mounted) {
-        setState(() {
-          _myPermissions = {};
-          _permissionsLoaded = true;
-        });
-      }
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
+      setState(() {
+        _myPermissions = {};
+        _permissionsLoaded = true;
+      });
     }
   }
 
   Future<void> _refresh() async {
+    if (_isDisposed) return;
     await _loadData();
-    _reportsTabKey.currentState?.refreshData();
-    setState(() => _hasChanges = true);
+    if (_isDisposed) return;
+    if (mounted) {
+      _reportsTabKey.currentState?.refreshData();
+      setState(() => _hasChanges = true);
+    }
   }
 
   void _openArchive() {
@@ -556,12 +635,20 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
   }
 
   Future<void> _updateAll() async {
+    if (_isDisposed) return;
     await _loadData();
+    if (_isDisposed) return;
     await _refreshCounters();
-    setState(() {});
+    if (_isDisposed) return;
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   Future<void> _confirmDeleteCompany() async {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     final t = AppLocalizations.of(context)!;
     final confirm = await showDialog<bool>(
       context: context,
@@ -582,12 +669,14 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
       final api = ApiClient();
       try {
         await api.delete('/companies/${_company.id}');
+        if (_isDisposed) return;
         if (mounted) {
           ScaffoldMessenger.of(context)
               .showSnackBar(SnackBar(content: Text(t.companyDeleted)));
           Navigator.pop(context, true);
         }
       } catch (e) {
+        if (_isDisposed) return;
         if (mounted) {
           ScaffoldMessenger.of(context)
               .showSnackBar(SnackBar(content: Text('${t.error}: $e')));
@@ -649,7 +738,9 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
-        Navigator.pop(context, _hasChanges);
+        if (mounted) {
+          Navigator.pop(context, _hasChanges);
+        }
       },
       child: Scaffold(
         backgroundColor: colorScheme.surface,
@@ -682,19 +773,28 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                       children: [
                         IconButton(
                           icon: Icon(Icons.arrow_back, color: colorScheme.onSurface),
-                          onPressed: () => Navigator.pop(context, _hasChanges),
+                          onPressed: () {
+                            if (mounted) {
+                              Navigator.pop(context, _hasChanges);
+                            }
+                          },
                         ),
                         const Spacer(),
                         if (showMenu)
                           PopupMenuButton<String>(
                             onSelected: (value) async {
+                              if (_isDisposed) return;
+                              if (!mounted) return;
+                              
                               if (value == 'edit' && showEditCompany) {
                                 await showDialog(
                                   context: context,
                                   builder: (_) => EditCompanyDialog(
                                     company: _company,
                                     onSuccess: () {
-                                      _loadData();
+                                      if (!_isDisposed && mounted) {
+                                        _loadData();
+                                      }
                                     },
                                   ),
                                 );
@@ -704,7 +804,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                                   context: context,
                                   builder: (_) => AddAccountDialog(
                                     companyId: _company.id,
-                                    onSuccess: _refresh
+                                    onSuccess: _refresh,
                                   ),
                                 );
                               }
@@ -714,7 +814,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                                   builder: (_) => ManageCategoriesDialog(
                                     companyId: _company.id,
                                     onSuccess: _refresh,
-                                    categories: _categories
+                                    categories: _categories,
                                   ),
                                 );
                               }
@@ -723,7 +823,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                                   context: context,
                                   builder: (_) => ManageEmployeesDialog(
                                     companyId: _company.id,
-                                    onSuccess: _refresh
+                                    onSuccess: _refresh,
                                   ),
                                 );
                               }
@@ -851,6 +951,9 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                                     child: AccountCard(
                                       account: acc,
                                       onDelete: () async {
+                                        if (_isDisposed) return;
+                                        if (!mounted) return;
+                                        
                                         final api = ApiClient();
                                         try {
                                           await api.delete(
@@ -860,10 +963,12 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
                                               });
                                           await _refresh();
                                         } catch (e) {
-                                          ScaffoldMessenger.of(context)
-                                              .showSnackBar(SnackBar(
-                                                  content:
-                                                      Text('${t.error}: $e')));
+                                          if (!_isDisposed && mounted) {
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(SnackBar(
+                                                    content:
+                                                        Text('${t.error}: $e')));
+                                          }
                                         }
                                       },
                                       isFounder: isFounder,

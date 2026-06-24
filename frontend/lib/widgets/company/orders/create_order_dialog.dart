@@ -31,8 +31,11 @@ class _CreateOrderDialogState extends ConsumerState<CreateOrderDialog> {
   final List<Map<String, dynamic>> _items = [];
   List<dynamic> _products = [];
   bool _loadingProducts = true;
+  
+  // Флаг для отмены запросов при dispose
+  bool _isDisposed = false;
 
-  // 👇 ФУНКЦИЯ ДЛЯ ЛОКАЛИЗОВАННОГО ОТОБРАЖЕНИЯ ИМЕНИ
+  // Функция для локализованного отображения имени
   String _getUserDisplayName(Map<String, dynamic> member, AppLocalizations t) {
     final fullName = member['full_name'] ?? '';
     final role = member['role'];
@@ -45,39 +48,59 @@ class _CreateOrderDialogState extends ConsumerState<CreateOrderDialog> {
   @override
   void initState() {
     super.initState();
+    _isDisposed = false;
+    // ✅ ВЫЗЫВАЕМ ЗАГРУЗКУ СРАЗУ В INITSTATE
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_isDisposed && mounted) {
+        _loadProducts();
+      }
+    });
   }
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _loadProducts();
+  void dispose() {
+    _isDisposed = true;
+    _titleController.dispose();
+    _descController.dispose();
+    _workPriceController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadProducts() async {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
+    setState(() => _loadingProducts = true);
     final api = ApiClient();
     try {
       final res = await api.get('/products/', queryParameters: {'company_id': widget.companyId});
-      if (mounted) {
-        setState(() {
-          _products = res.data;
-          _loadingProducts = false;
-        });
-      }
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
+      setState(() {
+        _products = res.data;
+        _loadingProducts = false;
+      });
     } catch (e) {
-      if (mounted) {
-        setState(() => _loadingProducts = false);
-        final t = AppLocalizations.of(context)!;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
-      }
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
+      setState(() => _loadingProducts = false);
+      final t = AppLocalizations.of(context)!;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
     }
   }
 
   Future<void> _createOrder() async {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     final t = AppLocalizations.of(context)!;
     if (_titleController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.enterTitle)));
       return;
     }
+    
     final api = ApiClient();
     try {
       final orderItems = _items.map((i) => ({
@@ -86,6 +109,7 @@ class _CreateOrderDialogState extends ConsumerState<CreateOrderDialog> {
         'unit_price': i['unit_price'],
         'use_from_stock': i['use_from_stock'],
       })).toList();
+      
       await api.post('/orders', queryParameters: {'company_id': widget.companyId}, data: {
         'title': _titleController.text,
         'description': _descController.text,
@@ -94,9 +118,16 @@ class _CreateOrderDialogState extends ConsumerState<CreateOrderDialog> {
         'deadline': _deadline?.toIso8601String(),
         'items': orderItems,
       });
+      
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
       widget.onOrderCreated();
-      if (mounted) Navigator.pop(context);
+      Navigator.pop(context);
     } catch (e) {
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
     }
   }
@@ -141,10 +172,10 @@ class _CreateOrderDialogState extends ConsumerState<CreateOrderDialog> {
                 dropdownColor: colorScheme.surface,
                 style: TextStyle(color: colorScheme.onSurface),
                 items: [
-                  DropdownMenuItem(value: null, child: Text(t.notAssigned)), // ✅ используем локализацию
+                  DropdownMenuItem(value: null, child: Text(t.notAssigned)),
                   ...widget.members.map((m) => DropdownMenuItem(
                     value: m['id'],
-                    child: Text(_getUserDisplayName(m, t)), // ✅ локализованное имя
+                    child: Text(_getUserDisplayName(m, t)),
                   )),
                 ],
                 onChanged: (v) => _assigneeId = v,
@@ -161,7 +192,9 @@ class _CreateOrderDialogState extends ConsumerState<CreateOrderDialog> {
                     firstDate: DateTime.now(),
                     lastDate: DateTime.now().add(const Duration(days: 365)),
                   );
-                  if (picked != null) setState(() => _deadline = picked);
+                  if (picked != null && mounted) {
+                    setState(() => _deadline = picked);
+                  }
                 },
               ),
               const Divider(),
@@ -173,6 +206,9 @@ class _CreateOrderDialogState extends ConsumerState<CreateOrderDialog> {
                     IconButton(
                       icon: const Icon(Icons.add),
                       onPressed: () async {
+                        if (_isDisposed) return;
+                        if (!mounted) return;
+                        
                         final newItem = await showDialog<Map<String, dynamic>>(
                           context: context,
                           builder: (context) => AddMaterialDialog(
@@ -180,6 +216,9 @@ class _CreateOrderDialogState extends ConsumerState<CreateOrderDialog> {
                             companyId: widget.companyId,
                           ),
                         );
+                        if (_isDisposed) return;
+                        if (!mounted) return;
+                        
                         if (newItem != null) {
                           setState(() => _items.add(newItem));
                         }
@@ -203,7 +242,11 @@ class _CreateOrderDialogState extends ConsumerState<CreateOrderDialog> {
                       subtitle: Text('${it['quantity']} ${t.pcs} × ${it['unit_price']}$currency = ${it['total']}$currency'),
                       trailing: IconButton(
                         icon: const Icon(Icons.delete, color: Colors.red),
-                        onPressed: () => setState(() => _items.removeAt(idx)),
+                        onPressed: () {
+                          if (!_isDisposed && mounted) {
+                            setState(() => _items.removeAt(idx));
+                          }
+                        },
                       ),
                     );
                   }).toList(),
@@ -217,7 +260,12 @@ class _CreateOrderDialogState extends ConsumerState<CreateOrderDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: Text(t.cancel, style: TextStyle(color: colorScheme.onSurfaceVariant))),
+        TextButton(
+          onPressed: () {
+            if (mounted) Navigator.pop(context);
+          },
+          child: Text(t.cancel, style: TextStyle(color: colorScheme.onSurfaceVariant)),
+        ),
         ElevatedButton(
           onPressed: _createOrder,
           style: ElevatedButton.styleFrom(

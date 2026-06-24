@@ -46,7 +46,6 @@ class ApiClient {
 
   Dio get dio => _dio;
 
-  // 👇 ФУНКЦИЯ ОПРЕДЕЛЕНИЯ ПЛАТФОРМЫ
   String _getPlatform() {
     if (kIsWeb) return 'web';
     if (Platform.isAndroid) return 'android';
@@ -63,7 +62,6 @@ class ApiClient {
       maxRedirects: 5,
       validateStatus: (status) => status != null && status < 400,
       headers: {
-        // 👇 ГЛАВНОЕ - ДОБАВЛЯЕМ ЗАГОЛОВОК
         'x-client-platform': _getPlatform(),
       },
     );
@@ -75,8 +73,6 @@ class ApiClient {
           options.headers ??= {};
           options.headers['Authorization'] = 'Bearer $token';
         }
-        // 👇 ДЛЯ ПРОВЕРКИ В ЛОГАХ
-        print('📱 [ApiClient] Platform: ${options.headers['x-client-platform']}');
         return handler.next(options);
       },
       onError: (DioException e, handler) async {
@@ -84,7 +80,13 @@ class ApiClient {
                                e.requestOptions.path.contains('/auth/register');
 
         if (e.response?.statusCode == 401 && !isAuthEndpoint) {
-          final container = ProviderScope.containerOf(navigatorKey.currentContext!);
+          final context = navigatorKey.currentContext;
+          if (context == null) {
+            _redirectToLogin();
+            return handler.reject(e);
+          }
+          
+          final container = ProviderScope.containerOf(context);
           final authNotifier = container.read(authProvider.notifier);
           final refreshed = await authNotifier.refreshAccessToken();
 
@@ -104,6 +106,16 @@ class ApiClient {
           }
         }
 
+        // Если ошибка 402 - показываем диалог подписки
+        if (e.response?.statusCode == 402) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            final context = navigatorKey.currentContext;
+            if (context != null && context.mounted) {
+              _showSubscriptionRequiredDialog(context);
+            }
+          });
+        }
+
         final errorMessage = _getLocalizedErrorMessage(e);
         final userFriendlyError = DioException(
           requestOptions: e.requestOptions,
@@ -115,7 +127,9 @@ class ApiClient {
       },
     ));
 
-    _dio.interceptors.add(LogInterceptor(responseBody: true, requestBody: true));
+    if (kDebugMode) {
+      _dio.interceptors.add(LogInterceptor(responseBody: true, requestBody: true));
+    }
   }
 
   void clearAuth() {
@@ -127,38 +141,45 @@ class ApiClient {
     await _storage.delete(key: 'refresh_token');
     _dio.options.headers.remove('Authorization');
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      navigatorKey.currentState?.pushNamedAndRemoveUntil('/login', (route) => false);
+      final context = navigatorKey.currentContext;
+      if (context != null && context.mounted) {
+        navigatorKey.currentState?.pushNamedAndRemoveUntil('/login', (route) => false);
+      }
     });
   }
 
-  String _getLocalizedErrorMessage(DioException e) {
+  // Вспомогательный метод для получения перевода с проверкой контекста
+  String _translate(String key, [String fallback = '']) {
     final context = navigatorKey.currentContext;
-    final t = context != null ? AppLocalizations.of(context) : null;
-
-    String tr(String key, [String fallback = '']) {
+    if (context == null) return fallback.isEmpty ? key : fallback;
+    
+    try {
+      final t = AppLocalizations.of(context);
       if (t == null) return fallback.isEmpty ? key : fallback;
-      try {
-        final value = (t as dynamic)[key];
-        if (value is String) return value;
-        return fallback.isEmpty ? key : fallback;
-      } catch (_) {
-        return fallback.isEmpty ? key : fallback;
-      }
+      
+      // Пытаемся получить перевод
+      final value = (t as dynamic)[key];
+      if (value is String && value.isNotEmpty) return value;
+      return fallback.isEmpty ? key : fallback;
+    } catch (_) {
+      return fallback.isEmpty ? key : fallback;
+    }
+  }
+
+  String _getLocalizedErrorMessage(DioException e) {
+    // Если запрос был отменен
+    if (e.type == DioExceptionType.cancel) {
+      return 'Request was cancelled';
     }
 
     if (e.response?.statusCode == 402) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (navigatorKey.currentContext != null) {
-          _showSubscriptionRequiredDialog(navigatorKey.currentContext!);
-        }
-      });
-      return e.response?.data?['detail'] ?? 'Достигнут лимит бесплатных операций. Оформите подписку.';
+      return e.response?.data?['detail'] ?? _translate('error_subscription_message', 'Достигнут лимит бесплатных операций. Оформите подписку.');
     }
 
     if (e.type == DioExceptionType.connectionTimeout ||
         e.type == DioExceptionType.receiveTimeout ||
         e.type == DioExceptionType.connectionError) {
-      return tr('error_connection', 'No connection to server. Check your internet.');
+      return _translate('error_connection', 'No connection to server. Check your internet.');
     }
 
     if (e.response != null) {
@@ -168,8 +189,19 @@ class ApiClient {
       if (data is Map<String, dynamic>) {
         if (data.containsKey('detail') && data['detail'] is String) {
           final detail = data['detail'] as String;
-          if (detail == 'Invalid credentials' && t != null) {
-            return tr('error_invalid_credentials', 'Invalid email or password');
+          if (detail == 'Invalid credentials') {
+            return _translate('error_invalid_credentials', 'Invalid email or password');
+          }
+          // Проверяем, не является ли detail кодом ошибки
+          if (detail.startsWith('ERROR_')) {
+            switch (detail) {
+              case 'ERROR_NEED_BASE_SUBSCRIPTION':
+                return _translate('need_base_subscription', 'Cannot buy extra company without active base subscription. Please subscribe first.');
+              case 'ERROR_INVALID_PLAN':
+                return _translate('invalid_plan', 'Invalid subscription plan');
+              default:
+                return detail;
+            }
           }
           return detail;
         }
@@ -182,15 +214,17 @@ class ApiClient {
       }
 
       if (statusCode != null) {
-        return tr('error_server', 'Server error: $statusCode').replaceFirst('{code}', '$statusCode');
+        return _translate('error_server', 'Server error: $statusCode').replaceFirst('{code}', '$statusCode');
       }
     }
 
     final msg = e.message ?? '';
-    return tr('error_unknown', 'An error occurred: $msg').replaceFirst('{message}', msg);
+    return _translate('error_unknown', 'An error occurred: $msg').replaceFirst('{message}', msg);
   }
 
   void _showSubscriptionRequiredDialog(BuildContext context) {
+    if (!context.mounted) return;
+    
     final t = AppLocalizations.of(context);
     
     showDialog(
@@ -219,14 +253,16 @@ class ApiClient {
         actions: [
           TextButton(
             onPressed: () {
-              Navigator.of(context).pop();
+              if (context.mounted) Navigator.of(context).pop();
             },
             child: Text(t?.cancel ?? 'Отмена'),
           ),
           ElevatedButton(
             onPressed: () {
-              Navigator.of(context).pop();
-              Navigator.of(context).pushNamed('/subscription');
+              if (context.mounted) {
+                Navigator.of(context).pop();
+                Navigator.of(context).pushNamed('/subscription');
+              }
             },
             child: Text(t?.upgrade ?? 'Оформить подписку'),
           ),
@@ -235,20 +271,26 @@ class ApiClient {
     );
   }
 
-  // ========== ОСНОВНЫЕ МЕТОДЫ ==========
+  // ========== ОСНОВНЫЕ МЕТОДЫ С УЛУЧШЕННОЙ ОБРАБОТКОЙ ==========
   Future<Response> post(String path, {dynamic data, Map<String, dynamic>? queryParameters}) async {
     try {
       return await _dio.post(path, data: data, queryParameters: queryParameters);
-    } catch (e) {
+    } on DioException catch (e) {
+      if (e.type == DioExceptionType.cancel) rethrow;
       throw _normalizeError(e);
+    } catch (e) {
+      throw Exception(_translate('error_unknown', 'Unknown error occurred'));
     }
   }
 
   Future<Response> get(String path, {Map<String, dynamic>? queryParameters}) async {
     try {
       return await _dio.get(path, queryParameters: queryParameters);
-    } catch (e) {
+    } on DioException catch (e) {
+      if (e.type == DioExceptionType.cancel) rethrow;
       throw _normalizeError(e);
+    } catch (e) {
+      throw Exception(_translate('error_unknown', 'Unknown error occurred'));
     }
   }
 
@@ -256,34 +298,64 @@ class ApiClient {
     if (error is DioException) {
       return error;
     }
-    return Exception('Unknown error occurred');
+    return Exception(_translate('error_unknown', 'Unknown error occurred'));
   }
 
-  Future<Response> put(String path, {dynamic data, Map<String, dynamic>? queryParameters}) =>
-      _dio.put(path, data: data, queryParameters: queryParameters);
+  Future<Response> put(String path, {dynamic data, Map<String, dynamic>? queryParameters}) async {
+    try {
+      return await _dio.put(path, data: data, queryParameters: queryParameters);
+    } on DioException catch (e) {
+      if (e.type == DioExceptionType.cancel) rethrow;
+      throw _normalizeError(e);
+    } catch (e) {
+      throw Exception(_translate('error_unknown', 'Unknown error occurred'));
+    }
+  }
 
-  Future<Response> patch(String path, {dynamic data, Map<String, dynamic>? queryParameters}) =>
-      _dio.patch(path, data: data, queryParameters: queryParameters);
+  Future<Response> patch(String path, {dynamic data, Map<String, dynamic>? queryParameters}) async {
+    try {
+      return await _dio.patch(path, data: data, queryParameters: queryParameters);
+    } on DioException catch (e) {
+      if (e.type == DioExceptionType.cancel) rethrow;
+      throw _normalizeError(e);
+    } catch (e) {
+      throw Exception(_translate('error_unknown', 'Unknown error occurred'));
+    }
+  }
 
   Future<Response> delete(String path, {dynamic data, Map<String, dynamic>? queryParameters}) async {
-    final token = await getToken();
-    return _dio.delete(
-      path,
-      data: data,
-      queryParameters: queryParameters,
-      options: Options(headers: {'Authorization': 'Bearer $token'}),
-    );
+    try {
+      final token = await getToken();
+      return await _dio.delete(
+        path,
+        data: data,
+        queryParameters: queryParameters,
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+    } on DioException catch (e) {
+      if (e.type == DioExceptionType.cancel) rethrow;
+      throw _normalizeError(e);
+    } catch (e) {
+      throw Exception(_translate('error_unknown', 'Unknown error occurred'));
+    }
   }
 
   Future<Response> postForm(String path, {required Map<String, String> data}) async {
-    return await _dio.post(
-      path,
-      data: data,
-      options: Options(
-        contentType: Headers.formUrlEncodedContentType,
-        headers: {},
-      ),
-    );
+    try {
+      return await _dio.post(
+        path,
+        data: data,
+        options: Options(
+          contentType: Headers.formUrlEncodedContentType,
+          headers: {},
+        ),
+      );
+    } on DioException catch (e) {
+      if (e.type == DioExceptionType.cancel) rethrow;
+      throw _normalizeError(e);
+    } catch (e) {
+      throw Exception(_translate('error_unknown', 'Unknown error occurred'));
+    }
   }
 
   // ========== ТОКЕНЫ ==========
@@ -299,7 +371,7 @@ class ApiClient {
   }) async {
     try {
       final token = await getToken();
-      if (token == null) throw Exception('No authentication token');
+      if (token == null) throw Exception(_translate('error_auth_message', 'No authentication token'));
       final formData = FormData.fromMap({
         'company_id': companyId.toString(),
         'file': MultipartFile.fromBytes(bytes, filename: filename),
@@ -311,9 +383,10 @@ class ApiClient {
       );
       return response.data as Map<String, dynamic>;
     } on DioException catch (e) {
+      if (e.type == DioExceptionType.cancel) rethrow;
       throw Exception(_getLocalizedErrorMessage(e));
     } catch (e) {
-      throw Exception('Upload error: $e');
+      throw Exception(_translate('error_upload', 'Upload error: $e'));
     }
   }
 
@@ -338,7 +411,9 @@ class ApiClient {
     final response = await get('/companies');
     final data = response.data;
     if (data is! List) {
-      print('Ошибка: получен не список, а ${data.runtimeType}. Ответ: $data');
+      if (kDebugMode) {
+        print('Ошибка: получен не список, а ${data.runtimeType}. Ответ: $data');
+      }
       return [];
     }
     return data.map((json) => Company.fromJson(json)).toList();
@@ -358,7 +433,7 @@ class ApiClient {
     try {
       await post('/auth/update-language', data: {'language': langCode});
     } catch (e) {
-      print('Error updating language on server: $e');
+      if (kDebugMode) print('Error updating language on server: $e');
     }
   }
 
@@ -447,15 +522,22 @@ class ApiClient {
     required Uint8List bytes,
     required String filename,
   }) async {
-    FormData formData = FormData.fromMap({
-      "file": MultipartFile.fromBytes(bytes, filename: filename),
-    });
-    final response = await _dio.post(
-      '/transactions/upload',
-      data: formData,
-      queryParameters: {'company_id': companyId},
-    );
-    return response.data;
+    try {
+      FormData formData = FormData.fromMap({
+        "file": MultipartFile.fromBytes(bytes, filename: filename),
+      });
+      final response = await _dio.post(
+        '/transactions/upload',
+        data: formData,
+        queryParameters: {'company_id': companyId},
+      );
+      return response.data;
+    } on DioException catch (e) {
+      if (e.type == DioExceptionType.cancel) rethrow;
+      throw Exception(_getLocalizedErrorMessage(e));
+    } catch (e) {
+      throw Exception(_translate('error_upload', 'Upload error: $e'));
+    }
   }
 
   Future<Map<String, dynamic>> uploadCompanyLogo({
@@ -563,7 +645,7 @@ class ApiClient {
     required String filename,
   }) async {
     final token = await getToken();
-    if (token == null) throw Exception('No authentication token');
+    if (token == null) throw Exception(_translate('error_auth_message', 'No authentication token'));
     
     final formData = FormData.fromMap({
       'file': MultipartFile.fromBytes(bytes, filename: filename),
@@ -603,7 +685,7 @@ class ApiClient {
   }) async {
     try {
       final token = await getToken();
-      if (token == null) throw Exception('No authentication token');
+      if (token == null) throw Exception(_translate('error_auth_message', 'No authentication token'));
       
       final formData = FormData.fromMap({
         'file': MultipartFile.fromBytes(bytes, filename: filename),
@@ -617,9 +699,10 @@ class ApiClient {
       );
       return response.data as Map<String, dynamic>;
     } on DioException catch (e) {
+      if (e.type == DioExceptionType.cancel) rethrow;
       throw Exception(_getLocalizedErrorMessage(e));
     } catch (e) {
-      throw Exception('Upload error: $e');
+      throw Exception(_translate('error_upload', 'Upload error: $e'));
     }
   }
 
@@ -648,7 +731,7 @@ class ApiClient {
     String? description,
   }) async {
     final token = await getToken();
-    if (token == null) throw Exception('No token');
+    if (token == null) throw Exception(_translate('error_auth_message', 'No authentication token'));
     final formData = FormData.fromMap({
       'file': MultipartFile.fromBytes(bytes, filename: filename),
       'description': description,

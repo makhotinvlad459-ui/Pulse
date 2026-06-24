@@ -22,6 +22,9 @@ class _CounterpartiesTabState extends ConsumerState<CounterpartiesTab> {
   String? _error;
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
+  
+  // Флаг для отмены запросов при dispose
+  bool _isDisposed = false;
 
   bool get _canView => ref.read(authProvider).user?.role == UserRole.founder ||
       widget.permissions.contains('view_counterparties');
@@ -37,19 +40,25 @@ class _CounterpartiesTabState extends ConsumerState<CounterpartiesTab> {
   @override
   void initState() {
     super.initState();
+    _isDisposed = false;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadCounterparties();
+      if (!_isDisposed && mounted) {
+        _loadCounterparties();
+      }
     });
   }
 
   @override
   void dispose() {
+    _isDisposed = true;
     _searchController.dispose();
     super.dispose();
   }
 
   Future<void> _loadCounterparties() async {
+    if (_isDisposed) return;
     if (!mounted) return;
+    
     setState(() {
       _loading = true;
       _error = null;
@@ -58,46 +67,58 @@ class _CounterpartiesTabState extends ConsumerState<CounterpartiesTab> {
     try {
       // Загружаем контрагентов
       final res = await api.get('/counterparties', queryParameters: {'company_id': widget.companyId});
+      if (_isDisposed) return;
       if (!mounted) return;
       
       final List<Map<String, dynamic>> counterparties = List<Map<String, dynamic>>.from(res.data);
       
       // Для каждого контрагента загружаем статистику с учётом оплаты
       for (var i = 0; i < counterparties.length; i++) {
+        if (_isDisposed) return;
+        
         try {
           final stats = await api.get('/statistics/counterparty-stats', queryParameters: {
             'company_id': widget.companyId,
             'counterparty': counterparties[i]['name'],
           });
+          if (_isDisposed) return;
+          
           counterparties[i]['total_income'] = stats.data['total_income'] ?? 0;
           counterparties[i]['total_expense'] = stats.data['total_expense'] ?? 0;
           counterparties[i]['balance'] = stats.data['balance'] ?? 0;
-          counterparties[i]['unpaid_income'] = stats.data['unpaid_income'] ?? 0;  // неоплаченные доходы
-          counterparties[i]['unpaid_expense'] = stats.data['unpaid_expense'] ?? 0;  // неоплаченные расходы
+          counterparties[i]['unpaid_income'] = stats.data['unpaid_income'] ?? 0;
+          counterparties[i]['unpaid_expense'] = stats.data['unpaid_expense'] ?? 0;
         } catch (e) {
-          print('Error loading stats for ${counterparties[i]['name']}: $e');
+          if (!_isDisposed) print('Error loading stats for ${counterparties[i]['name']}: $e');
         }
       }
+      
+      if (_isDisposed) return;
+      if (!mounted) return;
       
       setState(() {
         _counterparties = counterparties;
         _loading = false;
       });
     } catch (e) {
-      print('Error loading counterparties: $e');
+      if (_isDisposed) return;
       if (!mounted) return;
+      
+      print('Error loading counterparties: $e');
       setState(() {
         _error = e.toString();
         _loading = false;
       });
-      if (mounted) {
-        final t = AppLocalizations.of(context)!;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
-      }
+      
+      final t = AppLocalizations.of(context)!;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
     }
   }
 
   Future<void> _addEditCounterparty([Map<String, dynamic>? existing]) async {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     final t = AppLocalizations.of(context)!;
     final isEdit = existing != null;
     final nameController = TextEditingController(text: existing?['name'] ?? '');
@@ -148,10 +169,16 @@ class _CounterpartiesTabState extends ConsumerState<CounterpartiesTab> {
                     'director': directorController.text,
                   });
                 }
+                
+                if (_isDisposed) return;
                 if (!mounted) return;
+                
                 Navigator.pop(context);
                 _loadCounterparties();
               } catch (e) {
+                if (_isDisposed) return;
+                if (!mounted) return;
+                
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
               }
             },
@@ -163,6 +190,9 @@ class _CounterpartiesTabState extends ConsumerState<CounterpartiesTab> {
   }
 
   Future<void> _deleteCounterparty(int id, String name) async {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     final t = AppLocalizations.of(context)!;
     final confirm = await showDialog<bool>(
       context: context,
@@ -176,11 +206,21 @@ class _CounterpartiesTabState extends ConsumerState<CounterpartiesTab> {
       ),
     );
     if (confirm != true) return;
+    
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     final api = ApiClient();
     try {
       await api.delete('/counterparties/$id', queryParameters: {'company_id': widget.companyId});
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
       _loadCounterparties();
     } catch (e) {
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
     }
   }
@@ -206,7 +246,7 @@ class _CounterpartiesTabState extends ConsumerState<CounterpartiesTab> {
           Padding(
             padding: const EdgeInsets.all(8),
             child: ElevatedButton.icon(
-              onPressed: () => _addEditCounterparty(),
+              onPressed: _addEditCounterparty,
               icon: const Icon(Icons.add),
               label: Text(t.addCounterparty),
             ),
@@ -215,7 +255,11 @@ class _CounterpartiesTabState extends ConsumerState<CounterpartiesTab> {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: TextField(
             controller: _searchController,
-            onChanged: (v) => setState(() => _searchQuery = v),
+            onChanged: (v) {
+              if (!_isDisposed && mounted) {
+                setState(() => _searchQuery = v);
+              }
+            },
             decoration: InputDecoration(
               hintText: t.searchByNameOrArticle,
               hintStyle: TextStyle(color: colorScheme.onSurfaceVariant),
@@ -247,6 +291,9 @@ class _CounterpartiesTabState extends ConsumerState<CounterpartiesTab> {
                           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                           child: ListTile(
                             onTap: () {
+                              if (_isDisposed) return;
+                              if (!mounted) return;
+                              
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
