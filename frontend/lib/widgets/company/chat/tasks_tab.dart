@@ -155,7 +155,7 @@ class _TasksTabState extends ConsumerState<TasksTab> with AutomaticKeepAliveClie
                   if (!formKey.currentState!.validate()) return;
                   final api = ApiClient();
                   try {
-                    await api.post('/tasks', queryParameters: {
+                    await api.post('/tasks/', queryParameters: {
                       'company_id': widget.companyId
                     }, data: {
                       'title': titleController.text,

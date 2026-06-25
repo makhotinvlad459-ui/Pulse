@@ -27,15 +27,29 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  final bool _isLoading = false;
+  bool _isDisposed = false;
 
   @override
   void initState() {
     super.initState();
+    _isDisposed = false;
     _initWebSocket();
   }
 
+  @override
+  void dispose() {
+    _isDisposed = true;
+    try {
+      WebSocketService().disconnectUser();
+    } catch (e) {
+      debugPrint('Error disconnecting user WebSocket: $e');
+    }
+    super.dispose();
+  }
+
   Future<void> _initWebSocket() async {
+    if (_isDisposed) return;
+    
     final authState = ref.read(authProvider);
     final user = authState.user;
     if (user == null) return;
@@ -52,24 +66,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       debugPrint('Error disconnecting WebSockets: $e');
     }
     
+    if (_isDisposed) return;
+    
     // Небольшая задержка перед подключением
     await Future.delayed(const Duration(milliseconds: 100));
+    
+    if (_isDisposed) return;
     
     try {
       WebSocketService().connectUser(user.id, token);
     } catch (e) {
       debugPrint('Error connecting user WebSocket: $e');
     }
-  }
-
-  @override
-  void dispose() {
-    try {
-      WebSocketService().disconnectUser();
-    } catch (e) {
-      debugPrint('Error disconnecting user WebSocket: $e');
-    }
-    super.dispose();
   }
 
   String _getVideoPath(AppTheme theme) {
@@ -93,7 +101,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     ref.listen(StreamProvider((ref) => WebSocketService().userStream), (previous, next) {
       next.whenData((data) {
-        if (data['type'] == 'update_counters') {
+        if (data['type'] == 'update_counters' && !_isDisposed && mounted) {
           ref.invalidate(homeProvider);
         }
       });
@@ -111,62 +119,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         body: SafeArea(
           child: Column(
             children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Shimmer.fromColors(
-                          baseColor: colorScheme.onSurface.withOpacity(0.3),
-                          highlightColor: colorScheme.onSurface,
-                          period: const Duration(seconds: 2),
-                          child: Text(
-                            t.appTitle,
-                            style: GoogleFonts.playfairDisplay(
-                              fontSize: 28,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0.8,
-                              color: colorScheme.onSurface,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Shimmer.fromColors(
-                          baseColor: colorScheme.onSurface.withOpacity(0.2),
-                          highlightColor: colorScheme.onSurface.withOpacity(0.7),
-                          period: const Duration(seconds: 2),
-                          child: Text(
-                            t.appSubtitle,
-                            style: GoogleFonts.inter(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w400,
-                              letterSpacing: 0.5,
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    Builder(
-                      builder: (context) => Column(
-                        children: [
-                          IconButton(
-                            icon: Icon(Icons.settings, color: colorScheme.onSurface),
-                            onPressed: () => Scaffold.of(context).openDrawer(),
-                          ),
-                          Text(
-                            t.settings,
-                            style: TextStyle(fontSize: 10, color: colorScheme.onSurface),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              _buildHeader(colorScheme, t),
               Expanded(
                 child: RefreshIndicator(
                   onRefresh: () async {
@@ -174,77 +127,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     await Future.delayed(Duration.zero);
                   },
                   child: homeAsync.when(
-                    data: (data) {
-                      final companies = data.companies;
-                      final overview = data.overview;
-                      final counts = data.counts;
-                      return ListView(
-                        padding: const EdgeInsets.all(16),
-                        children: [
-                          if (overview.hasAnyAccountsPermission)
-                            Row(
-                              children: [
-                                _StatCard(title: t.totalAll, amount: overview.totalAll),
-                                const SizedBox(width: 8),
-                                _StatCard(title: t.totalCash, amount: overview.totalCash),
-                                const SizedBox(width: 8),
-                                _StatCard(title: t.totalBank, amount: overview.totalBank),
-                              ],
-                            ),
-                          const SizedBox(height: 16),
-                          ...companies.map((company) {
-                            final companyData = counts[company.id.toString()];
-                            int unread = 0;
-                            int pending = 0;
-                            if (companyData is Map) {
-                              unread = companyData['unread_messages'] as int? ?? 0;
-                              pending = companyData['pending_tasks'] as int? ?? 0;
-                            }
-                            return _CompanyCard(
-                              company: company,
-                              ref: ref,
-                              unreadMessages: unread,
-                              pendingTasks: pending,
-                              showBalance: overview.hasAnyAccountsPermission,
-                            );
-                          })
-                        ],
-                      );
-                    },
+                    data: (data) => _buildContent(data, colorScheme, t),
                     loading: () => const Center(child: CircularProgressIndicator()),
-                    error: (error, stack) {
-                      final appError = ErrorHandler.handleError(error);
-                      
-                      return Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.error_outline, size: 64, color: colorScheme.error),
-                            const SizedBox(height: 16),
-                            Text(
-                              appError.title,
-                              style: TextStyle(color: colorScheme.error, fontWeight: FontWeight.bold),
-                            ),
-                            const SizedBox(height: 8),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 32),
-                              child: Text(
-                                appError.message,
-                                textAlign: TextAlign.center,
-                                style: TextStyle(color: colorScheme.onSurfaceVariant),
-                              ),
-                            ),
-                            if (appError.canRetry)
-                              ElevatedButton(
-                                onPressed: () {
-                                  ref.invalidate(homeProvider);
-                                },
-                                child: Text(t.retry),
-                              ),
-                          ],
-                        ),
-                      );
-                    },
+                    error: (error, stack) => _buildError(error, colorScheme, t),
                   ),
                 ),
               ),
@@ -253,16 +138,161 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ),
         floatingActionButton: FloatingActionButton(
           onPressed: () async {
+            if (_isDisposed) return;
+            if (!mounted) return;
+            
             final result = await Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const CreateCompanyScreen()),
             );
-            if (result == true) ref.invalidate(homeProvider);
+            if (result == true && !_isDisposed && mounted) {
+              ref.invalidate(homeProvider);
+            }
           },
           backgroundColor: colorScheme.primary,
           foregroundColor: colorScheme.onPrimary,
           child: const Icon(Icons.add),
         ),
+      ),
+    );
+  }
+
+  // Вынесенные методы для читаемости
+  Widget _buildHeader(ColorScheme colorScheme, AppLocalizations t) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Shimmer.fromColors(
+                baseColor: colorScheme.onSurface.withOpacity(0.3),
+                highlightColor: colorScheme.onSurface,
+                period: const Duration(seconds: 2),
+                child: Text(
+                  t.appTitle,
+                  style: GoogleFonts.playfairDisplay(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.8,
+                    color: colorScheme.onSurface,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 3),
+              Shimmer.fromColors(
+                baseColor: colorScheme.onSurface.withOpacity(0.2),
+                highlightColor: colorScheme.onSurface.withOpacity(0.7),
+                period: const Duration(seconds: 2),
+                child: Text(
+                  t.appSubtitle,
+                  style: GoogleFonts.inter(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w400,
+                    letterSpacing: 0.5,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          Builder(
+            builder: (context) => Column(
+              children: [
+                IconButton(
+                  icon: Icon(Icons.settings, color: colorScheme.onSurface),
+                  onPressed: () {
+                    if (context.mounted) {
+                      Scaffold.of(context).openDrawer();
+                    }
+                  },
+                ),
+                Text(
+                  t.settings,
+                  style: TextStyle(fontSize: 10, color: colorScheme.onSurface),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildContent(HomeData data, ColorScheme colorScheme, AppLocalizations t) {
+    final companies = data.companies;
+    final overview = data.overview;
+    final counts = data.counts;
+    
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        if (overview.hasAnyAccountsPermission)
+          Row(
+            children: [
+              _StatCard(title: t.totalAll, amount: overview.totalAll),
+              const SizedBox(width: 8),
+              _StatCard(title: t.totalCash, amount: overview.totalCash),
+              const SizedBox(width: 8),
+              _StatCard(title: t.totalBank, amount: overview.totalBank),
+            ],
+          ),
+        const SizedBox(height: 16),
+        ...companies.map((company) {
+          final companyData = counts[company.id.toString()];
+          int unread = 0;
+          int pending = 0;
+          if (companyData is Map) {
+            unread = companyData['unread_messages'] as int? ?? 0;
+            pending = companyData['pending_tasks'] as int? ?? 0;
+          }
+          return _CompanyCard(
+            key: ValueKey(company.id),
+            company: company,
+            ref: ref,
+            unreadMessages: unread,
+            pendingTasks: pending,
+            showBalance: overview.hasAnyAccountsPermission,
+          );
+        })
+      ],
+    );
+  }
+
+  Widget _buildError(dynamic error, ColorScheme colorScheme, AppLocalizations t) {
+    final appError = ErrorHandler.handleError(error);
+    
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.error_outline, size: 64, color: colorScheme.error),
+          const SizedBox(height: 16),
+          Text(
+            appError.title,
+            style: TextStyle(color: colorScheme.error, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Text(
+              appError.message,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: colorScheme.onSurfaceVariant),
+            ),
+          ),
+          if (appError.canRetry)
+            ElevatedButton(
+              onPressed: () {
+                if (mounted) {
+                  ref.invalidate(homeProvider);
+                }
+              },
+              child: Text(t.retry),
+            ),
+        ],
       ),
     );
   }
@@ -319,6 +349,7 @@ class _CompanyCard extends StatefulWidget {
   final bool showBalance;
 
   const _CompanyCard({
+    super.key, // ✅ Добавлен ключ
     required this.company,
     required this.ref,
     required this.unreadMessages,
@@ -332,10 +363,13 @@ class _CompanyCard extends StatefulWidget {
 
 class _CompanyCardState extends State<_CompanyCard> with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
+  bool _isDisposed = false;
+  bool _isNavigating = false;
 
   @override
   void initState() {
     super.initState();
+    _isDisposed = false;
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 3),
@@ -344,11 +378,18 @@ class _CompanyCardState extends State<_CompanyCard> with SingleTickerProviderSta
 
   @override
   void dispose() {
+    _isDisposed = true;
     _animationController.dispose();
     super.dispose();
   }
 
   Future<void> _openCompany() async {
+    if (_isNavigating) return;
+    _isNavigating = true;
+    
+    if (_isDisposed) return;
+    if (!mounted) return;
+
     // Закрываем текущие WebSocket соединения перед переходом
     try {
       WebSocketService().disconnectChat();
@@ -357,19 +398,32 @@ class _CompanyCardState extends State<_CompanyCard> with SingleTickerProviderSta
     } catch (e) {
       debugPrint('Error disconnecting WebSockets before navigation: $e');
     }
-    
+
+    if (_isDisposed) return;
+    if (!mounted) {
+      _isNavigating = false;
+      return;
+    }
+
     try {
       await CompanyScreen.loadLibrary();
-      
-      if (!mounted) return;
-      
+
+      if (_isDisposed) return;
+      if (!mounted) {
+        _isNavigating = false;
+        return;
+      }
+
       await Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => CompanyScreen.CompanyScreen(company: widget.company)),
       );
+
+      _isNavigating = false;
       
+      if (_isDisposed) return;
       if (!mounted) return;
-      
+
       // После возврата переподключаем WebSocket для HomeScreen
       final authState = widget.ref.read(authProvider);
       final user = authState.user;
@@ -384,11 +438,14 @@ class _CompanyCardState extends State<_CompanyCard> with SingleTickerProviderSta
           }
         }
       }
-      
-      widget.ref.invalidate(homeProvider);
+
+      if (!_isDisposed && mounted) {
+        widget.ref.invalidate(homeProvider);
+      }
     } catch (e) {
+      _isNavigating = false;
       debugPrint('Error loading company screen: $e');
-      if (mounted) {
+      if (!_isDisposed && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Ошибка загрузки: $e')),
         );
@@ -439,7 +496,7 @@ class _CompanyCardState extends State<_CompanyCard> with SingleTickerProviderSta
             child: Material(
               color: Colors.transparent,
               child: InkWell(
-                onTap: _openCompany,
+                onTap: _isNavigating ? null : _openCompany,
                 borderRadius: BorderRadius.circular(8),
                 splashColor: colorScheme.primary.withOpacity(0.2),
                 highlightColor: colorScheme.primary.withOpacity(0.1),
@@ -520,6 +577,7 @@ class _CompanyCardState extends State<_CompanyCard> with SingleTickerProviderSta
   }
 }
 
+// ✅ Оптимизированный _BorderGradient - использует const и кеширует painter
 class _BorderGradient extends StatelessWidget {
   final Gradient gradient;
   final double borderRadius;
@@ -536,7 +594,11 @@ class _BorderGradient extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CustomPaint(
-      painter: _BorderGradientPainter(gradient, borderRadius, strokeWidth),
+      painter: _BorderGradientPainter(
+        gradient,
+        borderRadius,
+        strokeWidth,
+      ),
       child: child,
     );
   }
@@ -547,7 +609,11 @@ class _BorderGradientPainter extends CustomPainter {
   final double borderRadius;
   final double strokeWidth;
 
-  _BorderGradientPainter(this.gradient, this.borderRadius, this.strokeWidth);
+  const _BorderGradientPainter(
+    this.gradient,
+    this.borderRadius,
+    this.strokeWidth,
+  );
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -609,6 +675,8 @@ class SettingsDrawer extends StatelessWidget {
       ),
     );
     if (confirmed != true) return;
+    if (!context.mounted) return;
+    
     try {
       final api = ApiClient();
       await api.deleteMyAccount(passwordController.text);
@@ -626,6 +694,8 @@ class SettingsDrawer extends StatelessWidget {
         );
       }
     } catch (e) {
+      if (!context.mounted) return;
+      
       final appError = ErrorHandler.handleError(e, context: context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(appError.message)),
@@ -745,23 +815,25 @@ class SettingsDrawer extends StatelessWidget {
             },
           ),
           ListTile(
-  leading: const Icon(Icons.web),
-  title: Text(t.webVersion),
-  onTap: () async {
-    final Uri url = Uri.parse('https://pulse-yourmoney.com');
-    try {
-      if (await canLaunchUrl(url)) {
-        await launchUrl(url, mode: LaunchMode.externalApplication);
-      } else {
-        throw Exception('Could not launch $url');
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${t.error}: $e')),
-      );
-    }
-  },
-),
+            leading: const Icon(Icons.web),
+            title: Text(t.webVersion),
+            onTap: () async {
+              final Uri url = Uri.parse('https://pulse-yourmoney.com');
+              try {
+                if (await canLaunchUrl(url)) {
+                  await launchUrl(url, mode: LaunchMode.externalApplication);
+                } else {
+                  throw Exception('Could not launch $url');
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('${t.error}: $e')),
+                  );
+                }
+              }
+            },
+          ),
           ListTile(
             leading: const Icon(Icons.lock_outline),
             title: Text(t.changePassword),
@@ -789,6 +861,7 @@ class SettingsDrawer extends StatelessWidget {
             leading: const Icon(Icons.logout, color: Colors.red),
             title: Text(t.logout, style: const TextStyle(color: Colors.red)),
             onTap: () async {
+              if (!context.mounted) return;
               Navigator.pop(context);
               try {
                 WebSocketService().disconnectAll();

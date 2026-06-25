@@ -72,7 +72,7 @@ class _OrdersTabState extends ConsumerState<OrdersTab> {
     setState(() => _loading = true);
     final api = ApiClient();
     try {
-      final res = await api.get('/orders', queryParameters: {'company_id': widget.companyId});
+      final res = await api.get('/orders/', queryParameters: {'company_id': widget.companyId});
       if (_isDisposed) return;
       if (!mounted) return;
       

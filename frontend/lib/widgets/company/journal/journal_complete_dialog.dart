@@ -15,23 +15,41 @@ class _JournalCompleteDialogState extends State<JournalCompleteDialog> {
   List<Map<String, dynamic>> _accounts = [];
   bool _loading = true;
   int? _selectedAccountId;
+  
+  // ✅ ДОБАВЛЕН ФЛАГ
+  bool _isDisposed = false;
 
   @override
   void initState() {
     super.initState();
+    _isDisposed = false;
     _loadAccounts();
   }
 
+  @override
+  void dispose() {
+    _isDisposed = true;
+    super.dispose();
+  }
+
   Future<void> _loadAccounts() async {
+    if (_isDisposed) return;
+    
     final api = ApiClient();
     try {
       final res = await api.get('/accounts', queryParameters: {'company_id': widget.companyId});
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
       setState(() {
         _accounts = List<Map<String, dynamic>>.from(res.data);
         _loading = false;
         if (_accounts.isNotEmpty) _selectedAccountId = _accounts.first['id'];
       });
     } catch (e) {
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
       setState(() => _loading = false);
     }
   }
@@ -54,19 +72,30 @@ class _JournalCompleteDialogState extends State<JournalCompleteDialog> {
                   subtitle: Text('${t.balanceLabel}: ${acc['balance']} ${t.currencySymbol}'),
                   value: acc['id'],
                   groupValue: _selectedAccountId,
-                  onChanged: (value) => setState(() => _selectedAccountId = value),
+                  onChanged: (value) {
+                    if (!_isDisposed && mounted) {
+                      setState(() => _selectedAccountId = value);
+                    }
+                  },
                   secondary: Icon(icon, color: colorScheme.primary),
                 );
               }).toList(),
             ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: Text(t.cancel)),
+        TextButton(
+          onPressed: () {
+            if (mounted) Navigator.pop(context);
+          },
+          child: Text(t.cancel),
+        ),
         ElevatedButton(
           onPressed: () {
             if (_selectedAccountId != null) {
-              Navigator.pop(context, _selectedAccountId);
+              if (mounted) Navigator.pop(context, _selectedAccountId);
             } else {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.selectAccount)));
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.selectAccount)));
+              }
             }
           },
           child: Text(t.complete),

@@ -27,30 +27,51 @@ class _ProductionJournalTabState extends ConsumerState<ProductionJournalTab> {
   DateTime _focusedDay = DateTime.now();
   DateTime _selectedDay = DateTime.now();
   List<dynamic> _products = [];
+  
+  // ✅ ДОБАВЛЕН ФЛАГ
+  bool _isDisposed = false;
 
   @override
   void initState() {
     super.initState();
+    _isDisposed = false;
     _loadProducts();
     _loadEntries();
   }
 
+  @override
+  void dispose() {
+    _isDisposed = true;
+    super.dispose();
+  }
+
   Future<void> _loadProducts() async {
+    if (_isDisposed) return;
+    
     final api = ApiClient();
     try {
       final res = await api.get('/production/products', queryParameters: {'company_id': widget.companyId});
-      if (mounted) setState(() => _products = res.data);
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
+      setState(() => _products = res.data);
     } catch (e) {
-      print('Error loading products: $e');
+      if (!_isDisposed) print('Error loading products: $e');
     }
   }
 
   Future<void> _loadEntries() async {
+    if (_isDisposed) return;
+    
     final start = DateTime(_focusedDay.year, _focusedDay.month, 1);
     final end = DateTime(_focusedDay.year, _focusedDay.month + 1, 0);
     final notifier = ref.read(productionJournalProvider.notifier);
     await notifier.loadEntries(widget.companyId, start, end);
-    if (mounted) setState(() {});
+    
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
+    setState(() {});
   }
 
   List<dynamic> get _selectedDayEntries {
@@ -64,6 +85,9 @@ class _ProductionJournalTabState extends ConsumerState<ProductionJournalTab> {
   }
 
   void _onDaySelected(DateTime selectedDay, DateTime focusedDay) {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     setState(() {
       _selectedDay = selectedDay;
       _focusedDay = focusedDay;
@@ -71,15 +95,21 @@ class _ProductionJournalTabState extends ConsumerState<ProductionJournalTab> {
   }
 
   void _onPageChanged(DateTime focusedDay) {
+    if (_isDisposed) return;
+    
     _focusedDay = focusedDay;
     _loadEntries();
   }
 
   Future<void> _refresh() async {
+    if (_isDisposed) return;
     await _loadEntries();
   }
 
   Future<void> _createEntry() async {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     final result = await showDialog<bool>(
       context: context,
       builder: (context) => ProductionJournalEntryDialog(
@@ -92,7 +122,9 @@ class _ProductionJournalTabState extends ConsumerState<ProductionJournalTab> {
     if (result == true && mounted) {
       await _refresh();
       widget.onRefresh();
-      if (mounted) setState(() {});
+      if (_isDisposed) return;
+      if (!mounted) return;
+      setState(() {});
     }
   }
 
@@ -128,11 +160,16 @@ class _ProductionJournalTabState extends ConsumerState<ProductionJournalTab> {
             ? IconButton(
                 icon: const Icon(Icons.delete, color: Colors.red),
                 onPressed: () async {
+                  if (_isDisposed) return;
+                  if (!mounted) return;
+                  
                   final notifier = ref.read(productionJournalProvider.notifier);
                   await notifier.deleteEntry(widget.companyId, entry['id']);
                   await _refresh();
                   widget.onRefresh();
-                  if (mounted) setState(() {});
+                  if (_isDisposed) return;
+                  if (!mounted) return;
+                  setState(() {});
                 },
               )
             : null,
@@ -145,7 +182,7 @@ class _ProductionJournalTabState extends ConsumerState<ProductionJournalTab> {
     final colorScheme = Theme.of(context).colorScheme;
     final t = AppLocalizations.of(context)!;
     final canCreate = widget.permissions.contains('create_production');
-    final entries = ref.watch(productionJournalProvider);
+    final entries = ref.read(productionJournalProvider);
     final selectedEntries = _selectedDayEntries;
 
     final Map<DateTime, int> markers = {};

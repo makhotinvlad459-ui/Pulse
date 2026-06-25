@@ -293,7 +293,7 @@ class _ShowcaseTabState extends ConsumerState<ShowcaseTab> {
                         })).toList())
                       : null;
                   try {
-                    await _api.post('/showcase', queryParameters: {'company_id': widget.companyId}, data: {
+                    await _api.post('/showcase/', queryParameters: {'company_id': widget.companyId}, data: {
                       'name': name,
                       'price': price,
                       'category_id': categoryId,

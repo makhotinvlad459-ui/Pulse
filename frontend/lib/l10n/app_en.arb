@@ -1037,6 +1037,13 @@
   "error_network_title": "Network Error",
   "error_network_message": "Unable to connect to the server. Please check your internet connection.",
   "error_unknown_title": "Unexpected Error",
-  "error_unknown_message": "An unexpected error occurred. Please try again."
+  "error_unknown_message": "An unexpected error occurred. Please try again.",
+  "unknownError": "Unknown error",
+  "developerInfo": "Application developed by Individual Entrepreneur Makhotin V.A",
+  "appPurpose": "for maintaining management accounting of any number of enterprises",
+  "privacyPolicy": "Privacy Policy",
+  "contactLabel": "Send all questions and suggestions to:",
+  "contactEmail": "finance.pulsemoney@gmail.com",
+  "emailCopied": "Email copied"
 
 }

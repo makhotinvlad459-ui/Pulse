@@ -21,6 +21,20 @@ class ProductionTab extends ConsumerStatefulWidget {
 }
 
 class _ProductionTabState extends ConsumerState<ProductionTab> {
+  bool _isDisposed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _isDisposed = false;
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
@@ -35,19 +49,19 @@ class _ProductionTabState extends ConsumerState<ProductionTab> {
             labelColor: colorScheme.primary,
             unselectedLabelColor: colorScheme.onSurfaceVariant,
             tabs: [
-              Tab(text: t.productionJournal),      // ← ПЕРВАЯ
-              Tab(text: t.manufacturedProducts),   // ← ВТОРАЯ
+              Tab(text: t.productionJournal),
+              Tab(text: t.manufacturedProducts),
             ],
           ),
           Expanded(
             child: TabBarView(
               children: [
-                ProductionJournalTab(              // ← ПЕРВАЯ
+                ProductionJournalTab(
                   companyId: widget.companyId,
                   permissions: widget.permissions,
                   onRefresh: widget.onRefresh,
                 ),
-                ManufacturedProductsTab(           // ← ВТОРАЯ
+                ManufacturedProductsTab(
                   companyId: widget.companyId,
                   permissions: widget.permissions,
                   onRefresh: widget.onRefresh,

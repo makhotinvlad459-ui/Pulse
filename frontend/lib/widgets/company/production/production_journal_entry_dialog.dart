@@ -30,10 +30,15 @@ class _ProductionJournalEntryDialogState extends State<ProductionJournalEntryDia
   String _shift = 'day';
   Map<String, dynamic>? _selectedProduct;
   bool _loading = false;
+  
+  // ✅ ДОБАВЛЕН ФЛАГ
+  bool _isDisposed = false;
 
   @override
   void initState() {
     super.initState();
+    _isDisposed = false;
+    
     if (widget.initialEntry != null) {
       _productionDate = DateTime.parse(widget.initialEntry['production_date']).toLocal();
       _quantityController.text = widget.initialEntry['actual_quantity'].toString();
@@ -51,7 +56,17 @@ class _ProductionJournalEntryDialogState extends State<ProductionJournalEntryDia
     }
   }
 
+  @override
+  void dispose() {
+    _isDisposed = true;
+    _quantityController.dispose();
+    _notesController.dispose();
+    super.dispose();
+  }
+
   Future<void> _selectDate() async {
+    if (_isDisposed) return;
+    
     final picked = await showDatePicker(
       context: context,
       initialDate: _productionDate,
@@ -64,6 +79,9 @@ class _ProductionJournalEntryDialogState extends State<ProductionJournalEntryDia
   }
 
   Future<void> _save() async {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     final t = AppLocalizations.of(context)!;
     if (_selectedProduct == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -107,15 +125,22 @@ class _ProductionJournalEntryDialogState extends State<ProductionJournalEntryDia
           },
         );
       }
-      if (mounted) Navigator.pop(context, true);
+      
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
+      Navigator.pop(context, true);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${t.error}: $e')),
-        );
-      }
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${t.error}: $e')),
+      );
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (!_isDisposed && mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
@@ -152,7 +177,9 @@ class _ProductionJournalEntryDialogState extends State<ProductionJournalEntryDia
                       );
                     }).toList(),
                     onChanged: (value) {
-                      setState(() => _selectedProduct = value);
+                      if (!_isDisposed && mounted) {
+                        setState(() => _selectedProduct = value);
+                      }
                     },
                   ),
                   const SizedBox(height: 16),
@@ -174,13 +201,17 @@ class _ProductionJournalEntryDialogState extends State<ProductionJournalEntryDia
                   ),
                   const SizedBox(height: 16),
                   SegmentedButton<String>(
-  segments: [
-    ButtonSegment(value: 'day', label: Text(t.dayShift)),
-    ButtonSegment(value: 'night', label: Text(t.nightShift)),
-  ],
-  selected: {_shift},
-  onSelectionChanged: (s) => setState(() => _shift = s.first),
-),
+                    segments: [
+                      ButtonSegment(value: 'day', label: Text(t.dayShift)),
+                      ButtonSegment(value: 'night', label: Text(t.nightShift)),
+                    ],
+                    selected: {_shift},
+                    onSelectionChanged: (s) {
+                      if (!_isDisposed && mounted) {
+                        setState(() => _shift = s.first);
+                      }
+                    },
+                  ),
                   const SizedBox(height: 16),
                   TextField(
                     controller: _notesController,
@@ -196,7 +227,9 @@ class _ProductionJournalEntryDialogState extends State<ProductionJournalEntryDia
             ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            if (mounted) Navigator.pop(context);
+          },
           child: Text(t.cancel, style: TextStyle(color: colorScheme.onSurfaceVariant)),
         ),
         ElevatedButton(

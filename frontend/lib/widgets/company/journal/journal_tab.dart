@@ -33,29 +33,50 @@ class _JournalTabState extends ConsumerState<JournalTab> {
   final Map<DateTime, List<JournalEntry>> _entriesMap = {};
   bool _loading = false;
   final ApiClient _apiClient = ApiClient();
+  
+  // ✅ ДОБАВЛЕН ФЛАГ
+  bool _isDisposed = false;
 
   DateTime _normalize(DateTime dt) => DateTime(dt.year, dt.month, dt.day);
 
   @override
   void initState() {
     super.initState();
+    _isDisposed = false;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadEntriesForMonth(_focusedDay);
+      if (!_isDisposed && mounted) {
+        _loadEntriesForMonth(_focusedDay);
+      }
     });
   }
 
+  @override
+  void dispose() {
+    _isDisposed = true;
+    super.dispose();
+  }
+
   Future<void> _loadEntriesForMonth(DateTime month) async {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     final start = DateTime(month.year, month.month, 1);
     final end = DateTime(month.year, month.month + 1, 0);
     setState(() => _loading = true);
     final notifier = ref.read(journalProvider.notifier);
     await notifier.loadEntries(widget.companyId, start, end);
+    
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     final state = ref.read(journalProvider);
     _buildEntriesMap(state.entries);
     setState(() => _loading = false);
   }
 
   void _buildEntriesMap(List<JournalEntry> entries) {
+    if (_isDisposed) return;
+    
     _entriesMap.clear();
     for (var e in entries) {
       final date = _normalize(e.datetimeStart);
@@ -70,6 +91,9 @@ class _JournalTabState extends ConsumerState<JournalTab> {
   }
 
   void _onDaySelected(DateTime selectedDay, DateTime focusedDay) {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     setState(() {
       _selectedDay = selectedDay;
       _focusedDay = focusedDay;
@@ -77,15 +101,21 @@ class _JournalTabState extends ConsumerState<JournalTab> {
   }
 
   void _onPageChanged(DateTime focusedDay) {
+    if (_isDisposed) return;
+    
     _focusedDay = focusedDay;
     _loadEntriesForMonth(focusedDay);
   }
 
   Future<void> _refresh() async {
+    if (_isDisposed) return;
     await _loadEntriesForMonth(_focusedDay);
   }
 
   Future<void> _createEntry() async {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     final result = await showDialog<bool>(
       context: context,
       builder: (context) => JournalEntryDialog(
@@ -94,13 +124,19 @@ class _JournalTabState extends ConsumerState<JournalTab> {
         permissions: widget.permissions,
       ),
     );
-    if (result == true && mounted) {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
+    if (result == true) {
       await _loadEntriesForMonth(_focusedDay);
     }
   }
 
   Future<void> _editEntry(JournalEntry entry) async {
+    if (_isDisposed) return;
+    if (!mounted) return;
     if (!widget.permissions.contains('edit_journal')) return;
+    
     final entryMap = {
       'id': entry.id,
       'datetime_start': entry.datetimeStart.toIso8601String(),
@@ -123,13 +159,19 @@ class _JournalTabState extends ConsumerState<JournalTab> {
         permissions: widget.permissions,
       ),
     );
-    if (result == true && mounted) {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
+    if (result == true) {
       await _loadEntriesForMonth(_focusedDay);
     }
   }
 
   Future<void> _deleteEntry(JournalEntry entry) async {
+    if (_isDisposed) return;
+    if (!mounted) return;
     if (!widget.permissions.contains('delete_journal')) return;
+    
     final t = AppLocalizations.of(context)!;
     final confirm = await showDialog<bool>(
       context: context,
@@ -142,6 +184,9 @@ class _JournalTabState extends ConsumerState<JournalTab> {
         ],
       ),
     );
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     if (confirm == true) {
       final notifier = ref.read(journalProvider.notifier);
       await notifier.deleteEntry(widget.companyId, entry.id);
@@ -150,7 +195,10 @@ class _JournalTabState extends ConsumerState<JournalTab> {
   }
 
   Future<void> _completeEntry(JournalEntry entry) async {
+    if (_isDisposed) return;
+    if (!mounted) return;
     if (!widget.permissions.contains('complete_journal')) return;
+    
     final t = AppLocalizations.of(context)!;
     if (entry.status != 'planned') {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.onlyPlannedCanBeCompleted)));
@@ -160,78 +208,97 @@ class _JournalTabState extends ConsumerState<JournalTab> {
       context: context,
       builder: (context) => JournalCompleteDialog(companyId: widget.companyId),
     );
-    if (accountId != null && mounted) {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
+    if (accountId != null) {
       final notifier = ref.read(journalProvider.notifier);
       await notifier.completeEntry(widget.companyId, entry.id, accountId);
       widget.onRefresh?.call();
       await _loadEntriesForMonth(_focusedDay);
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.entryCompleted)));
     }
   }
 
   Future<void> _viewAttachment(int attachmentId, String fileName) async {
-  final t = AppLocalizations.of(context)!;
-  final ext = fileName.split('.').last.toLowerCase();
-  final isImage = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].contains(ext);
-  try {
-    final response = await _apiClient.getJournalAttachmentFile(attachmentId, widget.companyId);
-    final bytes = response.data is List<int>
-        ? Uint8List.fromList(response.data as List<int>)
-        : Uint8List.fromList((response.data as String).codeUnits);
-    if (isImage) {
-      if (mounted) {
-        showDialog(
-          context: context,
-          barrierDismissible: true,
-          builder: (context) => Dialog(
-            backgroundColor: Colors.transparent,
-            insetPadding: EdgeInsets.zero,
-            elevation: 0,
-            child: Stack(
-              children: [
-                Center(
-                  child: InteractiveViewer(
-                    child: Image.memory(bytes),
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
+    final t = AppLocalizations.of(context)!;
+    final ext = fileName.split('.').last.toLowerCase();
+    final isImage = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].contains(ext);
+    try {
+      final response = await _apiClient.getJournalAttachmentFile(attachmentId, widget.companyId);
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
+      final bytes = response.data is List<int>
+          ? Uint8List.fromList(response.data as List<int>)
+          : Uint8List.fromList((response.data as String).codeUnits);
+      if (isImage) {
+        if (mounted) {
+          showDialog(
+            context: context,
+            barrierDismissible: true,
+            builder: (context) => Dialog(
+              backgroundColor: Colors.transparent,
+              insetPadding: EdgeInsets.zero,
+              elevation: 0,
+              child: Stack(
+                children: [
+                  Center(
+                    child: InteractiveViewer(
+                      child: Image.memory(bytes),
+                    ),
                   ),
-                ),
-                Positioned(
-                  top: 40,
-                  right: 20,
-                  child: IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white, size: 30),
-                    onPressed: () => Navigator.pop(context),
+                  Positioned(
+                    top: 40,
+                    right: 20,
+                    child: IconButton(
+                      icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                      onPressed: () {
+                        if (mounted) Navigator.pop(context);
+                      },
+                    ),
                   ),
-                ),
-                Positioned(
-                  bottom: 40,
-                  right: 20,
-                  child: IconButton(
-                    icon: const Icon(Icons.download, color: Colors.white, size: 30),
-                    onPressed: () async {
-                      await FileDownloadHelper.downloadFile(bytes, fileName, context: context);
-                    },
+                  Positioned(
+                    bottom: 40,
+                    right: 20,
+                    child: IconButton(
+                      icon: const Icon(Icons.download, color: Colors.white, size: 30),
+                      onPressed: () async {
+                        await FileDownloadHelper.downloadFile(bytes, fileName, context: context);
+                      },
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        );
-      }
-    } else {
-      await FileDownloadHelper.downloadFile(bytes, fileName, context: context);
-      if (mounted) {
+          );
+        }
+      } else {
+        await FileDownloadHelper.downloadFile(bytes, fileName, context: context);
+        if (_isDisposed) return;
+        if (!mounted) return;
+        
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.fileSaved)));
       }
-    }
-  } catch (e) {
-    if (mounted) {
+    } catch (e) {
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
     }
   }
-}
 
   Future<void> _deleteAttachment(JournalEntry entry, int attachmentId) async {
+    if (_isDisposed) return;
+    if (!mounted) return;
     if (!widget.permissions.contains('edit_journal')) return;
+    
     final t = AppLocalizations.of(context)!;
     final confirm = await showDialog<bool>(
       context: context,
@@ -244,23 +311,28 @@ class _JournalTabState extends ConsumerState<JournalTab> {
         ],
       ),
     );
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     if (confirm == true) {
       try {
         await _apiClient.deleteJournalAttachment(attachmentId, widget.companyId);
         await _loadEntriesForMonth(_focusedDay);
       } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
-        }
+        if (_isDisposed) return;
+        if (!mounted) return;
+        
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
       }
     }
   }
 
   String _getFileExtension(String filename) {
-  final parts = filename.split('.');
-  if (parts.length < 2) return '';
-  return parts.last.toLowerCase();
-}
+    final parts = filename.split('.');
+    if (parts.length < 2) return '';
+    return parts.last.toLowerCase();
+  }
+
   Icon _getFileIcon(String filename) {
     final ext = _getFileExtension(filename);
     if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].contains(ext)) {

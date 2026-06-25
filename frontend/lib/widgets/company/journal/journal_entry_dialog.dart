@@ -45,10 +45,15 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
   // Автоподбор контрагентов
   List<String> _existingCounterparties = [];
   bool _loadingCounterparties = false;
+  
+  // ✅ ДОБАВЛЕН ФЛАГ
+  bool _isDisposed = false;
 
   @override
   void initState() {
     super.initState();
+    _isDisposed = false;
+    
     if (widget.initialEntry != null) {
       _startDateTime = DateTime.parse(widget.initialEntry['datetime_start']).toLocal();
       _endDateTime = DateTime.parse(widget.initialEntry['datetime_end']).toLocal();
@@ -83,14 +88,27 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
     _updateManualAmountState(setStateFlag: false);
   }
 
+  @override
+  void dispose() {
+    _isDisposed = true;
+    _descriptionController.dispose();
+    _counterpartyController.dispose();
+    _manualAmountController.dispose();
+    super.dispose();
+  }
+
   void _updateManualAmountState({bool setStateFlag = true}) {
+    if (_isDisposed) return;
+    
     final hasServices = _items.isNotEmpty;
     final computed = _items.fold(0.0, (sum, item) => sum + ((item['total'] ?? 0.0) as double));
     if (setStateFlag) {
-      setState(() {
-        _isManualAmountEnabled = !hasServices;
-        if (hasServices) _manualAmountController.text = computed.toStringAsFixed(2);
-      });
+      if (mounted) {
+        setState(() {
+          _isManualAmountEnabled = !hasServices;
+          if (hasServices) _manualAmountController.text = computed.toStringAsFixed(2);
+        });
+      }
     } else {
       _isManualAmountEnabled = !hasServices;
       if (hasServices) _manualAmountController.text = computed.toStringAsFixed(2);
@@ -98,38 +116,55 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
   }
 
   Future<void> _loadShowcaseItems() async {
+    if (_isDisposed) return;
     if (!mounted) return;
+    
     setState(() => _loadingShowcase = true);
     try {
       final api = ApiClient();
       final res = await api.get('/showcase', queryParameters: {'company_id': widget.companyId});
-      if (mounted) {
-        setState(() {
-          _showcaseItems = List<Map<String, dynamic>>.from(res.data);
-          _loadingShowcase = false;
-        });
-      }
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
+      setState(() {
+        _showcaseItems = List<Map<String, dynamic>>.from(res.data);
+        _loadingShowcase = false;
+      });
     } catch (e) {
-      if (mounted) setState(() => _loadingShowcase = false);
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
+      setState(() => _loadingShowcase = false);
     }
   }
 
   Future<void> _loadCounterparties() async {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     setState(() => _loadingCounterparties = true);
     final api = ApiClient();
     try {
       final res = await api.get('/statistics/counterparties', queryParameters: {'company_id': widget.companyId});
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
       setState(() {
         _existingCounterparties = List<String>.from(res.data);
         _loadingCounterparties = false;
       });
     } catch (e) {
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
       setState(() => _loadingCounterparties = false);
-      print('Error loading counterparties: $e');
+      if (!_isDisposed) print('Error loading counterparties: $e');
     }
   }
 
   Future<void> _selectTime(bool isStart) async {
+    if (_isDisposed) return;
+    
     final initialTime = TimeOfDay.fromDateTime(isStart ? _startDateTime : _endDateTime);
     final picked = await showTimePicker(context: context, initialTime: initialTime);
     if (picked != null && mounted) {
@@ -156,6 +191,9 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
   }
 
   void _addService() async {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     final t = AppLocalizations.of(context)!;
     if (_loadingShowcase) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.loadingServices)));
@@ -186,7 +224,10 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
         ),
       ),
     );
-    if (selected != null && mounted) {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
+    if (selected != null) {
       setState(() {
         _items.add({
           'showcase_item_id': selected['id'],
@@ -201,23 +242,25 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
   }
 
   void _removeService(int index) {
-    if (!mounted) return;
-    setState(() {
-      _items.removeAt(index);
-      _updateManualAmountState();
-    });
+    if (!_isDisposed && mounted) {
+      setState(() {
+        _items.removeAt(index);
+        _updateManualAmountState();
+      });
+    }
   }
 
   void _updateService(int index, {int? quantity, double? priceAtTime}) {
-    if (!mounted) return;
-    setState(() {
-      if (quantity != null) _items[index]['quantity'] = quantity;
-      if (priceAtTime != null) _items[index]['price_at_time'] = priceAtTime;
-      final qty = _items[index]['quantity'] as int;
-      final price = _items[index]['price_at_time'] as double;
-      _items[index]['total'] = qty * price;
-      _updateManualAmountState();
-    });
+    if (!_isDisposed && mounted) {
+      setState(() {
+        if (quantity != null) _items[index]['quantity'] = quantity;
+        if (priceAtTime != null) _items[index]['price_at_time'] = priceAtTime;
+        final qty = _items[index]['quantity'] as int;
+        final price = _items[index]['price_at_time'] as double;
+        _items[index]['total'] = qty * price;
+        _updateManualAmountState();
+      });
+    }
   }
 
   double get _finalAmount {
@@ -228,48 +271,60 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
   }
 
   Future<void> _pickFiles() async {
-  final t = AppLocalizations.of(context)!;
-  final result = await FilePicker.platform.pickFiles(
-    type: FileType.custom,
-    allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt'],
-    allowMultiple: true,
-  );
-  if (result != null && mounted) {
-    setState(() {
-      for (final file in result.files) {
-        Uint8List? fileBytes;
-if (file.bytes != null) {
-  fileBytes = file.bytes;
-} else if (!kIsWeb && file.path != null) {
-  fileBytes = File(file.path!).readAsBytesSync();
-}
-if (fileBytes != null) {
-  _newFiles.add((bytes: fileBytes, name: file.name));
-} else {
-  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.fileReadError)));
-}
-      }
-    });
-  } else if (!kIsWeb && mounted) {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery);
-    if (picked != null) {
-      final bytes = await picked.readAsBytes();
+    if (_isDisposed) return;
+    
+    final t = AppLocalizations.of(context)!;
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt'],
+      allowMultiple: true,
+    );
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
+    if (result != null) {
       setState(() {
-        _newFiles.add((bytes: bytes, name: picked.name));
+        for (final file in result.files) {
+          Uint8List? fileBytes;
+          if (file.bytes != null) {
+            fileBytes = file.bytes;
+          } else if (!kIsWeb && file.path != null) {
+            fileBytes = File(file.path!).readAsBytesSync();
+          }
+          if (fileBytes != null) {
+            _newFiles.add((bytes: fileBytes, name: file.name));
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.fileReadError)));
+          }
+        }
+      });
+    } else if (!kIsWeb && mounted) {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(source: ImageSource.gallery);
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
+      if (picked != null) {
+        final bytes = await picked.readAsBytes();
+        setState(() {
+          _newFiles.add((bytes: bytes, name: picked.name));
+        });
+      }
+    }
+  }
+
+  void _removeNewFile(int index) {
+    if (!_isDisposed && mounted) {
+      setState(() {
+        _newFiles.removeAt(index);
       });
     }
   }
-}
-
-  void _removeNewFile(int index) {
-    if (!mounted) return;
-    setState(() {
-      _newFiles.removeAt(index);
-    });
-  }
 
   Future<void> _removeExistingAttachment(int attachmentId) async {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     final t = AppLocalizations.of(context)!;
     final confirm = await showDialog<bool>(
       context: context,
@@ -282,24 +337,32 @@ if (fileBytes != null) {
         ],
       ),
     );
-    if (confirm == true && mounted) {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
+    if (confirm == true) {
       final api = ApiClient();
       try {
         await api.deleteJournalAttachment(attachmentId, widget.companyId);
-        if (mounted) {
-          setState(() {
-            _attachments.removeWhere((att) => att['id'] == attachmentId);
-          });
-        }
+        if (_isDisposed) return;
+        if (!mounted) return;
+        
+        setState(() {
+          _attachments.removeWhere((att) => att['id'] == attachmentId);
+        });
       } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
-        }
+        if (_isDisposed) return;
+        if (!mounted) return;
+        
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
       }
     }
   }
 
   Future<void> _save() async {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     final t = AppLocalizations.of(context)!;
     if (_endDateTime.isBefore(_startDateTime)) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.endTimeAfterStart)));
@@ -363,13 +426,17 @@ if (fileBytes != null) {
         );
       }
 
-      if (mounted) Navigator.pop(context, true);
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
+      Navigator.pop(context, true);
     } catch (e, stack) {
       debugPrint("Ошибка сохранения: $e\n$stack");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
-        setState(() => _uploading = false);
-      }
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
+      setState(() => _uploading = false);
     }
   }
 
@@ -419,8 +486,11 @@ if (fileBytes != null) {
                       _counterpartyController.text = selection;
                     },
                     fieldViewBuilder: (context, textController, focusNode, onFieldSubmitted) {
+                      // Синхронизация контроллеров
                       textController.addListener(() {
-                        // дополнительно можно обновить что-то, если нужно
+                        if (_counterpartyController.text != textController.text) {
+                          _counterpartyController.text = textController.text;
+                        }
                       });
                       return TextFormField(
                         controller: textController,
@@ -432,7 +502,11 @@ if (fileBytes != null) {
                               ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
                               : IconButton(
                                   icon: const Icon(Icons.refresh),
-                                  onPressed: _loadCounterparties,
+                                  onPressed: () {
+                                    if (!_isDisposed && mounted) {
+                                      _loadCounterparties();
+                                    }
+                                  },
                                   tooltip: t.refreshList,
                                 ),
                         ),
@@ -596,7 +670,12 @@ if (fileBytes != null) {
               ),
             ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: Text(t.cancel)),
+        TextButton(
+          onPressed: () {
+            if (mounted) Navigator.pop(context);
+          },
+          child: Text(t.cancel),
+        ),
         ElevatedButton(
           onPressed: _uploading ? null : _save,
           child: Text(isEdit ? t.save : t.create),

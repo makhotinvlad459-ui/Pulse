@@ -110,7 +110,7 @@ class _CreateOrderDialogState extends ConsumerState<CreateOrderDialog> {
         'use_from_stock': i['use_from_stock'],
       })).toList();
       
-      await api.post('/orders', queryParameters: {'company_id': widget.companyId}, data: {
+      await api.post('/orders/', queryParameters: {'company_id': widget.companyId}, data: {
         'title': _titleController.text,
         'description': _descController.text,
         'work_price': double.tryParse(_workPriceController.text) ?? 0,

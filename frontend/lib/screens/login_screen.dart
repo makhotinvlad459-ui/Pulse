@@ -10,7 +10,7 @@ import '../widgets/video_background.dart';
 import 'package:frontend/l10n/app_localizations.dart';
 import '../services/api_client.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/services.dart'; 
+import 'package:flutter/services.dart';
 import '../screens/privacy_policy_screen.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -26,81 +26,170 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final SecureStorage _storage = SecureStorage();
   bool _rememberMe = false;
   bool _obscurePassword = true;
+  
+  // ✅ ДОБАВЛЕН ФЛАГ
+  bool _isDisposed = false;
+  bool _isLoggingIn = false; // ✅ для предотвращения двойного нажатия
 
   @override
   void initState() {
     super.initState();
-    _clearInvalidTokens(); 
+    _isDisposed = false;
+    _clearInvalidTokens();
     _loadSavedCredentials();
   }
 
-Future<void> _clearInvalidTokens() async {
-  final storage = SecureStorage();
-  await storage.delete(key: 'access_token');
-  await storage.delete(key: 'refresh_token');
-  // Также обновляем заголовки Dio
-  final api = ApiClient();
-  api.clearAuth();
-  api.dio.options.headers.remove('Authorization');
-}
+  @override
+  void dispose() {
+    _isDisposed = true;
+    _loginController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _clearInvalidTokens() async {
+    if (_isDisposed) return;
+    
+    try {
+      final storage = SecureStorage();
+      await storage.delete(key: 'access_token');
+      await storage.delete(key: 'refresh_token');
+      final api = ApiClient();
+      api.clearAuth();
+      api.dio.options.headers.remove('Authorization');
+    } catch (e) {
+      // Игнорируем ошибки очистки токенов
+      if (!_isDisposed) debugPrint('Error clearing tokens: $e');
+    }
+  }
 
   Future<void> _loadSavedCredentials() async {
-    final savedLogin = await _storage.read(key: 'saved_login');
-    final savedPassword = await _storage.read(key: 'saved_password');
-    final savedRemember = await _storage.read(key: 'remember_me');
-    if (mounted) {
+    if (_isDisposed) return;
+    
+    try {
+      final savedLogin = await _storage.read(key: 'saved_login');
+      final savedPassword = await _storage.read(key: 'saved_password');
+      final savedRemember = await _storage.read(key: 'remember_me');
+      
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
       setState(() {
         if (savedLogin != null) _loginController.text = savedLogin;
         if (savedPassword != null) _passwordController.text = savedPassword;
         _rememberMe = savedRemember == 'true';
       });
+    } catch (e) {
+      if (!_isDisposed) debugPrint('Error loading saved credentials: $e');
     }
   }
 
   Future<void> _performLogin(String login, String password) async {
+    // ✅ Защита от двойного нажатия
+    if (_isLoggingIn) return;
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
+    setState(() => _isLoggingIn = true);
+    
     final authNotifier = ref.read(authProvider.notifier);
     final currentLocale = ref.read(localeProvider);
 
-    final success = await authNotifier.login(login, password, currentLocale);
+    try {
+      final success = await authNotifier.login(login, password, currentLocale);
 
-    if (!mounted) return;
-
-    if (success) {
-      if (_rememberMe) {
-        await _storage.write(key: 'saved_login', value: login);
-        await _storage.write(key: 'saved_password', value: password);
-        await _storage.write(key: 'remember_me', value: 'true');
-      } else {
-        await _storage.delete(key: 'saved_password');
-        await _storage.write(key: 'saved_login', value: login);
-        await _storage.write(key: 'remember_me', value: 'false');
+      if (_isDisposed) return;
+      if (!mounted) {
+        setState(() => _isLoggingIn = false);
+        return;
       }
 
+      if (success) {
+        // Сохраняем креды
+        if (_rememberMe) {
+          await _storage.write(key: 'saved_login', value: login);
+          await _storage.write(key: 'saved_password', value: password);
+          await _storage.write(key: 'remember_me', value: 'true');
+        } else {
+          await _storage.delete(key: 'saved_password');
+          await _storage.write(key: 'saved_login', value: login);
+          await _storage.write(key: 'remember_me', value: 'false');
+        }
+
+        // Отправляем FCM токен в фоне без блокировки UI
+        _sendFcmTokenInBackground();
+
+        // Синхронизируем язык в фоне
+        _syncLanguageInBackground(currentLocale.languageCode);
+
+        if (_isDisposed) return;
+        if (!mounted) {
+          setState(() => _isLoggingIn = false);
+          return;
+        }
+
+        setState(() => _isLoggingIn = false);
+        
+        // Навигация на главный экран
+        if (mounted) {
+          Navigator.pushReplacementNamed(context, '/home');
+        }
+      } else {
+        setState(() => _isLoggingIn = false);
+        
+        final error = ref.read(authProvider).error ?? 
+            AppLocalizations.of(context)?.unknownError ?? 'Неизвестная ошибка';
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(error)),
+          );
+        }
+      }
+    } catch (e) {
+      if (_isDisposed) return;
+      if (!mounted) {
+        setState(() => _isLoggingIn = false);
+        return;
+      }
+      
+      setState(() => _isLoggingIn = false);
+      
+      if (mounted) {
+        final t = AppLocalizations.of(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${t?.error ?? 'Ошибка'}: $e')),
+        );
+      }
+    }
+  }
+
+  // ✅ Фоновые операции, которые не должны блокировать UI
+  void _sendFcmTokenInBackground() {
+    Future.microtask(() async {
+      if (_isDisposed) return;
+      
       try {
         final fcmToken = await FirebaseMessaging.instance.getToken();
-        if (fcmToken != null) {
+        if (fcmToken != null && !_isDisposed) {
           await ApiClient().post('/chat/fcm-token', data: {'fcm_token': fcmToken});
         }
       } catch (e) {
-        print('Error sending FCM token: $e');
+        if (!_isDisposed) debugPrint('Error sending FCM token: $e');
       }
+    });
+  }
 
+  void _syncLanguageInBackground(String languageCode) {
+    Future.microtask(() async {
+      if (_isDisposed) return;
+      
       try {
-        await authNotifier.syncLanguage(currentLocale.languageCode);
-        print('Language synced: ${currentLocale.languageCode}');
+        await ref.read(authProvider.notifier).syncLanguage(languageCode);
+        if (!_isDisposed) debugPrint('Language synced: $languageCode');
       } catch (e) {
-        print('Error syncing language: $e');
+        if (!_isDisposed) debugPrint('Error syncing language: $e');
       }
-
-      if (mounted) {
-        Navigator.pushReplacementNamed(context, '/home');
-      }
-    } else {
-      final error = ref.read(authProvider).error ?? 'Неизвестная ошибка';
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
-      }
-    }
+    });
   }
 
   String _getVideoPath(AppTheme theme) {
@@ -115,6 +204,9 @@ Future<void> _clearInvalidTokens() async {
   }
 
   void _setLanguage(Locale locale) async {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
     final notifier = ref.read(localeProvider.notifier);
     notifier.setLocale(locale);
 
@@ -122,9 +214,9 @@ Future<void> _clearInvalidTokens() async {
     if (authState.user != null) {
       try {
         await ref.read(authProvider.notifier).syncLanguage(locale.languageCode);
-        print('Language synced to server: ${locale.languageCode}');
+        if (!_isDisposed) debugPrint('Language synced to server: ${locale.languageCode}');
       } catch (e) {
-        print('Error syncing language: $e');
+        if (!_isDisposed) debugPrint('Error syncing language: $e');
       }
     }
   }
@@ -254,9 +346,11 @@ Future<void> _clearInvalidTokens() async {
                             suffixIcon: IconButton(
                               icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
                               onPressed: () {
-                                setState(() {
-                                  _obscurePassword = !_obscurePassword;
-                                });
+                                if (!_isDisposed && mounted) {
+                                  setState(() {
+                                    _obscurePassword = !_obscurePassword;
+                                  });
+                                }
                               },
                             ),
                             filled: true,
@@ -278,16 +372,18 @@ Future<void> _clearInvalidTokens() async {
                             Checkbox(
                               value: _rememberMe,
                               onChanged: (value) {
-                                setState(() {
-                                  _rememberMe = value ?? false;
-                                });
+                                if (!_isDisposed && mounted) {
+                                  setState(() {
+                                    _rememberMe = value ?? false;
+                                  });
+                                }
                               },
                             ),
                             Text(t?.rememberMe ?? 'Запомнить меня'),
                           ],
                         ),
                         const SizedBox(height: 16),
-                        authState.isLoading
+                        authState.isLoading || _isLoggingIn
                             ? const CircularProgressIndicator()
                             : ElevatedButton(
                                 onPressed: () async {
@@ -308,7 +404,11 @@ Future<void> _clearInvalidTokens() async {
                               ),
                         const SizedBox(height: 16),
                         TextButton(
-                          onPressed: () => Navigator.pushNamed(context, '/register'),
+                          onPressed: () {
+                            if (_isDisposed) return;
+                            if (!mounted) return;
+                            Navigator.pushNamed(context, '/register');
+                          },
                           style: TextButton.styleFrom(
                             foregroundColor: Colors.grey.shade900,
                           ),
@@ -321,7 +421,11 @@ Future<void> _clearInvalidTokens() async {
                           ),
                         ),
                         TextButton(
-                          onPressed: () => Navigator.pushNamed(context, '/forgot-password'),
+                          onPressed: () {
+                            if (_isDisposed) return;
+                            if (!mounted) return;
+                            Navigator.pushNamed(context, '/forgot-password');
+                          },
                           style: TextButton.styleFrom(
                             foregroundColor: Colors.grey.shade900,
                           ),
@@ -335,159 +439,149 @@ Future<void> _clearInvalidTokens() async {
                 // ==================== КОНТАКТНАЯ ИНФОРМАЦИЯ ====================
                 const SizedBox(height: 32),
 
-Container(
-  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-  decoration: BoxDecoration(
-    color: Colors.black.withOpacity(0.35),
-    borderRadius: BorderRadius.circular(12),
-    border: Border.all(
-      color: Colors.white.withOpacity(0.2),
-      width: 0.8,
-    ),
-  ),
-  child: Column(
-    children: [
-      // Строка: разработчик
-      Text(
-        t?.developerInfo ?? 'Приложение разработано Индивидуальным предпринимателем Махотиным В.А',
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          fontSize: 10,
-          color: Colors.white.withOpacity(0.85),
-          fontWeight: FontWeight.w500,
-          letterSpacing: 0.3,
-        ),
-      ),
-      
-      const SizedBox(height: 6),
-      
-      // Строка: назначение приложения
-      Text(
-        t?.appPurpose ?? 'для ведения управленческого учета любого количества предприятий',
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          fontSize: 9,
-          color: Colors.white.withOpacity(0.65),
-          fontWeight: FontWeight.w400,
-          fontStyle: FontStyle.italic,
-        ),
-      ),
-      
-      const SizedBox(height: 12),
-      
-      // Разделитель
-      Container(
-        height: 0.5,
-        width: 60,
-        color: Colors.white.withOpacity(0.25),
-      ),
-      
-      const SizedBox(height: 10),
-      
-      Container(
-  height: 0.5,
-  width: 60,
-  color: Colors.white.withOpacity(0.25),
-),
+                Container(
+                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.35),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.2),
+                      width: 0.8,
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      Text(
+                        t?.developerInfo ?? 'Приложение разработано Индивидуальным предпринимателем Махотиным В.А',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.white.withOpacity(0.85),
+                          fontWeight: FontWeight.w500,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                      
+                      const SizedBox(height: 6),
+                      
+                      Text(
+                        t?.appPurpose ?? 'для ведения управленческого учета любого количества предприятий',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 9,
+                          color: Colors.white.withOpacity(0.65),
+                          fontWeight: FontWeight.w400,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                      
+                      const SizedBox(height: 12),
+                      
+                      Container(
+                        height: 0.5,
+                        width: 60,
+                        color: Colors.white.withOpacity(0.25),
+                      ),
+                      
+                      const SizedBox(height: 10),
+                      
+                      GestureDetector(
+                        onTap: () {
+                          if (_isDisposed) return;
+                          if (!mounted) return;
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const PrivacyPolicyScreen(),
+                            ),
+                          );
+                        },
+                        child: Text(
+                          t?.privacyPolicy ?? 'Политика конфиденциальности',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.white.withOpacity(0.7),
+                            fontWeight: FontWeight.w400,
+                            decoration: TextDecoration.underline,
+                            decorationColor: Colors.white.withOpacity(0.4),
+                          ),
+                        ),
+                      ),
 
-const SizedBox(height: 10),
-
-// Ссылка на политику конфиденциальности
-GestureDetector(
-  onTap: () {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const PrivacyPolicyScreen(),
-      ),
-    );
-  },
-  child: Text(
-    t?.privacyPolicy ?? 'Политика конфиденциальности',
-    textAlign: TextAlign.center,
-    style: TextStyle(
-      fontSize: 10,
-      color: Colors.white.withOpacity(0.7),
-      fontWeight: FontWeight.w400,
-      decoration: TextDecoration.underline,
-      decorationColor: Colors.white.withOpacity(0.4),
-    ),
-  ),
-),
-
-      // Лейбл: вопросы и предложения
-      Text(
-        t?.contactLabel ?? 'Все вопросы и предложения отправляйте:',
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          fontSize: 9,
-          color: Colors.white.withOpacity(0.7),
-          fontWeight: FontWeight.w400,
-        ),
-      ),
-      
-      const SizedBox(height: 6),
-      
-      // Email (кликабельный с копированием)
-      GestureDetector(
-        onTap: () {
-          // Копирование email в буфер обмена
-          Clipboard.setData(
-            const ClipboardData(text: 'finance.pulsemoney@gmail.com'),
-          );
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                t?.emailCopied ?? 'Email скопирован',
-                style: const TextStyle(fontSize: 13),
-              ),
-              duration: const Duration(seconds: 2),
-              backgroundColor: Colors.black87,
-              behavior: SnackBarBehavior.floating,
-              margin: const EdgeInsets.all(16),
-            ),
-          );
-        },
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.email_outlined,
-                size: 14,
-                color: Colors.white.withOpacity(0.9),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                t?.contactEmail ?? 'finance.pulsemoney@gmail.com',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: Colors.white.withOpacity(0.95),
-                  fontWeight: FontWeight.w500,
-                  decoration: TextDecoration.underline,
-                  decorationColor: Colors.white.withOpacity(0.5),
-                  letterSpacing: 0.3,
+                      Text(
+                        t?.contactLabel ?? 'Все вопросы и предложения отправляйте:',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 9,
+                          color: Colors.white.withOpacity(0.7),
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                      
+                      const SizedBox(height: 6),
+                      
+                      GestureDetector(
+                        onTap: () {
+                          if (_isDisposed) return;
+                          if (!mounted) return;
+                          
+                          Clipboard.setData(
+                            const ClipboardData(text: 'finance.pulsemoney@gmail.com'),
+                          );
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                t?.emailCopied ?? 'Email скопирован',
+                                style: const TextStyle(fontSize: 13),
+                              ),
+                              duration: const Duration(seconds: 2),
+                              backgroundColor: Colors.black87,
+                              behavior: SnackBarBehavior.floating,
+                              margin: const EdgeInsets.all(16),
+                            ),
+                          );
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.email_outlined,
+                                size: 14,
+                                color: Colors.white.withOpacity(0.9),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                t?.contactEmail ?? 'finance.pulsemoney@gmail.com',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.white.withOpacity(0.95),
+                                  fontWeight: FontWeight.w500,
+                                  decoration: TextDecoration.underline,
+                                  decorationColor: Colors.white.withOpacity(0.5),
+                                  letterSpacing: 0.3,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Icon(
+                                Icons.copy,
+                                size: 12,
+                                color: Colors.white.withOpacity(0.6),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: 6),
-              Icon(
-                Icons.copy,
-                size: 12,
-                color: Colors.white.withOpacity(0.6),
-              ),
-            ],
-          ),
-        ),
-      ),
-    ],
-  ),
-),
                 // ==============================================================
                 
                 const SizedBox(height: 16),
