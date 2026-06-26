@@ -8,14 +8,16 @@ class JournalEntry {
   final String status;
   final int? transactionId;
   final int? showcaseItemId;
-  final String? showcaseItemName;   // <-- добавьте это поле
+  final String? showcaseItemName;  
   final int quantity;
   final double totalAmount;
   final int createdBy;
   final DateTime createdAt;
   final DateTime updatedAt;
   final List<dynamic>? items;
-  final List<dynamic>? attachments;  // если ещё не добавили
+  final List<dynamic>? attachments;  
+  final int? assignedToId;
+  final String? assignedToName;
 
   JournalEntry({
     required this.id,
@@ -27,7 +29,7 @@ class JournalEntry {
     required this.status,
     this.transactionId,
     this.showcaseItemId,
-    this.showcaseItemName,           // <-- добавьте
+    this.showcaseItemName,           
     required this.quantity,
     required this.totalAmount,
     required this.createdBy,
@@ -35,6 +37,8 @@ class JournalEntry {
     required this.updatedAt,
     this.items,
     this.attachments,
+    this.assignedToId,      
+    this.assignedToName,
   });
 
   factory JournalEntry.fromJson(Map<String, dynamic> json) {
@@ -56,6 +60,8 @@ class JournalEntry {
       updatedAt: DateTime.parse(json['updated_at']),
       items: json['items'] as List?,
       attachments: json['attachments'] as List?,
+      assignedToId: json['assigned_to_id'],      
+      assignedToName: json['assigned_to_name'],
     );
   }
 }

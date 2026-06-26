@@ -283,6 +283,7 @@ class JournalEntryCreate(BaseModel):
     total_amount: float = 0.0  # если showcase_item_id не указан, можно указать сумму вручную
     items: Optional[List[JournalEntryItemCreate]] = []
     name: Optional[str] = None
+    assigned_to_id: Optional[int] = None 
 
 class JournalEntryUpdate(BaseModel):
     datetime_start: Optional[datetime] = None
@@ -294,6 +295,7 @@ class JournalEntryUpdate(BaseModel):
     total_amount: Optional[float] = None
     status: Optional[JournalEntryStatus] = None
     items: Optional[List[JournalEntryItemCreate]] = None
+    assigned_to_id: Optional[int] = None 
 
 class JournalAttachmentResponse(BaseModel):
     id: int
@@ -324,6 +326,8 @@ class JournalEntryResponse(BaseModel):
     showcase_item_name: Optional[str] = None  # для отображения
     items: Optional[List[JournalEntryItemCreate]] = None
     attachments: List[JournalAttachmentResponse] = []
+    assigned_to_id: Optional[int] = None
+    assigned_to_name: Optional[str] = None
 
     class Config:
         from_attributes = True        

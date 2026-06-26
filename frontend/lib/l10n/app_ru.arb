@@ -1044,7 +1044,19 @@
   "privacyPolicy": "Политика конфиденциальности",
   "contactLabel": "Все вопросы и предложения отправляйте:",
   "contactEmail": "finance.pulsemoney@gmail.com",
-  "emailCopied": "Email скопирован"
+  "emailCopied": "Email скопирован",
+  "filterByEmployee": "Фильтр по сотруднику",
+  "allEmployees": "Все сотрудники",
+  "clearFilter": "Очистить фильтр",
+  "assignedTo": "Назначен",
+  "notAssigned": "Не назначен",
+  "employeeReport": "Отчет по сотрудникам",
+  "employeeName": "Сотрудник",
+  "transactionsCount": "Кол-во операций",
+  "transactionsSum": "Сумма операций",
+  "journalEntriesCount": "Кол-во записей журнала",
+  "journalSum": "Сумма журнала",
+  "productionShifts": "Кол-во смен"
 
 }
 

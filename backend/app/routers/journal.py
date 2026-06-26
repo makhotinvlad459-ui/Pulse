@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload   # <-- ДОБАВЛЕН ИМПОРТ
+from sqlalchemy.orm import selectinload
 from typing import List, Optional
 from datetime import datetime
 import json
@@ -9,7 +9,7 @@ import os
 import uuid
 from sqlalchemy.orm.attributes import flag_modified
 from app.database import get_db
-from app.models import User, Company, CompanyMember, JournalEntry, JournalEntryStatus, ShowcaseItem, Account, Permission, CompanyMemberPermission, JournalAttachment
+from app.models import User,  Company, CompanyMember, JournalEntry, JournalEntryStatus, ShowcaseItem, Account, Permission, CompanyMemberPermission, JournalAttachment, UserRole
 from app.schemas import JournalEntryCreate, JournalEntryUpdate, JournalEntryResponse, TransactionCreate, TransactionType, JournalEntryItemCreate
 from app.deps import get_current_user
 from app.routers.transactions import create_transaction
@@ -61,11 +61,13 @@ async def _has_permission(company_id: int, user: User, permission_name: str, db:
     return perm.scalar_one_or_none() is not None
 
 
+# ✅ ЕДИНСТВЕННЫЙ ПРАВИЛЬНЫЙ МЕТОД GET
 @router.get("/", response_model=List[JournalEntryResponse])
 async def get_journal_entries(
     company_id: int,
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
+    assigned_to_id: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -82,12 +84,62 @@ async def get_journal_entries(
         query = query.where(JournalEntry.datetime_start >= start_date)
     if end_date:
         query = query.where(JournalEntry.datetime_start <= end_date)
+    if assigned_to_id is not None:
+        query = query.where(JournalEntry.assigned_to_id == assigned_to_id)
+
+    # ✅ ЗАГРУЖАЕМ attachments и creator
     query = query.order_by(JournalEntry.datetime_start).options(
-        selectinload(JournalEntry.attachments)   # <-- ПОДГРУЖАЕМ ВЛОЖЕНИЯ
+        selectinload(JournalEntry.attachments),
+        selectinload(JournalEntry.creator),
     )
     result = await db.execute(query)
     entries = result.scalars().all()
-    return entries
+
+    # Подгружаем assigned_to вручную через run_sync
+    def _load_users(sync_db):
+        user_ids = [e.assigned_to_id for e in entries if e.assigned_to_id is not None]
+        if not user_ids:
+            return {}
+        result = sync_db.execute(
+            select(User.id, User.full_name, User.role).where(User.id.in_(user_ids))
+        )
+        return {row.id: {"full_name": row.full_name, "role": row.role} for row in result.all()}
+
+    user_map = await db.run_sync(_load_users) if entries else {}
+
+    response_entries = []
+    for entry in entries:
+        user_data = user_map.get(entry.assigned_to_id)
+        assigned_name = None
+        if user_data:
+            if user_data["role"] == UserRole.FOUNDER:
+                assigned_name = "Основатель"
+            else:
+                assigned_name = user_data["full_name"]
+
+        response_entries.append(JournalEntryResponse(
+            id=entry.id,
+            company_id=entry.company_id,
+            datetime_start=entry.datetime_start,
+            datetime_end=entry.datetime_end,
+            description=entry.description,
+            counterparty=entry.counterparty,
+            status=entry.status,
+            transaction_id=entry.transaction_id,
+            showcase_item_id=entry.showcase_item_id,
+            quantity=entry.quantity,
+            total_amount=entry.total_amount,
+            created_by=entry.created_by,
+            created_at=entry.created_at,
+            updated_at=entry.updated_at,
+            creator_name=entry.creator.display_name if entry.creator else None,
+            items=entry.items,
+            attachments=entry.attachments,
+            assigned_to_id=entry.assigned_to_id,
+            assigned_to_name=assigned_name,
+        ))
+
+    return response_entries
 
 
 @router.post("/", response_model=JournalEntryResponse)
@@ -120,13 +172,13 @@ async def create_journal_entry(
         total_amount=entry_data.total_amount,
         created_by=current_user.id,
         status=JournalEntryStatus.PLANNED,
-        items=items_data
+        items=items_data,
+        assigned_to_id=entry_data.assigned_to_id,
     )
     db.add(new_entry)
     await db.commit()
     await db.refresh(new_entry)
 
-    # 🔧 Перезапрашиваем запись с подгрузкой attachments
     result = await db.execute(
         select(JournalEntry)
         .where(JournalEntry.id == new_entry.id)
@@ -135,6 +187,7 @@ async def create_journal_entry(
     new_entry = result.scalar_one()
 
     return new_entry
+
 
 @router.patch("/{entry_id}", response_model=JournalEntryResponse)
 async def update_journal_entry(
@@ -183,7 +236,6 @@ async def update_journal_entry(
     await db.commit()
     await db.refresh(entry)
 
-    # 🔧 Перезапрашиваем запись с подгрузкой attachments
     result = await db.execute(
         select(JournalEntry)
         .where(JournalEntry.id == entry.id)
@@ -440,15 +492,6 @@ async def delete_journal_attachment(
     attachment = result.scalar_one_or_none()
     if not attachment:
         raise HTTPException(404, "Attachment not found")
-
-    # Опционально: удалить файл из Firebase Storage (раскомментируйте при необходимости)
-    # try:
-    #     bucket = storage.bucket()
-    #     path = attachment.file_url.split('/o/')[-1].split('?')[0]
-    #     blob = bucket.blob(path)
-    #     blob.delete()
-    # except Exception as e:
-    #     print(f"Failed to delete from Firebase: {e}")
 
     await db.delete(attachment)
     await db.commit()

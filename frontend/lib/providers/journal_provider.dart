@@ -20,10 +20,11 @@ class JournalNotifier extends StateNotifier<JournalState> {
 
   final ApiClient _api = ApiClient();
 
-  Future<void> loadEntries(int companyId, DateTime start, DateTime end) async {
+
+  Future<void> loadEntries(int companyId, DateTime start, DateTime end, {int? assignedToId}) async {
     state = JournalState(isLoading: true, entries: state.entries);
     try {
-      final entries = await _api.getJournalEntries(companyId, start, end);
+      final entries = await _api.getJournalEntries(companyId, start, end, assignedToId: assignedToId);
       state = JournalState(entries: entries);
     } catch (e) {
       final appError = ErrorHandler.handleError(e);
@@ -40,6 +41,7 @@ class JournalNotifier extends StateNotifier<JournalState> {
     int quantity = 1,
     double totalAmount = 0.0,
     List<Map<String, dynamic>>? items,
+    int? assignedToId,
   }) async {
     try {
       final newEntry = await _api.createJournalEntry(
@@ -52,6 +54,7 @@ class JournalNotifier extends StateNotifier<JournalState> {
         quantity: quantity,
         totalAmount: totalAmount,
         items: items,
+        assignedToId: assignedToId,
       );
       state = JournalState(entries: [...state.entries, newEntry]);
       return newEntry;
@@ -62,6 +65,7 @@ class JournalNotifier extends StateNotifier<JournalState> {
     }
   }
 
+  // ✅ ДОБАВЛЕН ПАРАМЕТР assignedToId
   Future<bool> updateEntry(int companyId, int entryId, {
     DateTime? start,
     DateTime? end,
@@ -72,6 +76,7 @@ class JournalNotifier extends StateNotifier<JournalState> {
     double? totalAmount,
     List<Map<String, dynamic>>? items,
     String? status,
+    int? assignedToId,
   }) async {
     try {
       final updated = await _api.updateJournalEntry(
@@ -86,6 +91,7 @@ class JournalNotifier extends StateNotifier<JournalState> {
         totalAmount: totalAmount,
         items: items,
         status: status,
+        assignedToId: assignedToId,
       );
       final newEntries = state.entries.map((e) => e.id == entryId ? updated : e).toList();
       state = JournalState(entries: newEntries);
@@ -112,6 +118,8 @@ class JournalNotifier extends StateNotifier<JournalState> {
   Future<bool> completeEntry(int companyId, int entryId, int accountId) async {
     try {
       await _api.completeJournalEntry(companyId, entryId, accountId);
+      // Перезагружаем записи, чтобы обновить статус
+      // Или можно обновить локально
       state = JournalState(entries: state.entries);
       return true;
     } catch (e) {

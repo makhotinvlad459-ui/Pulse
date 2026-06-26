@@ -34,8 +34,12 @@ class _JournalTabState extends ConsumerState<JournalTab> {
   bool _loading = false;
   final ApiClient _apiClient = ApiClient();
   
-  // ✅ ДОБАВЛЕН ФЛАГ
   bool _isDisposed = false;
+  
+  // Для фильтра по сотрудникам
+  List<Map<String, dynamic>> _companyMembers = [];
+  int? _selectedMemberId;
+  bool _loadingMembers = false;
 
   DateTime _normalize(DateTime dt) => DateTime(dt.year, dt.month, dt.day);
 
@@ -45,6 +49,7 @@ class _JournalTabState extends ConsumerState<JournalTab> {
     _isDisposed = false;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_isDisposed && mounted) {
+        _loadCompanyMembers();
         _loadEntriesForMonth(_focusedDay);
       }
     });
@@ -56,6 +61,37 @@ class _JournalTabState extends ConsumerState<JournalTab> {
     super.dispose();
   }
 
+  Future<void> _loadCompanyMembers() async {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
+    setState(() => _loadingMembers = true);
+    final api = ApiClient();
+    try {
+      final res = await api.get('/orders/company/${widget.companyId}/members');
+      if (_isDisposed) return;
+      if (!mounted) return;
+      
+      setState(() {
+  final t = AppLocalizations.of(context)!;
+  _companyMembers = List<Map<String, dynamic>>.from(res.data).map((member) {
+    final name = member['full_name'] ?? '';
+    final role = member['role'];
+    // Если это основатель — заменяем на локализованное имя
+    if (role == 'founder' || name == 'Основатель') {
+      member['full_name'] = t.founderRole;
+    }
+    return member;
+  }).toList();
+  _loadingMembers = false;
+});
+    } catch (e) {
+      if (_isDisposed) return;
+      if (!mounted) return;
+      setState(() => _loadingMembers = false);
+    }
+  }
+
   Future<void> _loadEntriesForMonth(DateTime month) async {
     if (_isDisposed) return;
     if (!mounted) return;
@@ -64,7 +100,13 @@ class _JournalTabState extends ConsumerState<JournalTab> {
     final end = DateTime(month.year, month.month + 1, 0);
     setState(() => _loading = true);
     final notifier = ref.read(journalProvider.notifier);
-    await notifier.loadEntries(widget.companyId, start, end);
+    
+    await notifier.loadEntries(
+      widget.companyId, 
+      start, 
+      end,
+      assignedToId: _selectedMemberId,
+    );
     
     if (_isDisposed) return;
     if (!mounted) return;
@@ -107,6 +149,16 @@ class _JournalTabState extends ConsumerState<JournalTab> {
     _loadEntriesForMonth(focusedDay);
   }
 
+  void _onFilterChanged(int? memberId) {
+    if (_isDisposed) return;
+    if (!mounted) return;
+    
+    setState(() {
+      _selectedMemberId = memberId;
+    });
+    _loadEntriesForMonth(_focusedDay);
+  }
+
   Future<void> _refresh() async {
     if (_isDisposed) return;
     await _loadEntriesForMonth(_focusedDay);
@@ -122,6 +174,7 @@ class _JournalTabState extends ConsumerState<JournalTab> {
         companyId: widget.companyId,
         initialDate: _selectedDay,
         permissions: widget.permissions,
+        members: _companyMembers,
       ),
     );
     if (_isDisposed) return;
@@ -150,6 +203,7 @@ class _JournalTabState extends ConsumerState<JournalTab> {
         'name': item['name'] ?? 'Без названия',
       }).toList(),
       'total_amount': entry.totalAmount,
+      'assigned_to_id': entry.assignedToId,
     };
     final result = await showDialog<bool>(
       context: context,
@@ -157,6 +211,7 @@ class _JournalTabState extends ConsumerState<JournalTab> {
         companyId: widget.companyId,
         initialEntry: entryMap,
         permissions: widget.permissions,
+        members: _companyMembers,
       ),
     );
     if (_isDisposed) return;
@@ -355,6 +410,7 @@ class _JournalTabState extends ConsumerState<JournalTab> {
     final t = AppLocalizations.of(context)!;
     final canCreate = widget.permissions.contains('create_journal');
     final selectedEntries = _selectedDayEntries;
+    final showFilter = _companyMembers.isNotEmpty;
 
     return RefreshIndicator(
       onRefresh: _refresh,
@@ -364,6 +420,46 @@ class _JournalTabState extends ConsumerState<JournalTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // Фильтр по сотрудникам
+            if (showFilter)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<int?>(
+                        decoration: InputDecoration(
+                          labelText: t.filterByEmployee,
+                          border: const OutlineInputBorder(),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        ),
+                        value: _selectedMemberId,
+                        hint: Text(t.allEmployees),
+                        items: [
+                          DropdownMenuItem<int?>(
+                            value: null,
+                            child: Text(t.allEmployees),
+                          ),
+                          ..._companyMembers.map((member) {
+                            final name = member['full_name'] ?? 'Без имени';
+                            return DropdownMenuItem<int?>(
+                              value: member['id'],
+                              child: Text(name),
+                            );
+                          }),
+                        ],
+                        onChanged: _onFilterChanged,
+                      ),
+                    ),
+                    if (_selectedMemberId != null)
+                      IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () => _onFilterChanged(null),
+                        tooltip: t.clearFilter,
+                      ),
+                  ],
+                ),
+              ),
             TableCalendar(
               focusedDay: _focusedDay,
               firstDay: DateTime(2020),
@@ -458,6 +554,13 @@ class _JournalTabState extends ConsumerState<JournalTab> {
   Widget _buildEntryCard(JournalEntry entry, ColorScheme colorScheme, AppLocalizations t) {
     final isCompleted = entry.status == 'completed';
     final attachments = entry.attachments ?? [];
+    
+    // ✅ ЛОКАЛИЗАЦИЯ ДЛЯ ОСНОВАТЕЛЯ
+    String assignedName = entry.assignedToName ?? '';
+    if (assignedName == 'Основатель') {
+      assignedName = t.founderRole;
+    }
+    
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -479,6 +582,9 @@ class _JournalTabState extends ConsumerState<JournalTab> {
               Text(entry.description!, style: const TextStyle(fontSize: 12)),
             if (entry.counterparty != null && entry.counterparty!.isNotEmpty)
               Text('${t.counterpartyLabel}: ${entry.counterparty}', style: const TextStyle(fontSize: 11)),
+            // 👇 ПОКАЗЫВАЕМ НАЗНАЧЕННОГО СОТРУДНИКА С ЛОКАЛИЗАЦИЕЙ
+            if (assignedName.isNotEmpty)
+              Text('👤 ${t.assignedTo}: $assignedName', style: const TextStyle(fontSize: 11)),
             if (entry.items != null && entry.items!.isNotEmpty)
               Column(
                 children: entry.items!.map((item) {

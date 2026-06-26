@@ -1044,6 +1044,18 @@
   "privacyPolicy": "Privacy Policy",
   "contactLabel": "Send all questions and suggestions to:",
   "contactEmail": "finance.pulsemoney@gmail.com",
-  "emailCopied": "Email copied"
+  "emailCopied": "Email copied",
+  "filterByEmployee": "Filter by employee",
+  "allEmployees": "All employees",
+  "clearFilter": "Clear filter",
+  "assignedTo": "Assigned to",
+  "notAssigned": "Not assigned",
+  "employeeReport": "Employee Report",
+  "employeeName": "Employee",
+  "transactionsCount": "Transactions count",
+  "transactionsSum": "Transactions sum",
+  "journalEntriesCount": "Journal entries count",
+  "journalSum": "Journal sum",
+  "productionShifts": "Production shifts"
 
 }

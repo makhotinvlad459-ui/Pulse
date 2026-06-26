@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 import os
 
 from app.database import get_db
-from app.models import User, Company, Permission, CompanyMemberPermission, Counterparty, Transaction, Category, CompanyMember, UserRole, Account, ShowcaseItem, TransactionItem, Product, Order, OrderItem, OrderStatus
+from app.models import User, JournalEntry, ProductionJournalEntry, Company, Permission, CompanyMemberPermission, Counterparty, Transaction, Category, CompanyMember, UserRole, Account, ShowcaseItem, TransactionItem, Product, Order, OrderItem, OrderStatus
 from app.deps import get_current_user
 
 router = APIRouter(prefix="/statistics", tags=["statistics"], redirect_slashes=False)
@@ -1022,3 +1022,175 @@ async def get_counterparties_report(
     
     result.sort(key=lambda x: x["name"])
     return result
+
+@router.get("/employee-transactions")
+async def get_employee_transactions(
+    company_id: int,
+    start_date: datetime,
+    end_date: datetime,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if not await _check_company_access(company_id, current_user, db):
+        raise HTTPException(403, "Access denied")
+    
+    if start_date.tzinfo:
+        start_date = start_date.replace(tzinfo=None)
+    if end_date.tzinfo:
+        end_date = end_date.replace(tzinfo=None)
+    
+    # ✅ run_sync использует db (асинхронную сессию) и преобразует в синхронную
+    rows = await db.run_sync(
+        lambda sync_db: sync_db.execute(
+            select(
+                User.id.label("employee_id"),
+                User.full_name.label("full_name"),
+                User.role.label("role"),
+                User.email.label("email"),
+                User.phone.label("phone"),
+                func.count(Transaction.id).label("count"),
+                func.sum(Transaction.amount).label("total")
+            )
+            .join(Transaction, Transaction.created_by == User.id)
+            .where(
+                Transaction.company_id == company_id,
+                Transaction.date >= start_date,
+                Transaction.date <= end_date,
+                Transaction.is_deleted == False
+            )
+            .group_by(User.id, User.full_name, User.role, User.email, User.phone)
+            .order_by(User.id)
+        ).all()
+    )
+    
+    result_data = []
+    for row in rows:
+        if row.role.value == "founder":
+            name = "Основатель"
+        elif row.full_name and row.full_name.strip():
+            name = row.full_name
+        else:
+            name = row.email or row.phone or f"Пользователь {row.employee_id}"
+        
+        result_data.append({
+            "employee_id": row.employee_id,
+            "employee_name": name,
+            "count": row.count or 0,
+            "total": float(row.total or 0)
+        })
+    
+    return result_data
+
+
+@router.get("/employee-journal")
+async def get_employee_journal(
+    company_id: int,
+    start_date: datetime,
+    end_date: datetime,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if not await _check_company_access(company_id, current_user, db):
+        raise HTTPException(403, "Access denied")
+    
+    if start_date.tzinfo:
+        start_date = start_date.replace(tzinfo=None)
+    if end_date.tzinfo:
+        end_date = end_date.replace(tzinfo=None)
+    
+    rows = await db.run_sync(
+        lambda sync_db: sync_db.execute(
+            select(
+                User.id.label("employee_id"),
+                User.full_name.label("full_name"),
+                User.role.label("role"),
+                User.email.label("email"),
+                User.phone.label("phone"),
+                func.count(JournalEntry.id).label("count"),
+                func.sum(JournalEntry.total_amount).label("total")
+            )
+            # 👇 ИЗМЕНЕНО: created_by → assigned_to_id
+            .join(JournalEntry, JournalEntry.assigned_to_id == User.id)
+            .where(
+                JournalEntry.company_id == company_id,
+                JournalEntry.datetime_start >= start_date,
+                JournalEntry.datetime_start <= end_date,
+                JournalEntry.assigned_to_id.isnot(None)  # 👈 ТОЛЬКО ТЕ, У КОГО ЕСТЬ НАЗНАЧЕННЫЙ
+            )
+            .group_by(User.id, User.full_name, User.role, User.email, User.phone)
+            .order_by(User.id)
+        ).all()
+    )
+    
+    result_data = []
+    for row in rows:
+        if row.role.value == "founder":
+            name = "Основатель"
+        elif row.full_name and row.full_name.strip():
+            name = row.full_name
+        else:
+            name = row.email or row.phone or f"Пользователь {row.employee_id}"
+        
+        result_data.append({
+            "employee_id": row.employee_id,
+            "employee_name": name,
+            "count": row.count or 0,
+            "total": float(row.total or 0)
+        })
+    
+    return result_data
+
+
+@router.get("/employee-production")
+async def get_employee_production(
+    company_id: int,
+    start_date: datetime,
+    end_date: datetime,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if not await _check_company_access(company_id, current_user, db):
+        raise HTTPException(403, "Access denied")
+    
+    if start_date.tzinfo:
+        start_date = start_date.replace(tzinfo=None)
+    if end_date.tzinfo:
+        end_date = end_date.replace(tzinfo=None)
+    
+    rows = await db.run_sync(
+        lambda sync_db: sync_db.execute(
+            select(
+                User.id.label("employee_id"),
+                User.full_name.label("full_name"),
+                User.role.label("role"),
+                User.email.label("email"),
+                User.phone.label("phone"),
+                func.count(ProductionJournalEntry.id).label("shifts")
+            )
+            .join(ProductionJournalEntry, ProductionJournalEntry.created_by == User.id)
+            .where(
+                ProductionJournalEntry.company_id == company_id,
+                ProductionJournalEntry.production_date >= start_date,
+                ProductionJournalEntry.production_date <= end_date
+            )
+            .group_by(User.id, User.full_name, User.role, User.email, User.phone)
+            .order_by(User.id)
+        ).all()
+    )
+    
+    result_data = []
+    for row in rows:
+        if row.role.value == "founder":
+            name = "Основатель"
+        elif row.full_name and row.full_name.strip():
+            name = row.full_name
+        else:
+            name = row.email or row.phone or f"Пользователь {row.employee_id}"
+        
+        result_data.append({
+            "employee_id": row.employee_id,
+            "employee_name": name,
+            "shifts": row.shifts or 0
+        })
+    
+    return result_data

@@ -14,6 +14,7 @@ class JournalEntryDialog extends StatefulWidget {
   final DateTime? initialDate;
   final dynamic initialEntry;
   final Set<String> permissions;
+  final List<Map<String, dynamic>> members;
 
   const JournalEntryDialog({
     super.key,
@@ -21,6 +22,7 @@ class JournalEntryDialog extends StatefulWidget {
     this.initialDate,
     this.initialEntry,
     required this.permissions,
+    required this.members,
   });
 
   @override
@@ -42,11 +44,11 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
   final List<({Uint8List bytes, String name})> _newFiles = [];
   bool _uploading = false;
 
-  // Автоподбор контрагентов
   List<String> _existingCounterparties = [];
   bool _loadingCounterparties = false;
   
-  // ✅ ДОБАВЛЕН ФЛАГ
+  int? _selectedMemberId;
+  
   bool _isDisposed = false;
 
   @override
@@ -60,6 +62,8 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
       _descriptionController.text = widget.initialEntry['description'] ?? '';
       final cp = widget.initialEntry['counterparty'] ?? '';
       _counterpartyController.text = cp;
+      _selectedMemberId = widget.initialEntry['assigned_to_id'];
+      
       if (widget.initialEntry['items'] != null) {
         _items = List<Map<String, dynamic>>.from(widget.initialEntry['items']).map((item) {
           final total = item['total'] ?? item['quantity'] * item['price_at_time'];
@@ -133,7 +137,6 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
     } catch (e) {
       if (_isDisposed) return;
       if (!mounted) return;
-      
       setState(() => _loadingShowcase = false);
     }
   }
@@ -156,9 +159,7 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
     } catch (e) {
       if (_isDisposed) return;
       if (!mounted) return;
-      
       setState(() => _loadingCounterparties = false);
-      if (!_isDisposed) print('Error loading counterparties: $e');
     }
   }
 
@@ -353,10 +354,19 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
       } catch (e) {
         if (_isDisposed) return;
         if (!mounted) return;
-        
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t.error}: $e')));
       }
     }
+  }
+
+  String _getUserDisplayName(Map<String, dynamic> member) {
+    final fullName = member['full_name'] ?? '';
+    final role = member['role'];
+    if (role == 'founder' || fullName == 'Основатель') {
+      final t = AppLocalizations.of(context)!;
+      return t.founderRole;
+    }
+    return fullName;
   }
 
   Future<void> _save() async {
@@ -390,6 +400,7 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
           counterparty: _counterpartyController.text.trim(),
           items: itemsToSend.isNotEmpty ? itemsToSend : null,
           totalAmount: _finalAmount,
+          assignedToId: _selectedMemberId,
         );
         entryId = widget.initialEntry['id'];
       } else {
@@ -401,6 +412,7 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
           counterparty: _counterpartyController.text.trim(),
           items: itemsToSend.isNotEmpty ? itemsToSend : null,
           totalAmount: _finalAmount,
+          assignedToId: _selectedMemberId,
         );
         entryId = newEntry.id;
       }
@@ -486,7 +498,6 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
                       _counterpartyController.text = selection;
                     },
                     fieldViewBuilder: (context, textController, focusNode, onFieldSubmitted) {
-                      // Синхронизация контроллеров
                       textController.addListener(() {
                         if (_counterpartyController.text != textController.text) {
                           _counterpartyController.text = textController.text;
@@ -533,6 +544,35 @@ class _JournalEntryDialogState extends State<JournalEntryDialog> {
                           ),
                         ),
                       );
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  // ✅ ВЫБОР СОТРУДНИКА
+                  DropdownButtonFormField<int?>(
+                    decoration: InputDecoration(
+                      labelText: t.assignResponsible,
+                      border: const OutlineInputBorder(),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    ),
+                    value: _selectedMemberId,
+                    hint: Text(t.notAssigned),
+                    items: [
+                       DropdownMenuItem<int?>(
+                        value: null,
+                        child: Text(t.notAssigned),
+                      ),
+                      ...widget.members.map((member) {
+                        final name = _getUserDisplayName(member);
+                        return DropdownMenuItem<int?>(
+                          value: member['id'],
+                          child: Text(name),
+                        );
+                      }),
+                    ],
+                    onChanged: (value) {
+                      if (!_isDisposed && mounted) {
+                        setState(() => _selectedMemberId = value);
+                      }
                     },
                   ),
                   const SizedBox(height: 12),

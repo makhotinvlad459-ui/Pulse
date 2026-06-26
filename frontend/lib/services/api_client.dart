@@ -569,63 +569,76 @@ class ApiClient {
     return response;
   }
 
-  Future<List<JournalEntry>> getJournalEntries(int companyId, DateTime start, DateTime end) async {
-    final response = await get('/journal/', queryParameters: {
-      'company_id': companyId,
-      'start_date': start.toIso8601String(),
-      'end_date': end.toIso8601String(),
-    });
-    final List<dynamic> data = response.data;
-    return data.map((json) => JournalEntry.fromJson(json)).toList();
+  Future<List<JournalEntry>> getJournalEntries(
+  int companyId, 
+  DateTime start, 
+  DateTime end, {
+  int? assignedToId,
+}) async {
+  final queryParams = {
+    'company_id': companyId,
+    'start_date': start.toIso8601String(),
+    'end_date': end.toIso8601String(),
+  };
+  if (assignedToId != null) {
+    queryParams['assigned_to_id'] = assignedToId.toString();
   }
+  final response = await get('/journal/', queryParameters: queryParams);
+  final List<dynamic> data = response.data;
+  return data.map((json) => JournalEntry.fromJson(json)).toList();
+}
 
   Future<JournalEntry> createJournalEntry(int companyId, {
-    required DateTime start,
-    required DateTime end,
-    String? description,
-    String? counterparty,
-    int? showcaseItemId,
-    int quantity = 1,
-    double totalAmount = 0.0,
-    List<Map<String, dynamic>>? items,
-  }) async {
-    final response = await post('/journal/', queryParameters: {'company_id': companyId}, data: {
-      'datetime_start': start.toIso8601String(),
-      'datetime_end': end.toIso8601String(),
-      'description': description,
-      'counterparty': counterparty,
-      'showcase_item_id': showcaseItemId,
-      'quantity': quantity,
-      'total_amount': totalAmount,
-      'items': items,
-    });
-    return JournalEntry.fromJson(response.data);
-  }
+  required DateTime start,
+  required DateTime end,
+  String? description,
+  String? counterparty,
+  int? showcaseItemId,
+  int quantity = 1,
+  double totalAmount = 0.0,
+  List<Map<String, dynamic>>? items,
+  int? assignedToId,
+}) async {
+  final response = await post('/journal/', queryParameters: {'company_id': companyId}, data: {
+    'datetime_start': start.toIso8601String(),
+    'datetime_end': end.toIso8601String(),
+    'description': description,
+    'counterparty': counterparty,
+    'showcase_item_id': showcaseItemId,
+    'quantity': quantity,
+    'total_amount': totalAmount,
+    'items': items,
+    'assigned_to_id': assignedToId,
+  });
+  return JournalEntry.fromJson(response.data);
+}
 
   Future<JournalEntry> updateJournalEntry(int companyId, int entryId, {
-    DateTime? start,
-    DateTime? end,
-    String? description,
-    String? counterparty,
-    int? showcaseItemId,
-    int? quantity,
-    double? totalAmount,
-    List<Map<String, dynamic>>? items,
-    String? status,
-  }) async {
-    final data = <String, dynamic>{};
-    if (start != null) data['datetime_start'] = start.toIso8601String();
-    if (end != null) data['datetime_end'] = end.toIso8601String();
-    if (description != null) data['description'] = description;
-    if (counterparty != null) data['counterparty'] = counterparty;
-    if (showcaseItemId != null) data['showcase_item_id'] = showcaseItemId;
-    if (quantity != null) data['quantity'] = quantity;
-    if (totalAmount != null) data['total_amount'] = totalAmount;
-    if (items != null) data['items'] = items;
-    if (status != null) data['status'] = status;
-    final response = await patch('/journal/$entryId', queryParameters: {'company_id': companyId}, data: data);
-    return JournalEntry.fromJson(response.data);
-  }
+  DateTime? start,
+  DateTime? end,
+  String? description,
+  String? counterparty,
+  int? showcaseItemId,
+  int? quantity,
+  double? totalAmount,
+  List<Map<String, dynamic>>? items,
+  String? status,
+  int? assignedToId,
+}) async {
+  final data = <String, dynamic>{};
+  if (start != null) data['datetime_start'] = start.toIso8601String();
+  if (end != null) data['datetime_end'] = end.toIso8601String();
+  if (description != null) data['description'] = description;
+  if (counterparty != null) data['counterparty'] = counterparty;
+  if (showcaseItemId != null) data['showcase_item_id'] = showcaseItemId;
+  if (quantity != null) data['quantity'] = quantity;
+  if (totalAmount != null) data['total_amount'] = totalAmount;
+  if (items != null) data['items'] = items;
+  if (status != null) data['status'] = status;
+  if (assignedToId != null) data['assigned_to_id'] = assignedToId;
+  final response = await patch('/journal/$entryId', queryParameters: {'company_id': companyId}, data: data);
+  return JournalEntry.fromJson(response.data);
+}
 
   Future<void> deleteJournalEntry(int companyId, int entryId) async {
     await delete('/journal/$entryId', queryParameters: {'company_id': companyId});

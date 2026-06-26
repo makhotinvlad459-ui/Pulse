@@ -24,6 +24,7 @@ import 'reports/counterparty_movement_report.dart';
 import 'reports/cash_movement_report.dart';
 import 'reports/bank_movement_report.dart';
 import 'production_reports/production_reports_tab.dart';
+import 'reports/employee_report_widget.dart';
 
 class ReportsTab extends ConsumerStatefulWidget {
   final int companyId;
@@ -765,6 +766,11 @@ class ReportsTabState extends ConsumerState<ReportsTab> {
             leading: const Icon(Icons.more_horiz),
             initiallyExpanded: false,
             children: [
+              ExpansionTile(
+                leading: const Icon(Icons.people_alt),
+                title: Text(t.employeeReport),
+                children: [EmployeeReportWidget(companyId: widget.companyId)],
+              ),
               ExpansionTile(
                 leading: const Icon(Icons.receipt),
                 title: Text(t.operationsExportTitle),
