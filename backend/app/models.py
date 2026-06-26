@@ -529,6 +529,7 @@ class JournalEntry(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     items: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    assigned_to_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     # relationships
     company: Mapped["Company"] = relationship(foreign_keys=[company_id])
@@ -536,7 +537,7 @@ class JournalEntry(Base):
     creator: Mapped["User"] = relationship(foreign_keys=[created_by])
     showcase_item: Mapped["ShowcaseItem"] = relationship()  
     attachments: Mapped[List["JournalAttachment"]] = relationship(back_populates="journal_entry", cascade="all, delete-orphan")  
-
+    assigned_to: Mapped["User"] = relationship(foreign_keys=[assigned_to_id])
 
 class ProductionOrderStatus(str, PyEnum):
     PLANNED = "planned"      # Запланировано
