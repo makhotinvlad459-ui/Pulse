@@ -3,7 +3,7 @@ from typing import Optional
 
 class Settings(BaseSettings):
     # База данных
-    DATABASE_URL: str = "postgresql+asyncpg://pulse_user:pulse_secret@db:5432/pulse"
+    DATABASE_URL: str = ""
     # JWT
     SECRET_KEY: str = "change_this_in_production_please"
     ALGORITHM: str = "HS256"
