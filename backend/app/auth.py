@@ -148,7 +148,7 @@ async def register(register_data: RegisterRequest, db: AsyncSession = Depends(ge
     token = create_access_token(data={"sub": str(new_user.id), "role": new_user.role.value})
     return {"access_token": token, "token_type": "bearer"}
 
-# ---------- Логин ----------
+# ---------- Логин (исправлен) ----------
 @router.post("/login")
 async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
     username_clean = form_data.username.lower().strip()
@@ -161,12 +161,19 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSessi
         )
     )
     user = user.scalar_one_or_none()
+    
+    # Проверка credentials
     if not user or not verify_password(form_data.password, user.password_hash):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid credentials")
+    
+    # Проверка активности аккаунта
     if not user.is_active:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Account deactivated")
-    if user.role == UserRole.FOUNDER and user.subscription_until and user.subscription_until < datetime.utcnow():
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Subscription expired")
+    
+    # ✅ УБРАЛИ ПРОВЕРКУ ПОДПИСКИ!
+    # Теперь пользователь может войти даже с истекшей подпиской,
+    # чтобы иметь возможность её оплатить.
+    # Ограничения будут работать через /subscription/status и бизнес-эндпоинты.
         
     user.last_login = datetime.utcnow()
     
