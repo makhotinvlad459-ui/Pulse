@@ -12,6 +12,7 @@ import '../services/api_client.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/services.dart';
 import '../screens/privacy_policy_screen.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});

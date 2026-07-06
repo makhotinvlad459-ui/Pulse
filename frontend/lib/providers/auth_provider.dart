@@ -5,7 +5,8 @@ import '../services/secure_storage.dart';
 import '../services/websocket_service.dart';
 import '../models/user.dart';
 import '../services/error/error_handler.dart';
-import '../services/fcm_service.dart'; // 👈 ДОБАВЬ ИМПОРТ
+import '../services/fcm_service.dart'; 
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) => AuthNotifier());
 
