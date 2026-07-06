@@ -41,6 +41,7 @@ void _initFirebaseInBackground() {
     try {
       print('🔥 [FCM] Инициализация Firebase в фоне...');
 
+      // 👇 ДЛЯ WEB — ТОЛЬКО ИНИЦИАЛИЗАЦИЯ, БЕЗ ПОЛУЧЕНИЯ ТОКЕНА!
       if (kIsWeb) {
         await Firebase.initializeApp(
           options: const FirebaseOptions(
@@ -52,11 +53,14 @@ void _initFirebaseInBackground() {
             appId: "1:267395124760:web:93231e40b80650ccf9bd6d",
           ),
         );
-      } else {
-        await Firebase.initializeApp();
+        print('✅ [FCM] Firebase инициализирован (Web)');
+        print('⚠️ [FCM] Web режим: FCM отключен (используем WebSocket)');
+        return;  // ← ВЫХОДИМ! НЕ ЖДЁМ ТОКЕН!
       }
 
-      print('✅ [FCM] Firebase инициализирован');
+      // 👇 ДЛЯ ANDROID / iOS — ПОЛНАЯ ИНИЦИАЛИЗАЦИЯ
+      await Firebase.initializeApp();
+      print('✅ [FCM] Firebase инициализирован (Mobile)');
 
       // Запрос разрешений
       unawaited(
@@ -67,14 +71,9 @@ void _initFirebaseInBackground() {
         })
       );
 
-      // 👇👇👇 ГЛАВНОЕ ИСПРАВЛЕНИЕ 👇👇👇
-      // Получаем токен и отправляем на сервер
+      // Получаем и отправляем токен
       final fcmService = FcmService();
-      
-      // Сначала пробуем отправить токен (если пользователь уже авторизован)
       await fcmService.updateFcmToken();
-      
-      // Слушаем обновление токена
       fcmService.listenTokenRefresh();
 
       print('✅ [FCM] Слушатели установлены');
