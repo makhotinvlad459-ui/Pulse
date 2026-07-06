@@ -30,26 +30,32 @@ class ConnectionManager:
             try:
                 if self.redis_client is None:
                     await self.init_redis()
-                
+            
                 self.pubsub = self.redis_client.pubsub()
                 await self.pubsub.subscribe("pulse_events")
                 print("📡 Subscribed to 'pulse_events' channel")
-                
+            
                 while self._running:
                     try:
-                        # Ждем сообщение с таймаутом 30 секунд
-                        message = await asyncio.wait_for(self.pubsub.get_message(), timeout=30.0)
+                    # 🔥 ИСПРАВЛЕНИЕ: используем timeout=1.0 и добавляем sleep
+                        message = await self.pubsub.get_message(
+                            ignore_subscribe_messages=True,
+                            timeout=1.0
+                        )
                         if message and message["type"] == "message":
                             await self._handle_redis_message(message["data"])
+                        else:
+                        # 👇 ВАЖНО! Даем время другим задачам
+                            await asyncio.sleep(0.01)
                     except asyncio.TimeoutError:
-                        # Таймаут - просто продолжаем, чтобы проверить _running
+                    # Таймаут - просто продолжаем
                         continue
                     except Exception as e:
                         print(f"❌ Redis listener error: {e}")
                         break
             except Exception as e:
                 print(f"❌ Redis connection error: {e}")
-                await asyncio.sleep(5)  # Ждем перед переподключением
+                await asyncio.sleep(5)
                 continue
 
     async def _handle_redis_message(self, data: str):
