@@ -15,10 +15,10 @@ import 'screens/forgot_password_screen.dart';
 import 'screens/reset_password_screen.dart';
 import 'services/websocket_service.dart';
 import 'services/push_notifications.dart';
+import 'services/fcm_service.dart';
 import 'package:frontend/l10n/app_localizations.dart';
 import 'services/error/global_error_handler.dart';
-import 'screens/privacy_policy_screen.dart'; 
-
+import 'screens/privacy_policy_screen.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -31,20 +31,17 @@ void main() async {
       systemNavigationBarColor: Colors.transparent,
     ),
   );
-  // 🔥 Запускаем приложение сразу, не дожидаясь Firebase
+  
   runApp(const ProviderScope(child: MyApp()));
-
-  // 📡 Инициализируем Firebase в фоне (без блокировки UI)
   _initFirebaseInBackground();
 }
 
-/// Фоновая инициализация Firebase с таймаутом 10 секунд
+/// Фоновая инициализация Firebase
 void _initFirebaseInBackground() {
   Future.microtask(() async {
     try {
       print('🔥 [FCM] Инициализация Firebase в фоне...');
 
-      // Инициализация Firebase с таймаутом 10 секунд
       if (kIsWeb) {
         await Firebase.initializeApp(
           options: const FirebaseOptions(
@@ -62,25 +59,19 @@ void _initFirebaseInBackground() {
 
       print('✅ [FCM] Firebase инициализирован');
 
-      // Запрос разрешения + получение токена с таймаутом 10 секунд
+      // Запрос разрешений
       try {
         await FirebaseMessaging.instance
             .requestPermission()
             .timeout(const Duration(seconds: 5));
-
-        final token = await FirebaseMessaging.instance
-            .getToken()
-            .timeout(const Duration(seconds: 10));
-
-        if (token != null && token.isNotEmpty) {
-          print('✅ [FCM] Токен получен: $token');
-          // Можно сохранить токен на сервер, если нужно
-        } else {
-          print('⚠️ [FCM] Токен не получен (пустой)');
-        }
       } catch (e) {
-        print('⚠️ [FCM] Ошибка при получении токена: $e');
+        print('⚠️ [FCM] Ошибка запроса разрешений: $e');
       }
+
+      // 👇 ИСПОЛЬЗУЕМ FcmService
+      final fcmService = FcmService();
+      await fcmService.updateFcmToken();
+      fcmService.listenTokenRefresh();
 
     } catch (e, stack) {
       print('❌ [FCM] Ошибка инициализации Firebase: $e');
@@ -103,7 +94,6 @@ class _MyAppState extends ConsumerState<MyApp> {
     _initNotificationListeners();
   }
 
-  /// Только слушатели уведомлений (без запроса токена)
   void _initNotificationListeners() {
     Future.microtask(() async {
       try {
@@ -164,7 +154,7 @@ class _MyAppState extends ConsumerState<MyApp> {
             return MaterialPageRoute(builder: (_) => const RegisterScreen());
           case '/home':
             return MaterialPageRoute(builder: (_) => const HomeScreen());
-          case '/privacy-policy': 
+          case '/privacy-policy':
             return MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen());
           case '/forgot-password':
             return MaterialPageRoute(builder: (_) => const ForgotPasswordScreen());

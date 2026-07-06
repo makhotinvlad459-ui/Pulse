@@ -5,6 +5,7 @@ import '../providers/auth_provider.dart';
 import '../providers/locale_provider.dart';
 import '../widgets/video_background.dart';
 import 'package:frontend/l10n/app_localizations.dart';
+import '../services/fcm_service.dart'; // 👈 ДОБАВИТЬ ИМПОРТ
 
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
@@ -64,9 +65,20 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     final success =
         await authNotifier.register(email, null, fullName, password);
     if (!mounted) return;
+    
     if (success) {
+      // 👇👇👇 ДОБАВЛЯЕМ ОТПРАВКУ FCM ТОКЕНА ПОСЛЕ РЕГИСТРАЦИИ 👇👇👇
+      try {
+        await FcmService().updateFcmToken();
+        print('✅ [FCM] Токен отправлен после регистрации');
+      } catch (e) {
+        print('⚠️ [FCM] Ошибка отправки токена после регистрации: $e');
+      }
+      
       await Future.delayed(const Duration(milliseconds: 100));
-      Navigator.pushReplacementNamed(context, '/home');
+      if (mounted) {
+        Navigator.pushReplacementNamed(context, '/home');
+      }
     } else {
       final error = ref.read(authProvider).error ??
           _localized('registrationError', 'Ошибка регистрации');

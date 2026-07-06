@@ -5,6 +5,7 @@ import '../services/secure_storage.dart';
 import '../services/websocket_service.dart';
 import '../models/user.dart';
 import '../services/error/error_handler.dart';
+import '../services/fcm_service.dart'; // 👈 ДОБАВЬ ИМПОРТ
 
 final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) => AuthNotifier());
 
@@ -41,6 +42,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
       if (token == null) throw Exception('No token');
       await _api.setToken(token);
       final loaded = await _loadUserProfile();
+      
+      // 👇 ДОБАВЛЯЕМ ОТПРАВКУ FCM ТОКЕНА ПОСЛЕ РЕГИСТРАЦИИ
+      if (loaded) {
+        await FcmService().updateFcmToken();
+      }
+      
       return loaded;
     } catch (e) {
       state = AuthState(error: e.toString());
@@ -57,7 +64,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final newAccess = response.data['access_token'] as String?;
       if (newAccess == null) return false;
       await _api.setToken(newAccess);
-      // Обновляем WebSocket соединения с новым токеном
       WebSocketService().refreshAllConnections();
       return true;
     } catch (e) {
@@ -67,40 +73,47 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<bool> login(String username, String password, Locale currentLocale) async {
-  state = AuthState(isLoading: true);
-  try {
-    final response = await _api.postForm('/auth/login', data: {
-      'username': username,
-      'password': password,
-    });
-    
-    final data = response.data;
-    if (data is! Map<String, dynamic>) throw Exception('Invalid response format');
-    
-    final token = data['access_token'] as String?;
-    if (token == null) throw Exception('No token in response');
-    
-    final refreshToken = data['refresh_token'] as String?;
-    if (refreshToken != null) {
-      await _storage.setRefreshToken(refreshToken);
+    state = AuthState(isLoading: true);
+    try {
+      final response = await _api.postForm('/auth/login', data: {
+        'username': username,
+        'password': password,
+      });
+      
+      final data = response.data;
+      if (data is! Map<String, dynamic>) throw Exception('Invalid response format');
+      
+      final token = data['access_token'] as String?;
+      if (token == null) throw Exception('No token in response');
+      
+      final refreshToken = data['refresh_token'] as String?;
+      if (refreshToken != null) {
+        await _storage.setRefreshToken(refreshToken);
+      }
+      
+      await _api.setToken(token);
+      
+      final loaded = await _loadUserProfile();
+      
+      if (loaded) {
+        await syncLanguage(currentLocale.languageCode);
+        
+        // 👇👇👇 ДОБАВЛЯЕМ ОТПРАВКУ FCM ТОКЕНА ПОСЛЕ ЛОГИНА 👇👇👇
+        try {
+          await FcmService().updateFcmToken();
+          print('✅ [FCM] Токен обновлен после логина');
+        } catch (e) {
+          print('⚠️ [FCM] Ошибка обновления токена после логина: $e');
+        }
+      }
+      
+      return loaded;
+    } catch (e) {
+      final appError = ErrorHandler.handleError(e);
+      state = AuthState(error: appError.message);
+      return false;
     }
-    
-    await _api.setToken(token);
-    
-    final loaded = await _loadUserProfile();
-    
-    if (loaded) {
-      await syncLanguage(currentLocale.languageCode);
-    }
-    
-    return loaded;
-  } catch (e) {
-    // Используем ErrorHandler для красивого сообщения
-    final appError = ErrorHandler.handleError(e);
-    state = AuthState(error: appError.message);
-    return false;
   }
-}
 
   Future<bool> _loadUserProfile() async {
     try {
@@ -149,7 +162,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<void> logout() async {
     await _api.clearToken();
-    await _storage.clearTokens(); // очищаем и refresh token
+    await _storage.clearTokens();
     _api.clearAuth();
     WebSocketService().disconnectAll();
     state = AuthState();
