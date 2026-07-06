@@ -15,7 +15,7 @@ import 'screens/forgot_password_screen.dart';
 import 'screens/reset_password_screen.dart';
 import 'services/websocket_service.dart';
 import 'services/push_notifications.dart';
-import 'services/fcm_service.dart';  // 👈 ЕСТЬ
+import 'services/fcm_service.dart';
 import 'package:frontend/l10n/app_localizations.dart';
 import 'services/error/global_error_handler.dart';
 import 'screens/privacy_policy_screen.dart';
@@ -67,8 +67,12 @@ void _initFirebaseInBackground() {
         })
       );
 
-      // 👇 ИСПОЛЬЗУЕМ FcmService ДЛЯ ОБНОВЛЕНИЯ ТОКЕНА
+      // 👇👇👇 ГЛАВНОЕ ИСПРАВЛЕНИЕ 👇👇👇
+      // Получаем токен и отправляем на сервер
       final fcmService = FcmService();
+      
+      // Сначала пробуем отправить токен (если пользователь уже авторизован)
+      await fcmService.updateFcmToken();
       
       // Слушаем обновление токена
       fcmService.listenTokenRefresh();
