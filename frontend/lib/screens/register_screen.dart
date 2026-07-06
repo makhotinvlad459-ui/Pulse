@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../providers/auth_provider.dart';
 import '../providers/locale_provider.dart';
 import '../widgets/video_background.dart';
 import 'package:frontend/l10n/app_localizations.dart';
-import '../services/fcm_service.dart'; // 👈 ДОБАВИТЬ ИМПОРТ
+import '../services/fcm_service.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
@@ -62,32 +63,30 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     }
 
     final authNotifier = ref.read(authProvider.notifier);
-    final success =
-        await authNotifier.register(email, null, fullName, password);
+    final success = await authNotifier.register(email, null, fullName, password);
     if (!mounted) return;
-    
+
     if (success) {
-  // 👇 ТОЛЬКО НЕ НА WEB!
-  if (!kIsWeb) {
-    try {
-      await FcmService().updateFcmToken();
-      print('✅ [FCM] Токен отправлен после регистрации');
-    } catch (e) {
-      print('⚠️ [FCM] Ошибка отправки токена после регистрации: $e');
+      // 👇 ТОЛЬКО НЕ НА WEB!
+      if (!kIsWeb) {
+        try {
+          await FcmService().updateFcmToken();
+          print('✅ [FCM] Токен отправлен после регистрации');
+        } catch (e) {
+          print('⚠️ [FCM] Ошибка отправки токена после регистрации: $e');
+        }
+      }
+
+      await Future.delayed(const Duration(milliseconds: 100));
+      if (mounted) {
+        Navigator.pushReplacementNamed(context, '/home');
+      }
+    } else {
+      final error = ref.read(authProvider).error ??
+          _localized('registrationError', 'Ошибка регистрации');
+      if (mounted) _showSnackBar(error);
     }
   }
-  
-  // 👇 ЭТОТ КОД ДОЛЖЕН БЫТЬ ВНУТРИ if (success)!
-  await Future.delayed(const Duration(milliseconds: 100));
-  if (mounted) {
-    Navigator.pushReplacementNamed(context, '/home');
-  }
-} else {
-  // 👇 Если регистрация не удалась
-  final error = ref.read(authProvider).error ??
-      _localized('registrationError', 'Ошибка регистрации');
-  if (mounted) _showSnackBar(error);
-}
 
   void _showSnackBar(String message) {
     ScaffoldMessenger.of(context)
