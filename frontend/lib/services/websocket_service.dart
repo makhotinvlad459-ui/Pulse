@@ -61,92 +61,95 @@ class WebSocketService with WidgetsBindingObserver {
   }
 
   void connectChat(int companyId, String token) {
-    if (_currentChatCompanyId == companyId && _chatChannel != null) {
-      if (kDebugMode) print('✅ Already connected to chat company $companyId');
-      return;
-    }
-    
-    if (_chatChannel != null) {
-      try {
-        _chatChannel!.sink.close();
-      } catch (e) {}
-      _chatChannel = null;
-    }
-    
-    _currentChatCompanyId = companyId;
-    _currentChatToken = token;
-    _shouldReconnect = true;
-
-    final url = '$_baseUrl/ws/chat/$companyId?token=$token';
-    if (kDebugMode) print('📡 WS Chat: Connecting to $url');
-
-    try {
-      _chatChannel = WebSocketChannel.connect(Uri.parse(url));
-      _chatChannel!.stream.listen(
-        (message) => _handleMessage(message, 'chat'),
-        onDone: () => _handleDisconnect('chat'),
-        onError: (error) => _handleDisconnect('chat'),
-      );
-    } catch (e) {
-      _handleDisconnect('chat');
-    }
+  if (_currentChatCompanyId == companyId && _chatChannel != null) {
+    if (kDebugMode) print('✅ Already connected to chat company $companyId');
+    return;
   }
+  
+  if (_chatChannel != null) {
+    try {
+      _chatChannel!.sink.close();
+    } catch (e) {}
+    _chatChannel = null;
+  }
+  
+  _currentChatCompanyId = companyId;
+  _currentChatToken = token;
+  _shouldReconnect = true;
+
+  final url = '$_baseUrl/ws/chat/$companyId?token=$token';
+  if (kDebugMode) print('📡 WS Chat: Connecting to $url');
+
+  try {
+    final channel = WebSocketChannel.connect(Uri.parse(url));
+    _chatChannel = channel;
+    channel.stream.listen(
+      (message) => _handleMessage(message, 'chat'),
+      onDone: () => _handleDisconnect('chat'),
+      onError: (error) => _handleDisconnect('chat'),
+    );
+  } catch (e) {
+    _handleDisconnect('chat');
+  }
+}
 
   void connectTasks(int companyId, String token) {
-    if (_currentTasksCompanyId == companyId && _tasksChannel != null) {
-      if (kDebugMode) print('✅ Already connected to tasks company $companyId');
-      return;
-    }
-    
-    if (_tasksChannel != null) {
-      try {
-        _tasksChannel!.sink.close();
-      } catch (e) {}
-      _tasksChannel = null;
-    }
-    
-    _currentTasksCompanyId = companyId;
-    _currentTasksToken = token;
-    _shouldReconnect = true;
-
-    final url = '$_baseUrl/ws/tasks/$companyId?token=$token';
-    if (kDebugMode) print('📡 WS Tasks: Connecting to $url');
-
-    try {
-      _tasksChannel = WebSocketChannel.connect(Uri.parse(url));
-      _tasksChannel!.stream.listen(
-        (message) => _handleMessage(message, 'tasks'),
-        onDone: () => _handleDisconnect('tasks'),
-        onError: (error) => _handleDisconnect('tasks'),
-      );
-    } catch (e) {
-      _handleDisconnect('tasks');
-    }
+  if (_currentTasksCompanyId == companyId && _tasksChannel != null) {
+    if (kDebugMode) print('✅ Already connected to tasks company $companyId');
+    return;
   }
-
-  void connectUser(int userId, String token) {
-    if (_userChannel != null && _currentUserId == userId) {
-      return;
-    }
-    disconnectUser();
-    _currentUserId = userId;
-    _currentUserToken = token;
-    _shouldReconnect = true;
-
-    final url = '$_baseUrl/ws/user/$userId?token=$token';
-    if (kDebugMode) print('📡 WS User: Connecting to $url');
-
+  
+  if (_tasksChannel != null) {
     try {
-      _userChannel = WebSocketChannel.connect(Uri.parse(url));
-      _userChannel!.stream.listen(
-        (message) => _handleMessage(message, 'user'),
-        onDone: () => _handleDisconnect('user'),
-        onError: (error) => _handleDisconnect('user'),
-      );
-    } catch (e) {
-      _handleDisconnect('user');
-    }
+      _tasksChannel!.sink.close();
+    } catch (e) {}
+    _tasksChannel = null;
   }
+  
+  _currentTasksCompanyId = companyId;
+  _currentTasksToken = token;
+  _shouldReconnect = true;
+
+  final url = '$_baseUrl/ws/tasks/$companyId?token=$token';
+  if (kDebugMode) print('📡 WS Tasks: Connecting to $url');
+
+  try {
+    final channel = WebSocketChannel.connect(Uri.parse(url));
+    _tasksChannel = channel;
+    channel.stream.listen(
+      (message) => _handleMessage(message, 'tasks'),
+      onDone: () => _handleDisconnect('tasks'),
+      onError: (error) => _handleDisconnect('tasks'),
+    );
+  } catch (e) {
+    _handleDisconnect('tasks');
+  }
+}
+
+ void connectUser(int userId, String token) {
+  if (_userChannel != null && _currentUserId == userId) {
+    return;
+  }
+  disconnectUser();
+  _currentUserId = userId;
+  _currentUserToken = token;
+  _shouldReconnect = true;
+
+  final url = '$_baseUrl/ws/user/$userId?token=$token';
+  if (kDebugMode) print('📡 WS User: Connecting to $url');
+
+  try {
+    final channel = WebSocketChannel.connect(Uri.parse(url));
+    _userChannel = channel;
+    channel.stream.listen(
+      (message) => _handleMessage(message, 'user'),
+      onDone: () => _handleDisconnect('user'),
+      onError: (error) => _handleDisconnect('user'),
+    );
+  } catch (e) {
+    _handleDisconnect('user');
+  }
+}
 
   void _handleMessage(dynamic message, String type) {
     try {
