@@ -31,6 +31,23 @@
     firebase.initializeApp(firebaseConfig);
     const messaging = firebase.messaging();
     window.firebaseMessaging = messaging;
+
+    // 👇👇👇 ДОБАВЛЕННЫЙ БЛОК 👇👇👇
+    // Регистрация Service Worker для FCM
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('firebase-messaging-sw.js')
+        .then(function (registration) {
+          console.log('✅ Service Worker registered');
+          // Привязываем Service Worker к Firebase Messaging
+          if (window.firebaseMessaging) {
+            window.firebaseMessaging.useServiceWorker(registration);
+          }
+        })
+        .catch(function (err) {
+          console.log('❌ Service Worker registration failed: ', err);
+        });
+    }
+    // 👆👆👆 КОНЕЦ ДОБАВЛЕННОГО БЛОКА 👆👆👆
   </script>
 
   <script src="flutter_bootstrap.js" async></script>
