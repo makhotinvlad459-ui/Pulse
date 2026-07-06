@@ -67,24 +67,27 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     if (!mounted) return;
     
     if (success) {
-      // 👇👇👇 ДОБАВЛЯЕМ ОТПРАВКУ FCM ТОКЕНА ПОСЛЕ РЕГИСТРАЦИИ 👇👇👇
-      try {
-        await FcmService().updateFcmToken();
-        print('✅ [FCM] Токен отправлен после регистрации');
-      } catch (e) {
-        print('⚠️ [FCM] Ошибка отправки токена после регистрации: $e');
-      }
-      
-      await Future.delayed(const Duration(milliseconds: 100));
-      if (mounted) {
-        Navigator.pushReplacementNamed(context, '/home');
-      }
-    } else {
-      final error = ref.read(authProvider).error ??
-          _localized('registrationError', 'Ошибка регистрации');
-      if (mounted) _showSnackBar(error);
+  // 👇 ТОЛЬКО НЕ НА WEB!
+  if (!kIsWeb) {
+    try {
+      await FcmService().updateFcmToken();
+      print('✅ [FCM] Токен отправлен после регистрации');
+    } catch (e) {
+      print('⚠️ [FCM] Ошибка отправки токена после регистрации: $e');
     }
   }
+  
+  // 👇 ЭТОТ КОД ДОЛЖЕН БЫТЬ ВНУТРИ if (success)!
+  await Future.delayed(const Duration(milliseconds: 100));
+  if (mounted) {
+    Navigator.pushReplacementNamed(context, '/home');
+  }
+} else {
+  // 👇 Если регистрация не удалась
+  final error = ref.read(authProvider).error ??
+      _localized('registrationError', 'Ошибка регистрации');
+  if (mounted) _showSnackBar(error);
+}
 
   void _showSnackBar(String message) {
     ScaffoldMessenger.of(context)

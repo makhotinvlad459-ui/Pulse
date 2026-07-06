@@ -98,13 +98,19 @@ class AuthNotifier extends StateNotifier<AuthState> {
       if (loaded) {
         await syncLanguage(currentLocale.languageCode);
         
-        // 👇👇👇 ДОБАВЛЯЕМ ОТПРАВКУ FCM ТОКЕНА ПОСЛЕ ЛОГИНА 👇👇👇
-        try {
-          await FcmService().updateFcmToken();
-          print('✅ [FCM] Токен обновлен после логина');
-        } catch (e) {
-          print('⚠️ [FCM] Ошибка обновления токена после логина: $e');
+       
+        // Отправка FCM токена ТОЛЬКО НЕ НА WEB
+        if (!kIsWeb) {
+          try {
+            await FcmService().updateFcmToken();
+            print('✅ [FCM] Токен обновлен после логина');
+          } catch (e) {
+            print('⚠️ [FCM] Ошибка обновления токена после логина: $e');
+          }
+        } else {
+          print('⚠️ [FCM] Web режим: токен НЕ отправляется');
         }
+        
       }
       
       return loaded;
@@ -115,7 +121,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  Future<bool> _loadUserProfile() async {
+  Future<bool> _loadUserProfile() async { 
     try {
       final response = await _api.get('/auth/me');
       if (response.statusCode != 200) throw Exception('Failed to fetch profile');

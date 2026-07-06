@@ -165,6 +165,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   // ✅ Фоновые операции, которые не должны блокировать UI
   void _sendFcmTokenInBackground() {
+    // 👇👇👇 ДОБАВЛЯЕМ ПРОВЕРКУ 👇👇👇
+    if (kIsWeb) {
+      print('⚠️ [FCM] Web режим: токен НЕ отправляется');
+      return;
+    }
+    // 👆👆👆 КОНЕЦ ПРОВЕРКИ 👆👆👆
+    
     Future.microtask(() async {
       if (_isDisposed) return;
       
