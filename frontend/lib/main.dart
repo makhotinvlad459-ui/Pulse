@@ -15,7 +15,7 @@ import 'screens/forgot_password_screen.dart';
 import 'screens/reset_password_screen.dart';
 import 'services/websocket_service.dart';
 import 'services/push_notifications.dart';
-import 'services/fcm_service.dart';
+import 'services/fcm_service.dart';  // 👈 ЕСТЬ
 import 'package:frontend/l10n/app_localizations.dart';
 import 'services/error/global_error_handler.dart';
 import 'screens/privacy_policy_screen.dart';
@@ -36,7 +36,6 @@ void main() async {
   _initFirebaseInBackground();
 }
 
-/// Фоновая инициализация Firebase
 void _initFirebaseInBackground() {
   Future.microtask(() async {
     try {
@@ -52,26 +51,29 @@ void _initFirebaseInBackground() {
             messagingSenderId: "267395124760",
             appId: "1:267395124760:web:93231e40b80650ccf9bd6d",
           ),
-        ).timeout(const Duration(seconds: 10));
+        );
       } else {
-        await Firebase.initializeApp().timeout(const Duration(seconds: 10));
+        await Firebase.initializeApp();
       }
 
       print('✅ [FCM] Firebase инициализирован');
 
       // Запрос разрешений
-      try {
-        await FirebaseMessaging.instance
-            .requestPermission()
-            .timeout(const Duration(seconds: 5));
-      } catch (e) {
-        print('⚠️ [FCM] Ошибка запроса разрешений: $e');
-      }
+      unawaited(
+        FirebaseMessaging.instance.requestPermission().then((_) {
+          print('✅ [FCM] Разрешения получены');
+        }).catchError((e) {
+          print('⚠️ [FCM] Ошибка разрешений: $e');
+        })
+      );
 
-      // 👇 ИСПОЛЬЗУЕМ FcmService
+      // 👇 ИСПОЛЬЗУЕМ FcmService ДЛЯ ОБНОВЛЕНИЯ ТОКЕНА
       final fcmService = FcmService();
-      await fcmService.updateFcmToken();
+      
+      // Слушаем обновление токена
       fcmService.listenTokenRefresh();
+
+      print('✅ [FCM] Слушатели установлены');
 
     } catch (e, stack) {
       print('❌ [FCM] Ошибка инициализации Firebase: $e');
